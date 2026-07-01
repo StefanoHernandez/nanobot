@@ -124,14 +124,15 @@ class CronTurnCoordinator:
                 job_ids.add(job_id)
         return job_ids
 
-    async def publish_next_deferred(self, session_key: str) -> None:
+    async def publish_next_deferred(self, session_key: str) -> bool:
         queue = self.deferred_queues.get(session_key)
         if not queue:
-            return
+            return False
         msg = queue.pop(0)
         if not queue:
             self.deferred_queues.pop(session_key, None)
         await self._publish_inbound(msg)
+        return True
 
 
 def _cron_job_id(msg: InboundMessage) -> str | None:
