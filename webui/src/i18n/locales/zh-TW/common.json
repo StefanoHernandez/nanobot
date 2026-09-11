@@ -42,8 +42,8 @@
       "description": "nanobot Web UI —— 與你的 nanobot 工作區對話。"
     },
     "pairing": {
-      "title": "配對聊天使用者",
-      "description": "輸入聊天中顯示的配對碼。",
+      "title": "配對你的聊天帳號",
+      "description": "輸入你在聊天平台收到的配對碼。",
       "code": "配對碼",
       "matched": "已符合 {{channel}}，正在連線…",
       "expiresInline": "配對碼將於 {{expires}} 到期。",
@@ -783,7 +783,6 @@
       "requires": "需要：{{requirements}}",
       "setUp": "設定",
       "setupGuide": "設定指南",
-      "setupSummary": "啟用此通訊管道只會開啟 nanobot 的支援功能。請新增平台憑證，然後重新啟動 nanobot。",
       "configKeys": "設定欄位",
       "enable": "啟用通訊管道",
       "disable": "停用通訊管道",
@@ -797,7 +796,8 @@
       "open": "開啟",
       "checkedAndEnabled": "已檢查並啟用。",
       "checking": "正在檢查...",
-      "checkOnly": "僅檢查",
+      "help": "說明",
+      "checkOnly": "檢測",
       "commandCopied": "指令已複製。",
       "commandCopyFailed": "無法複製指令。",
       "configuredInstances_one": "已設定 {{count}} 個執行個體",
@@ -817,7 +817,6 @@
       "runtimeStarting": "正在啟動",
       "runtimeStopped": "未執行",
       "managedByWebui": "由 WebUI 管理",
-      "officialGuide": "官方指南",
       "optional": "選填",
       "providerPreset": "服務供應商",
       "requiredSetup": "必要設定",
@@ -826,19 +825,49 @@
       "savedSettings": "設定已儲存。",
       "saveSettings": "儲存設定",
       "selectChannel": "檢視 {{name}} 設定",
-      "setupSteps": "後續步驟",
       "showSecret": "顯示金鑰",
       "toggleChannel": "啟用 {{name}}",
       "toggleInstance": "{{name}} 執行個體",
-      "tryIt": "試試看",
       "validationFailed": "啟用前請檢查必要設定。",
+      "completeSetupToEnable": "請先完成下方必要設定，然後即可啟用此頻道。",
+      "chooseCredentialMethod": "選擇一種憑證方式",
+      "or": "或",
+      "fieldRequired": "完成設定需要此欄位。",
+      "secretWillBeRemoved": "將被移除",
+      "keepSavedSecret": "保留已儲存的憑證",
+      "removeSavedSecret": "移除已儲存的憑證",
+      "sections": {
+        "account": "帳戶",
+        "credentials": "憑證",
+        "connection": "連線",
+        "access": "存取權限",
+        "behavior": "行為",
+        "security": "安全性"
+      },
       "validation": {
         "connected": "已連線",
-        "configured": "手動設定",
+        "configured": "未驗證",
         "needs_setup": "需要設定",
-        "invalid": "無效",
+        "invalid": "連線失敗",
         "unsupported": "手動設定"
-      }
+      },
+      "validationMessages": {
+        "connected": "連線正常",
+        "unverified": "尚未驗證連線是否可用",
+        "missing": "請填寫必填欄位",
+        "invalid": "檢測失敗",
+        "unsupported": "此渠道暫不支援連線檢測",
+        "present": "已填寫",
+        "required": "必填",
+        "manual": "此渠道暫不支援連線檢測"
+      },
+      "search": "搜尋聊天平台",
+      "filterEnabled": "已啟用",
+      "noResults": "沒有符合的渠道",
+      "install": "安裝",
+      "installChannel": "安裝 {{name}}",
+      "noInstallNeeded": "無需安裝",
+      "installNeeded": "需要額外依賴"
     },
     "nanobotFeatures": {
       "enabled": "已啟用",
@@ -849,7 +878,9 @@
       "installSupport": "安裝支援套件",
       "installConfirmTitle": "安裝 {{name}} 的支援套件？",
       "installConfirmDescription": "nanobot 將安裝 {{name}} 所需的元件並啟用支援。要繼續嗎？",
+      "installOnlyConfirmDescription": "將安裝 {{name}} 所需的支援套件。安裝完成後即可連線。",
       "installConfirmAction": "安裝並啟用",
+      "installOnlyConfirmAction": "安裝支援套件",
       "websocketRequired": "WebUI 需要此功能",
       "channelDisabled": "通訊管道已停用",
       "notEnabled": "未啟用"
@@ -914,20 +945,7 @@
       },
       "channels": {
         "api": "API",
-        "cli": "CLI",
-        "dingtalk": "釘釘",
-        "discord": "Discord",
-        "email": "電子郵件",
-        "feishu": "飛書",
-        "matrix": "Matrix",
-        "msteams": "Microsoft Teams",
-        "qq": "QQ",
-        "slack": "Slack",
-        "telegram": "Telegram",
-        "wechat": "微信",
-        "wecom": "企業微信",
-        "weixin": "微信",
-        "whatsapp": "WhatsApp"
+        "cli": "CLI"
       },
       "schedule": {
         "at": "於 {{time}}",
@@ -1187,7 +1205,7 @@
     "compaction": {
       "cancelled": "上下文壓縮已取消",
       "empty": "無需壓縮上下文",
-      "started": "正在壓縮上下文",
+      "started": "正在壓縮上下文…",
       "failed": "上下文壓縮失敗",
       "succeeded": "上下文已壓縮"
     },

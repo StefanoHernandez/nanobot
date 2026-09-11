@@ -984,8 +984,9 @@ export interface NanobotFeatureInfo {
   configured_fields?: string[];
   setup?: ChannelSetupContract;
   instances?: NanobotChannelInstanceInfo[];
-  installed: boolean;
-  ready: boolean;
+    installed: boolean;
+    requires_dependencies?: boolean;
+    ready: boolean;
   status: "enabled" | "missing_dependency" | "not_enabled" | string;
   install_supported: boolean;
   requires_restart: boolean;
@@ -1002,7 +1003,13 @@ export interface ChannelSetupContractField {
 
 export interface ChannelSetupContract {
   fields: ChannelSetupContractField[];
+  requirements?: ChannelSetupContractRequirement[];
   official_url?: string;
+  verifies_connection?: boolean;
+}
+
+export interface ChannelSetupContractRequirement {
+  alternatives: string[][];
 }
 
 export interface NanobotChannelInstanceInfo {
@@ -1194,11 +1201,8 @@ export interface ChannelConnectPayload {
   status: ChannelConnectStatus;
   message?: string;
   qr_url?: string;
-  domain?: string;
   interval_ms?: number;
   expires_at_ms?: number;
-  app_id?: string;
-  account?: string;
   nanobot_features?: NanobotFeaturesPayload;
 }
 
