@@ -890,7 +890,7 @@
     },
     "automations": {
       "create": "Crear automatización",
-      "createPrompt": "¿Qué te gustaría programar con nanobot?",
+      "createPrompt": "¿Qué te gustaría automatizar con nanobot?",
       "createInput": "Describe una automatización",
       "createRequest": "Crea una automatización para esta solicitud:\n\n{{request}}",
       "errors": {
@@ -908,6 +908,14 @@
       },
       "yourTasks": "Tus automatizaciones",
       "systemTasks": "Tareas del sistema",
+      "views": {
+        "label": "Vista de automatizaciones",
+        "tasks": "Tareas",
+        "calendar": "Calendario"
+      },
+      "filter": "Filtrar",
+      "filteredBy": "Filtro: {{status}}",
+      "commandCondition": "Se activa mediante un comando",
       "instructions": "Instrucciones",
       "done": "Listo",
       "moreDetails": "Más detalles",
@@ -918,7 +926,7 @@
       "filters": {
         "all": "Todas",
         "active": "Activas",
-        "paused": "Pausadas",
+        "paused": "Desactivadas",
         "failed": "Requieren atención",
         "system": "Sistema"
       },
@@ -946,8 +954,8 @@
         "updated": "Actualizada"
       },
       "runNow": "Ejecutar ahora",
-      "pause": "Pausar",
-      "resume": "Reanudar",
+      "pause": "Desactivar",
+      "resume": "Activar",
       "edit": "Editar",
       "delete": "Eliminar",
       "protected": "Protegida",
@@ -961,7 +969,7 @@
       "status": {
         "system": "Sistema",
         "running": "Ejecutándose ahora",
-        "paused": "Pausada",
+        "paused": "Desactivada",
         "failed": "Fallida",
         "completed": "Completada",
         "noSchedule": "Sin programación",
@@ -976,12 +984,14 @@
         "cli": "CLI"
       },
       "schedule": {
+        "weeklyAt": "Cada {{day}} a las {{time}}",
         "at": "A las {{time}}",
         "every": "Cada {{duration}}",
         "cron": "Cron {{expr}}",
         "cronWithTz": "Cron {{expr}} ({{tz}})",
         "withTz": "{{summary}} ({{tz}})",
         "dailyAt": "Todos los días a las {{time}}",
+        "monthlyAt": "El día {{day}} de cada mes a las {{time}}",
         "weekdaysAt": "De lunes a viernes a las {{time}}",
         "hourlyAt": "Cada hora, en el minuto {{minute}}",
         "hourlyWindow": "Cada hora de {{start}} a {{end}}, en el minuto {{minute}}",
@@ -989,7 +999,7 @@
         "custom": "Programación personalizada"
       },
       "next": {
-        "paused": "Pausada",
+        "paused": "Desactivada",
         "pending": "Ejecutándose ahora",
         "local": "Esperando activador",
         "none": "Sin próxima ejecución"
@@ -1007,7 +1017,10 @@
         "unit": "Unidad",
         "cronExpression": "Expresión cron",
         "timezone": "Zona horaria",
-        "runAt": "Ejecutar a las"
+        "runAt": "Ejecutar a las",
+        "runDate": "Fecha de ejecución",
+        "runTime": "Hora de ejecución",
+        "chooseDate": "Elegir fecha"
       },
       "scheduleTypes": {
         "every": "Intervalo",

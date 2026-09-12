@@ -889,7 +889,7 @@
     },
     "automations": {
       "create": "Tạo tự động hóa",
-      "createPrompt": "Bạn muốn nanobot làm gì theo lịch?",
+      "createPrompt": "Bạn muốn nanobot tự động làm gì?",
       "createInput": "Mô tả tác vụ tự động",
       "createRequest": "Tạo một tác vụ tự động cho yêu cầu này:\n\n{{request}}",
       "errors": {
@@ -907,6 +907,14 @@
       },
       "yourTasks": "Tác vụ tự động của bạn",
       "systemTasks": "Tác vụ hệ thống",
+      "views": {
+        "label": "Chế độ xem tác vụ tự động",
+        "tasks": "Tác vụ",
+        "calendar": "Lịch"
+      },
+      "filter": "Lọc",
+      "filteredBy": "Lọc: {{status}}",
+      "commandCondition": "Kích hoạt bằng lệnh",
       "instructions": "Chỉ dẫn",
       "done": "Xong",
       "moreDetails": "Chi tiết khác",
@@ -917,7 +925,7 @@
       "filters": {
         "all": "Tất cả",
         "active": "Đã bật",
-        "paused": "Đã tạm dừng",
+        "paused": "Đã tắt",
         "failed": "Cần xử lý",
         "system": "Hệ thống"
       },
@@ -945,8 +953,8 @@
         "updated": "Đã cập nhật"
       },
       "runNow": "Chạy ngay",
-      "pause": "Tạm dừng",
-      "resume": "Tiếp tục",
+      "pause": "Tắt",
+      "resume": "Bật",
       "edit": "Sửa",
       "delete": "Xóa",
       "protected": "Được bảo vệ",
@@ -960,7 +968,7 @@
       "status": {
         "system": "Hệ thống",
         "running": "Đang chạy",
-        "paused": "Đã tạm dừng",
+        "paused": "Đã tắt",
         "failed": "Thất bại",
         "completed": "Hoàn tất",
         "noSchedule": "Không có lịch",
@@ -975,12 +983,14 @@
         "cli": "CLI"
       },
       "schedule": {
+        "weeklyAt": "Mỗi {{day}} lúc {{time}}",
         "at": "Vào {{time}}",
         "every": "Mỗi {{duration}}",
         "cron": "Cron {{expr}}",
         "cronWithTz": "Cron {{expr}} ({{tz}})",
         "withTz": "{{summary}} ({{tz}})",
         "dailyAt": "Hằng ngày lúc {{time}}",
+        "monthlyAt": "Ngày {{day}} hằng tháng lúc {{time}}",
         "weekdaysAt": "Thứ Hai đến thứ Sáu lúc {{time}}",
         "hourlyAt": "Vào phút {{minute}} mỗi giờ",
         "hourlyWindow": "Vào phút {{minute}} mỗi giờ, từ {{start}} đến {{end}}",
@@ -988,7 +998,7 @@
         "custom": "Lịch tùy chỉnh"
       },
       "next": {
-        "paused": "Đã tạm dừng",
+        "paused": "Đã tắt",
         "pending": "Đang chạy",
         "local": "Đang chờ kích hoạt",
         "none": "Không có lần chạy tiếp theo"
@@ -1006,7 +1016,10 @@
         "unit": "Đơn vị",
         "cronExpression": "Biểu thức cron",
         "timezone": "Múi giờ",
-        "runAt": "Chạy lúc"
+        "runAt": "Chạy lúc",
+        "runDate": "Ngày chạy",
+        "runTime": "Giờ chạy",
+        "chooseDate": "Chọn ngày"
       },
       "scheduleTypes": {
         "every": "Khoảng lặp",
