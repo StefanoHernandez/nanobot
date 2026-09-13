@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, type ReactNode } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { FloatingPortalContext } from "@/components/ui/floating-portal";
 import {
   Tooltip,
   TooltipContent,
@@ -65,6 +66,7 @@ export function ComposerUsagePopover({
   bottomSheet?: boolean;
 }) {
   const { t, i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
   const normalizedRounds = useMemo(() => normalizeRounds(rounds), [rounds]);
   const hasContext = !!context
     && Number.isFinite(context.contextTokens)
@@ -116,6 +118,10 @@ export function ComposerUsagePopover({
 
   const Root = bottomSheet ? Sheet : Popover;
   const Trigger = bottomSheet ? SheetTrigger : PopoverTrigger;
+  const RoundRoot = bottomSheet ? Popover : Tooltip;
+  const RoundTrigger = bottomSheet ? PopoverTrigger : TooltipTrigger;
+  const RoundContent = bottomSheet ? PopoverContent : TooltipContent;
+  const RoundBar = bottomSheet ? "button" : "span";
   const trigger = (
     <Trigger asChild>
       <button
@@ -178,7 +184,7 @@ export function ComposerUsagePopover({
   );
 
   return (
-    <Root>
+    <Root open={open} onOpenChange={setOpen}>
       <TooltipProvider>
         {bottomSheet ? trigger : (
           <Tooltip>
@@ -194,7 +200,7 @@ export function ComposerUsagePopover({
           </Tooltip>
         )}
 
-        <UsagePanel bottomSheet={bottomSheet}>
+        <UsagePanel bottomSheet={bottomSheet} onDismiss={() => setOpen(false)}>
           <div className="px-4 pb-4 pt-3.5">
             {contextPercentage !== null ? (
               <>
@@ -330,16 +336,18 @@ export function ComposerUsagePopover({
                             index === normalizedRounds.length - 1 && "opacity-100",
                           )}
                         >
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                role="img"
+                          <RoundRoot>
+                            <RoundTrigger asChild>
+                              <RoundBar
+                                type={bottomSheet ? "button" : undefined}
+                                role={bottomSheet ? undefined : "img"}
                                 tabIndex={0}
                                 aria-label={detailLabel}
                                 data-testid="round-usage-bar"
                                 className={cn(
                                   "flex w-full max-w-7 flex-col overflow-hidden rounded-t-[3px] bg-muted",
                                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                  bottomSheet && "data-[state=open]:ring-2 data-[state=open]:ring-foreground/20",
                                 )}
                                 style={{ height: `${barHeight}px` }}
                               >
@@ -361,12 +369,16 @@ export function ComposerUsagePopover({
                                 ) : (
                                   <span className="block h-full w-full bg-muted-foreground/25" />
                                 )}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent
+                              </RoundBar>
+                            </RoundTrigger>
+                            <RoundContent
                               side="top"
                               align="center"
                               className="max-w-72 px-3 py-2 text-[11px]"
+                              {...(bottomSheet ? {
+                                "aria-label": timestampLabel,
+                                onOpenAutoFocus: (event: Event) => event.preventDefault(),
+                              } : {})}
                             >
                               <span
                                 className="block font-medium text-foreground"
@@ -392,8 +404,8 @@ export function ComposerUsagePopover({
                                   {detailNote}
                                 </span>
                               ) : null}
-                            </TooltipContent>
-                          </Tooltip>
+                            </RoundContent>
+                          </RoundRoot>
                         </span>
                       );
                     })}
@@ -408,34 +420,109 @@ export function ComposerUsagePopover({
   );
 }
 
-function UsagePanel({ bottomSheet, children }: { bottomSheet: boolean; children: ReactNode }) {
+function UsagePanel({ bottomSheet, onDismiss, children }: {
+  bottomSheet: boolean;
+  onDismiss: () => void;
+  children: ReactNode;
+}) {
   const { t } = useTranslation();
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panelNode, setPanelNode] = useState<HTMLDivElement | null>(null);
+  const sheetRef = useCallback((node: HTMLDivElement | null) => {
+    panelRef.current = node;
+    setPanelNode(node);
+  }, []);
+  const gesture = useRef<{ pointerId: number; x: number; y: number; time: number } | null>(null);
+  const suppressClick = useRef(false);
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const title = t("thread.composer.context.panelTitle", { defaultValue: "Context usage" });
   const focusPanel = (event: Event) => {
     event.preventDefault();
+    gesture.current = null;
+    suppressClick.current = false;
+    setOffset(0);
+    setDragging(false);
     panelRef.current?.focus({ preventScroll: true });
+  };
+  const cancelDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    if (gesture.current?.pointerId !== event.pointerId) return;
+    gesture.current = null;
+    suppressClick.current = true;
+    setDragging(false);
+    setOffset(0);
   };
 
   if (bottomSheet) {
     return (
       <SheetContent
-        ref={panelRef}
+        ref={sheetRef}
         side="bottom"
         aria-describedby={undefined}
+        showCloseButton={false}
         onOpenAutoFocus={focusPanel}
+        style={{ translate: `0 ${offset}px`, ...(dragging ? { transition: "none" } : {}) }}
         className={cn(
           "mx-auto max-h-[60dvh] w-full max-w-md gap-0 rounded-t-3xl border-t border-border/60 p-0 shadow-xl outline-none",
+          "transition-[translate]",
           "data-[state=open]:duration-300 data-[state=open]:ease-out data-[state=closed]:duration-200 data-[state=closed]:ease-in",
         )}
-        closeButtonClassName="right-3 top-5 flex size-11 items-center justify-center rounded-full"
       >
-        <div aria-hidden="true" className="mx-auto mt-2.5 h-1 w-8 shrink-0 rounded-full bg-foreground/15" />
-        <div className="shrink-0 px-5 pb-2 pt-5 pr-16">
+        <button
+          type="button"
+          aria-label={t("common.close")}
+          className="mx-auto flex h-11 w-24 shrink-0 touch-none select-none items-center justify-center rounded-full cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onPointerDown={(event) => {
+            if (event.button !== 0 || !event.isPrimary || gesture.current) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, time: event.timeStamp };
+            suppressClick.current = false;
+            setDragging(true);
+          }}
+          onPointerMove={(event) => {
+            const start = gesture.current;
+            if (!start || start.pointerId !== event.pointerId) return;
+            const dy = event.clientY - start.y;
+            const dx = event.clientX - start.x;
+            if (Math.abs(dy) > 5 || Math.abs(dx) > 5) suppressClick.current = true;
+            setOffset(Math.max(0, dy));
+          }}
+          onPointerUp={(event) => {
+            const start = gesture.current;
+            if (!start || start.pointerId !== event.pointerId) return;
+            gesture.current = null;
+            const dy = Math.max(0, event.clientY - start.y);
+            const dx = Math.abs(event.clientX - start.x);
+            const threshold = Math.max(48, Math.min(96, (panelRef.current?.offsetHeight ?? 320) * 0.3));
+            const elapsed = Math.max(1, event.timeStamp - start.time);
+            const dismiss = dy > dx && (dy >= threshold || (dy > 20 && dy / elapsed > 0.5));
+            suppressClick.current ||= dy > 5 || dx > 5;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+            setDragging(false);
+            if (dismiss) onDismiss();
+            else setOffset(0);
+          }}
+          onPointerCancel={cancelDrag}
+          onLostPointerCapture={cancelDrag}
+          onClick={(event) => {
+            // A completed drag also emits a click; don't close after a snap-back.
+            if (suppressClick.current && event.detail !== 0) {
+              event.preventDefault();
+              suppressClick.current = false;
+              return;
+            }
+            onDismiss();
+          }}
+        >
+          <span aria-hidden="true" className="h-1 w-8 rounded-full bg-foreground/15" />
+        </button>
+        <div className="shrink-0 px-5 pb-2">
           <SheetTitle className="text-base font-medium">{title}</SheetTitle>
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-contain px-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {children}
+          <FloatingPortalContext.Provider value={panelNode}>
+            {children}
+          </FloatingPortalContext.Provider>
         </div>
       </SheetContent>
     );

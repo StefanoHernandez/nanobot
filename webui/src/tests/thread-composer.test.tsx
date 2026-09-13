@@ -1190,7 +1190,7 @@ describe("ThreadComposer", () => {
     expect(onWorkspaceScopeChange).not.toHaveBeenCalled();
   });
 
-  it.each(["close button", "Escape"])("opens narrow context usage as a bottom sheet and restores interaction after %s", async (dismissal) => {
+  it.each(["handle tap", "Escape"])("opens narrow context usage as a bottom sheet and restores interaction after %s", async (dismissal) => {
     vi.spyOn(HTMLFormElement.prototype, "getBoundingClientRect").mockReturnValue(
       rect({ width: 390, height: 160 }),
     );
