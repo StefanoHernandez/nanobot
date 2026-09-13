@@ -37,6 +37,25 @@ async function openSheet() {
 }
 
 describe("Mobile context usage sheet", () => {
+  it("keeps tiny rounds tappable without exaggerating their visual token usage", async () => {
+    const user = userEvent.setup();
+    render(<ComposerUsagePopover bottomSheet context={null} rounds={[
+      { id: "small", timestamp: 0, inputTokens: 1000 },
+      { id: "large", timestamp: 60000, inputTokens: 500000 },
+    ]} />);
+    await user.click(screen.getByTestId("composer-context-usage"));
+    const [small, large] = screen.getAllByTestId("round-usage-bar");
+    for (const bar of [small, large]) {
+      expect(bar.parentElement).toHaveClass("relative", "h-full", "flex-1");
+      expect(bar).toHaveClass("before:absolute", "before:inset-0");
+    }
+    expect(small).toHaveStyle({ height: "0.216px" });
+    expect(large).toHaveStyle({ height: "108px" });
+    await user.pointer([{ keys: "[TouchA>]", target: small }, { keys: "[/TouchA]", target: small }]);
+    expect(within(screen.getByRole("dialog", { name: "Context usage" })).getByRole("dialog"))
+      .toHaveTextContent("1,000");
+  });
+
   it("replaces the X with a keyboard-accessible drag handle", async () => {
     const { user, handle, sheet, trigger } = await openSheet();
     expect(within(sheet).getAllByRole("button", { name: "Close" })).toEqual([handle]);

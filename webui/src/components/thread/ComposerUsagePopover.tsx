@@ -328,6 +328,7 @@ export function ComposerUsagePopover({
                           key={round.id}
                           className={cn(
                             "flex h-full min-w-0 flex-1 items-end justify-center rounded-sm",
+                            bottomSheet && "relative",
                             "opacity-70 transition-opacity hover:opacity-100",
                             index === 0 && "justify-start",
                             normalizedRounds.length > 1
@@ -347,7 +348,9 @@ export function ComposerUsagePopover({
                                 className={cn(
                                   "flex w-full max-w-7 flex-col overflow-hidden rounded-t-[3px] bg-muted",
                                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                  bottomSheet && "data-[state=open]:ring-2 data-[state=open]:ring-foreground/20",
+                                  // Let touch users hit the entire column, even when a
+                                  // round's proportional bar is less than a pixel high.
+                                  bottomSheet && "before:absolute before:inset-0 before:content-[''] data-[state=open]:ring-2 data-[state=open]:ring-foreground/20",
                                 )}
                                 style={{ height: `${barHeight}px` }}
                               >
