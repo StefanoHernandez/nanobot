@@ -23,7 +23,13 @@ import {
 } from "@/components/SidebarSelectionHighlight";
 import { isCapabilitySection, type SettingsSectionKey } from "@/components/settings/contracts";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
@@ -184,7 +190,7 @@ export function SettingsSidebar(props: SettingsSidebarProps) {
   );
 }
 
-// Mount only on narrow screens so switching to desktop also releases the sheet's focus/pointer lock.
+// Mount only on narrow screens so an open menu cannot survive a switch to desktop.
 function MobileSettingsNavigation({
   navSection,
   activeLabel,
@@ -202,16 +208,18 @@ function MobileSettingsNavigation({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const restart = () => { setOpen(false); onRestart?.(); };
+  const restartTone = restartPending && !isRestarting
+    ? "text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+    : "text-muted-foreground hover:text-foreground";
+  const restartIcon = isRestarting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+    : <RotateCcw className="h-4 w-4" aria-hidden />;
   const restartAction = onRestart ? (
     <Button type="button" variant="ghost" disabled={isRestarting}
-      onClick={() => { setOpen(false); onRestart(); }}
-      className={cn("h-11 shrink-0 gap-2 px-3 text-sm font-normal",
-        restartPending && !isRestarting
-          ? "text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
-          : "text-muted-foreground hover:text-foreground")}
+      onClick={restart}
+      className={cn("h-11 shrink-0 gap-2 px-3 text-sm font-normal", restartTone)}
     >
-      {isRestarting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        : <RotateCcw className="h-4 w-4" aria-hidden />}
+      {restartIcon}
       {restartLabel}
     </Button>
   ) : null;
@@ -227,49 +235,45 @@ function MobileSettingsNavigation({
         >
           <ChevronLeft className="h-5 w-5" aria-hidden />
         </Button>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
+        <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+          <DropdownMenuTrigger asChild>
             <Button type="button" variant="ghost"
               aria-label={`${t("settings.sidebar.title")}: ${activeLabel}`}
               className="h-11 min-w-0 max-w-full justify-self-center gap-1.5 px-2 text-base font-medium"
             >
               <span className="truncate">{activeLabel}</span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none", open && "rotate-180")} aria-hidden />
             </Button>
-          </SheetTrigger>
-          <SheetContent side="bottom" showCloseButton={false} aria-describedby={undefined}
-            className="mx-auto max-h-[85dvh] max-w-md gap-0 rounded-t-3xl px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] data-[state=open]:duration-300 data-[state=closed]:duration-200"
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="center" sideOffset={6} collisionPadding={12}
+            aria-label={t("settings.sidebar.ariaLabel")} aria-labelledby={undefined}
+            className="w-60 max-w-[calc(100vw-1.5rem)] data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1 data-[state=open]:duration-150 data-[state=closed]:duration-100 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none"
           >
-            <div className="flex shrink-0 items-center justify-between gap-3 px-3 pb-2">
-              <SheetTitle className="text-base font-medium">{t("settings.sidebar.title")}</SheetTitle>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}
-                className="-mr-2 h-11 px-2 text-sm font-normal text-muted-foreground"
-              >{t("common.close")}</Button>
-            </div>
-            <div className="min-h-0 overflow-y-auto overscroll-contain">
-              <nav aria-label={t("settings.sidebar.ariaLabel")} className="space-y-0.5">
-                {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback }) => {
-                  const active = key === navSection;
-                  return (
-                    <Button key={key} type="button" variant="ghost"
-                      aria-current={active ? "page" : undefined}
-                      onClick={() => { setOpen(false); onSelectSection(key); }}
-                      className={cn("h-11 w-full justify-start gap-3 rounded-xl px-3 text-sm font-normal",
-                        active ? "bg-sidebar-accent text-foreground" : "text-sidebar-content")}
-                    >
-                      <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-left">
-                        {t(`settings.nav.${key}`, { defaultValue: fallback })}
-                      </span>
-                      {active ? <Check className="h-4 w-4 shrink-0" aria-hidden /> : null}
-                    </Button>
-                  );
-                })}
-              </nav>
-              {restartAction ? <div className="mt-2 border-t border-border/50 pt-2">{restartAction}</div> : null}
-            </div>
-          </SheetContent>
-        </Sheet>
+            {SETTINGS_NAV_ITEMS.map(({ key, icon: Icon, fallback }) => {
+              const active = key === navSection;
+              return (
+                <DropdownMenuItem key={key}
+                  aria-current={active ? "page" : undefined}
+                  onSelect={() => onSelectSection(key)}
+                  className={cn("min-h-11 gap-3 text-sm font-normal",
+                    active ? "bg-sidebar-accent text-foreground" : "text-sidebar-content")}
+                >
+                  <Icon aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">
+                    {t(`settings.nav.${key}`, { defaultValue: fallback })}
+                  </span>
+                  {active ? <Check aria-hidden /> : null}
+                </DropdownMenuItem>
+              );
+            })}
+            {onRestart ? <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={isRestarting} onSelect={restart}
+                className={cn("min-h-11 gap-3 text-sm font-normal", restartTone)}
+              >{restartIcon}{restartLabel}</DropdownMenuItem>
+            </> : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {onRestart && (restartPending || isRestarting) ? (
         <div className="flex min-h-11 items-center justify-between gap-2 px-4 pb-1">
