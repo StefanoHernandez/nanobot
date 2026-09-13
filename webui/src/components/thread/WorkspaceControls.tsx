@@ -389,7 +389,7 @@ function AccessMenuItem({
       disabled={disabled}
       onSelect={onSelect}
       className={cn(
-        "flex h-10 items-center gap-3 px-3 text-[13.5px] font-semibold",
+        "flex h-10 items-center gap-3 px-3 text-[13.5px] font-semibold max-sm:min-h-11",
         warning && "text-orange-600 focus:text-orange-600 dark:text-orange-300 dark:focus:text-orange-300",
       )}
     >

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef } from "react";
+import { Fragment, useMemo, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -6,6 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipContent,
@@ -55,12 +56,15 @@ function normalizeRounds(
 export function ComposerUsagePopover({
   context,
   rounds,
+  showLabel = false,
+  bottomSheet = false,
 }: {
   context: ComposerContextUsage | null;
   rounds: readonly ComposerRoundUsage[];
+  showLabel?: boolean;
+  bottomSheet?: boolean;
 }) {
   const { t, i18n } = useTranslation();
-  const panelRef = useRef<HTMLDivElement>(null);
   const normalizedRounds = useMemo(() => normalizeRounds(rounds), [rounds]);
   const hasContext = !!context
     && Number.isFinite(context.contextTokens)
@@ -110,109 +114,104 @@ export function ComposerUsagePopover({
     minute: "2-digit",
   });
 
-  return (
-    <Popover>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                data-testid="composer-context-usage"
-                aria-label={triggerLabel}
-                className={cn(
-                  "touch-target inline-flex size-5 shrink-0 items-center justify-center rounded-full",
-                  "text-muted-foreground/75 transition-colors hover:text-foreground/85",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                )}
-              >
-                {contextPercentage === null ? (
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[15px]">
-                    <path
-                      d="M3 12V9m5 3V5m5 7V2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    viewBox="0 0 16 16"
-                    aria-hidden="true"
-                    className={cn(
-                      "size-[15px] shrink-0 -rotate-90",
-                      status === "critical" && "text-destructive",
-                      status === "caution" && "text-amber-600 dark:text-amber-400",
-                      status === "normal" && "text-muted-foreground/75",
-                    )}
-                  >
-                    <circle
-                      cx="8"
-                      cy="8"
-                      r="6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      className="opacity-20"
-                    />
-                    <circle
-                      cx="8"
-                      cy="8"
-                      r="6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeDasharray={`${ringLength} ${ringCircumference}`}
-                      data-testid="composer-context-meter"
-                    />
-                  </svg>
-                )}
-              </button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            align="center"
-            sideOffset={8}
-            className="w-fit max-w-[calc(100vw-2rem)] rounded-full border-border/70 px-2.5 py-1 text-xs font-medium shadow-[0_8px_24px_rgba(15,23,42,0.13)]"
+  const Root = bottomSheet ? Sheet : Popover;
+  const Trigger = bottomSheet ? SheetTrigger : PopoverTrigger;
+  const trigger = (
+    <Trigger asChild>
+      <button
+        type="button"
+        data-testid="composer-context-usage"
+        aria-label={triggerLabel}
+        className={cn(
+          "touch-target inline-flex size-5 shrink-0 items-center justify-center rounded-full",
+          "text-muted-foreground/75 transition-colors hover:text-foreground/85",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          showLabel && "w-auto gap-1.5 px-2 text-xs",
+        )}
+      >
+        {contextPercentage === null ? (
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[15px]">
+            <path
+              d="M3 12V9m5 3V5m5 7V2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        ) : (
+          <svg
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            className={cn(
+              "size-[15px] shrink-0 -rotate-90",
+              status === "critical" && "text-destructive",
+              status === "caution" && "text-amber-600 dark:text-amber-400",
+              status === "normal" && "text-muted-foreground/75",
+            )}
           >
-            <span className="whitespace-nowrap tabular-nums">{contextDescription}</span>
-          </TooltipContent>
-        </Tooltip>
+            <circle
+              cx="8"
+              cy="8"
+              r="6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="opacity-20"
+            />
+            <circle
+              cx="8"
+              cy="8"
+              r="6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeDasharray={`${ringLength} ${ringCircumference}`}
+              data-testid="composer-context-meter"
+            />
+          </svg>
+        )}
+        {showLabel ? <span aria-hidden>{contextDescription}</span> : null}
+      </button>
+    </Trigger>
+  );
 
-        <PopoverContent
-          ref={panelRef}
-          side="top"
-          align="end"
-          sideOffset={10}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            panelRef.current?.focus();
-          }}
-          aria-label={t("thread.composer.context.panelTitle", {
-            defaultValue: "Context usage",
-          })}
-          className="w-[min(22rem,calc(100vw-1.5rem))] p-0"
-        >
+  return (
+    <Root>
+      <TooltipProvider>
+        {bottomSheet ? trigger : (
+          <Tooltip>
+            <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+            <TooltipContent
+              side="top"
+              align="center"
+              sideOffset={8}
+              className="w-fit max-w-[calc(100vw-2rem)] rounded-full border-border/70 px-2.5 py-1 text-xs font-medium shadow-[0_8px_24px_rgba(15,23,42,0.13)]"
+            >
+              <span className="whitespace-nowrap tabular-nums">{contextDescription}</span>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        <UsagePanel bottomSheet={bottomSheet}>
           <div className="px-4 pb-4 pt-3.5">
             {contextPercentage !== null ? (
               <>
                 <div className="flex items-baseline justify-between gap-3">
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <span className="shrink-0 text-[12px] font-medium text-foreground">
+                    <span className={cn("shrink-0 font-medium text-foreground", bottomSheet ? "text-sm" : "text-[12px]")}>
                       {t("thread.composer.context.contextTitle", {
                         defaultValue: "Context",
                       })}
                     </span>
-                    <span className="truncate text-[11px] tabular-nums text-muted-foreground">
+                    <span className={cn("truncate tabular-nums text-muted-foreground", bottomSheet ? "text-xs" : "text-[11px]")}>
                       {formatCompactTokenCount(context!.contextTokens)} / {formatCompactTokenCount(
                         context!.contextWindowTokens!,
                       )}
                     </span>
                   </div>
-                  <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                  <span className={cn("shrink-0 tabular-nums text-muted-foreground", bottomSheet ? "text-xs" : "text-[11px]")}>
                     {contextPercentage}%
                   </span>
                 </div>
@@ -243,12 +242,12 @@ export function ComposerUsagePopover({
                   "flex items-baseline justify-between gap-3",
                   contextPercentage === null ? "mt-0" : "mt-5",
                 )}>
-                  <span className="text-[12px] font-medium text-foreground">
+                  <span className={cn("font-medium text-foreground", bottomSheet ? "text-sm" : "text-[12px]")}>
                     {t("thread.composer.context.recentRounds", {
                       defaultValue: "Recent rounds",
                     })}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className={cn("text-muted-foreground", bottomSheet ? "text-xs" : "text-[11px]")}>
                     {t("thread.composer.context.inputTrend", {
                       defaultValue: "Input tokens",
                     })}
@@ -403,8 +402,56 @@ export function ComposerUsagePopover({
             ) : null}
 
           </div>
-        </PopoverContent>
+        </UsagePanel>
       </TooltipProvider>
-    </Popover>
+    </Root>
+  );
+}
+
+function UsagePanel({ bottomSheet, children }: { bottomSheet: boolean; children: ReactNode }) {
+  const { t } = useTranslation();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const title = t("thread.composer.context.panelTitle", { defaultValue: "Context usage" });
+  const focusPanel = (event: Event) => {
+    event.preventDefault();
+    panelRef.current?.focus({ preventScroll: true });
+  };
+
+  if (bottomSheet) {
+    return (
+      <SheetContent
+        ref={panelRef}
+        side="bottom"
+        aria-describedby={undefined}
+        onOpenAutoFocus={focusPanel}
+        className={cn(
+          "mx-auto max-h-[60dvh] w-full max-w-md gap-0 rounded-t-3xl border-t border-border/60 p-0 shadow-xl outline-none",
+          "data-[state=open]:duration-300 data-[state=open]:ease-out data-[state=closed]:duration-200 data-[state=closed]:ease-in",
+        )}
+        closeButtonClassName="right-3 top-5 flex size-11 items-center justify-center rounded-full"
+      >
+        <div aria-hidden="true" className="mx-auto mt-2.5 h-1 w-8 shrink-0 rounded-full bg-foreground/15" />
+        <div className="shrink-0 px-5 pb-2 pt-5 pr-16">
+          <SheetTitle className="text-base font-medium">{title}</SheetTitle>
+        </div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {children}
+        </div>
+      </SheetContent>
+    );
+  }
+
+  return (
+    <PopoverContent
+      ref={panelRef}
+      side="top"
+      align="end"
+      sideOffset={10}
+      onOpenAutoFocus={focusPanel}
+      aria-label={title}
+      className="w-[min(22rem,calc(100vw-1.5rem))] p-0"
+    >
+      {children}
+    </PopoverContent>
   );
 }
