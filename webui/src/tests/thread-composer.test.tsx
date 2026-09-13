@@ -2384,6 +2384,25 @@ describe("ThreadComposer", () => {
     });
   });
 
+  it("does not remove a mention when composition is canceled inside its label", () => {
+    const onSend = vi.fn();
+    render(<ThreadComposer onSend={onSend} mcpPresets={[
+      { ...MCP_PRESETS[0], name: "drive", display_name: "Google Drive" },
+    ]} />);
+    const input = screen.getByLabelText("Message input") as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "@drive next" } });
+    input.setSelectionRange(4, 4);
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: "@\u00a0Gonogle Drive next", selectionStart: 5 } });
+    fireEvent.change(input, { target: { value: "@\u00a0Google Drive next", selectionStart: 4 } });
+    fireEvent.compositionEnd(input, { data: "" });
+    expect(input).toHaveValue("@\u00a0Google Drive next");
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    expect(onSend).toHaveBeenCalledWith("@drive next", undefined, {
+      mcpPresets: [expect.objectContaining({ name: "drive" })],
+    });
+  });
+
   it("clears mention editing and undo state when switching sessions during composition", () => {
     const props = { onSend: vi.fn(), cliApps: CLI_APPS };
     const { rerender } = render(<ThreadComposer {...props} pendingQueueKey="chat-a" />);

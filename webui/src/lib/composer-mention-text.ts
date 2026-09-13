@@ -102,6 +102,10 @@ export function editComposerMentionText(
   caret: number,
   selection?: { start: number; end: number },
 ): { value: string; cursor: number } {
+  // Canceling IME composition is not an edit, even when its caret is inside a token.
+  if (nextDisplay === text.display) {
+    return { value: text.raw, cursor: mentionTextOffset(text, caret, "toRaw") };
+  }
   let start = 0;
   // The caret disambiguates repeated text (e.g. inserting a space before an existing space).
   while (start < Math.min(text.display.length, nextDisplay.length, caret, selection?.start ?? Infinity)

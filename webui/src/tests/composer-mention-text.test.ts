@@ -12,6 +12,13 @@ const apps = [
 const project = (raw: string) => composerMentionText(splitCapabilityMentionSegments(raw, apps));
 
 describe("composer mention display text", () => {
+  it("preserves the identifier when an IME edit is canceled inside a mention", () => {
+    const text = project("@drive next");
+    expect(editComposerMentionText(text, text.display, 4, { start: 4, end: 4 }).value)
+      .toBe("@drive next");
+    expect(editComposerMentionText(text, text.display, 13, { start: 0, end: 13 }).value)
+      .toBe("@drive next");
+  });
   it.each([
     ["n @Linear @Google Drive", 0, 0, ["linear", "drive"]],
     ["@Linear n @Google Drive", 8, 8, ["linear", "drive"]],
