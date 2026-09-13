@@ -44,7 +44,10 @@ export function useComposerMentionInput({
   }, [inputRef]);
 
   const selectRaw = useCallback((start: number, end = start) => {
-    inputRef.current?.setSelectionRange(
+    const el = inputRef.current;
+    // Focus first: removing a queued prompt's edit button can reset a blurred selection.
+    el?.focus();
+    el?.setSelectionRange(
       mentionTextOffset(textRef.current, start, "toDisplay", "start"),
       mentionTextOffset(textRef.current, end, "toDisplay", "end"),
     );

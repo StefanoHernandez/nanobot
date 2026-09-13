@@ -2981,10 +2981,19 @@ describe("ThreadComposer", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     const editButton = screen.getByRole("button", { name: "Edit guidance" });
-    fireEvent.click(editButton);
+    const textarea = input as HTMLTextAreaElement;
+    const setSelection = textarea.setSelectionRange.bind(textarea);
+    const focusedSelections: boolean[] = [];
+    vi.spyOn(textarea, "setSelectionRange").mockImplementation((start, end, direction) => {
+      focusedSelections.push(document.activeElement === textarea);
+      setSelection(start, end, direction);
+    });
+    await userEvent.click(editButton);
     await waitFor(() => {
       expect(input).toHaveFocus();
     });
+    expect(focusedSelections).toEqual([true]);
+    expect(textarea.selectionStart).toBe("rough follow-up".length);
     expect(input).toHaveValue("rough follow-up");
     expect(screen.queryByRole("group", { name: "Queued guidance" })).not.toBeInTheDocument();
     fireEvent.change(input, { target: { value: "polished follow-up" } });
