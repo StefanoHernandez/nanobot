@@ -384,6 +384,17 @@ def test_add_at_job_accepts_future_datetime(tmp_path) -> None:
     assert job.state.next_run_at_ms is not None
 
 
+def test_add_job_rejects_multiple_schedule_fields(tmp_path) -> None:
+    tool = _make_tool(tmp_path)
+    with request_context(
+        RequestContext(channel="telegram", chat_id="chat-1", session_key="telegram:chat-1")
+    ):
+        result = tool._add_job(None, "Morning standup", 60, "0 8 * * *", None, None)
+
+    assert result == "Error: exactly one of every_seconds, cron_expr, or at is required"
+    assert tool._cron.list_jobs() == []
+
+
 def test_add_job_binds_current_session_key(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     with request_context(
