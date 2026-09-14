@@ -604,6 +604,17 @@
     }
   }
 
+  .thread-workspace {
+    container: thread-workspace / inline-size;
+  }
+  /* Keep room for the 49.5rem message column and controls in the side margin. */
+  @container thread-workspace (max-width: 72rem) {
+    .thread-workspace > * {
+      --thread-header-position: relative;
+      --thread-prompt-inset: 1rem;
+    }
+  }
+
   .workbench-pane {
     transform-origin: top left;
   }
