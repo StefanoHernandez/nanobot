@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+from nanobot.agent.tools.file_state import file_read_context
 from nanobot.agent.tools.filesystem import EditFileTool, ReadFileTool
 
 
@@ -10,9 +11,11 @@ def test_read_file_force_bypasses_dedup(tmp_path):
     target.write_text("alpha\n")
     tool = ReadFileTool(workspace=tmp_path)
 
-    first = asyncio.run(tool.execute(path=str(target)))
-    second = asyncio.run(tool.execute(path=str(target)))
-    forced = asyncio.run(tool.execute(path=str(target), force=True))
+    with file_read_context("read-1", lambda: {}):
+        first = asyncio.run(tool.execute(path=str(target)))
+    with file_read_context("read-2", lambda: {"read-1": first}):
+        second = asyncio.run(tool.execute(path=str(target)))
+        forced = asyncio.run(tool.execute(path=str(target), force=True))
 
     assert "alpha" in first
     assert "unchanged" in second.lower()
