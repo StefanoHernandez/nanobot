@@ -290,6 +290,18 @@ function hasValidProjectionMetadata(value: Record<string, unknown>): boolean {
   );
 }
 
+function isProjectionTraceDetail(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.ref === "string"
+    && /^\d{1,12}\.history-[0-9a-f]{20}$/.test(value.ref)
+    && typeof value.bytes === "number"
+    && Number.isFinite(value.bytes)
+    && value.bytes >= 0
+    && typeof value.traceCount === "number"
+    && Number.isInteger(value.traceCount)
+    && value.traceCount >= 0;
+}
+
 function parseThreadProjectionEvent(value: unknown): ThreadProjectionEvent {
   if (!isRecord(value) || typeof value.event !== "string" || typeof value.chat_id !== "string") {
     throw new Error("Invalid WebUI thread event");
@@ -328,6 +340,10 @@ function parseThreadProjectionEvent(value: unknown): ThreadProjectionEvent {
     case "message":
       if (typeof value.text !== "string") break;
       if (value.tool_events !== undefined && !isRecordArray(value.tool_events)) break;
+      if (value.trace_detail !== undefined && (
+        !["tool_hint", "progress"].includes(String(value.kind))
+        || !isProjectionTraceDetail(value.trace_detail)
+      )) break;
       if (value.media_urls !== undefined && (
         !Array.isArray(value.media_urls) || !value.media_urls.every(isProjectionMedia)
       )) break;
@@ -356,17 +372,30 @@ function parseWebuiThreadPayload(value: unknown): WebuiThreadPersistedPayload {
   if (!isRecord(value) || typeof value.schemaVersion !== "number") {
     throw new Error("Invalid WebUI thread response");
   }
-  if (value.messages !== undefined && !Array.isArray(value.messages)) {
-    throw new Error("Invalid WebUI thread messages");
-  }
-  if (value.events !== undefined && !Array.isArray(value.events)) {
+  if (value.projection !== "events" || !Array.isArray(value.events)) {
     throw new Error("Invalid WebUI thread events");
   }
-  const events = value.events?.map(parseThreadProjectionEvent);
+  const events = value.events.map(parseThreadProjectionEvent);
   return {
     ...value,
-    ...(events ? { events } : {}),
+    projection: "events",
+    events,
   } as unknown as WebuiThreadPersistedPayload;
+}
+
+function parseWebuiThreadTraceDetailPayload(value: unknown): WebuiThreadTraceDetailPayload {
+  if (
+    !isRecord(value)
+    || typeof value.message_id !== "string"
+    || !/^history-[0-9a-f]{20}$/.test(value.message_id)
+    || !Array.isArray(value.events)
+  ) {
+    throw new Error("Invalid WebUI thread trace detail response");
+  }
+  return {
+    message_id: value.message_id,
+    events: value.events.map(parseThreadProjectionEvent),
+  };
 }
 
 export async function fetchWebuiThread(
@@ -381,7 +410,6 @@ export async function fetchWebuiThread(
   if (options?.limit !== undefined) params.set("limit", String(options.limit));
   if (options?.direction) params.set("direction", options.direction);
   if (options?.before) params.set("before", options.before);
-  params.set("projection", "events");
   const query = params.toString();
   const suffix = query ? `?${query}` : "";
   const url = `${resolvedBase}/api/sessions/${encodeURIComponent(key)}/webui-thread${suffix}`;
@@ -413,7 +441,7 @@ export async function fetchWebuiThreadTraceDetail(
     cache: "no-store",
   });
   if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
-  return (await res.json()) as WebuiThreadTraceDetailPayload;
+  return parseWebuiThreadTraceDetailPayload(await res.json());
 }
 
 export async function fetchFilePreview(

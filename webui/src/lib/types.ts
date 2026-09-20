@@ -71,6 +71,12 @@ export interface ResponseSource {
   fallback?: boolean;
 }
 
+export interface UITraceDetail {
+  ref: string;
+  bytes: number;
+  traceCount: number;
+}
+
 export interface RetryStatus extends WireRetryStatus {
   next_retry_at?: number;
   turn_id?: string;
@@ -91,11 +97,7 @@ export interface UIMessage {
    * distinguish running, completed, and failed tool phases. */
   toolEvents?: ToolProgressEvent[];
   /** Oversized persisted trace content that can be fetched when activity is expanded. */
-  traceDetail?: {
-    ref: string;
-    bytes: number;
-    traceCount: number;
-  };
+  traceDetail?: UITraceDetail;
   /** Activity rows: explicit file edits emitted by edit tools. */
   fileEdits?: UIFileEdit[];
   /** Activity rows created during the same agent phase share one collapsible block. */
@@ -1387,6 +1389,8 @@ export type InboundEvent =
       media?: string[];
       media_urls?: Array<{ url: string; name?: string }>;
       tool_events?: ToolProgressEvent[];
+      /** Oversized persisted activity detail, fetched only when the trace is expanded. */
+      trace_detail?: UITraceDetail;
       /** Present when the frame is an agent breadcrumb (e.g. tool hint,
        * generic progress line) rather than a conversational reply. */
       kind?: "tool_hint" | "progress" | "reasoning";
@@ -1572,8 +1576,6 @@ export interface OutboundMcpPresetMention {
 interface WebuiThreadPagePayload {
   before_cursor?: string | null;
   has_more_before?: boolean;
-  loaded_message_count?: number;
-  total_known_message_count?: number;
   user_message_offset?: number;
   loaded_event_count?: number;
 }
@@ -1584,12 +1586,9 @@ export interface WebuiThreadPersistedPayload {
   savedAt?: string;
   /** Cheap server revision used for application-managed conditional revalidation. */
   revision?: string;
-  /** Legacy server-projected snapshots, retained as a compatibility fallback. */
-  messages?: UIMessage[];
   /** Canonical transcript events projected by the same reducer as live events. */
-  events?: ThreadProjectionEvent[];
-  projection?: "events";
-  fork_boundary_message_count?: number;
+  events: ThreadProjectionEvent[];
+  projection: "events";
   fork_boundary_event_index?: number;
   /** Turn ids backed by an explicit persisted ``turn_end`` event. */
   completed_turn_ids?: string[];
@@ -1602,9 +1601,7 @@ export interface WebuiThreadPersistedPayload {
 
 export interface WebuiThreadTraceDetailPayload {
   message_id: string;
-  content: string;
-  traces?: string[];
-  toolEvents?: ToolProgressEvent[];
+  events: ThreadProjectionEvent[];
 }
 
 export interface FilePreviewPayload {
