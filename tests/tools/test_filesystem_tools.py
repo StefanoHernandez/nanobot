@@ -99,6 +99,38 @@ class TestReadFileTool:
         assert "Use offset=" in result
 
     @pytest.mark.asyncio
+    async def test_first_line_longer_than_budget_returns_prefix(self, tool, tmp_path):
+        """A single line over the whole budget must still yield content."""
+        f = tmp_path / "minified.txt"
+        f.write_text("y" * (ReadFileTool._MAX_CHARS * 2) + "\nsecond line\n", encoding="utf-8")
+
+        result = await tool.execute(path=str(f))
+
+        assert "1| " in result
+        assert "second line" not in result
+        assert len(result) <= ReadFileTool._MAX_CHARS + 500
+        assert "Use offset=2 to continue" in result
+
+    @pytest.mark.asyncio
+    async def test_long_middle_line_advances_to_following_content(self, tool, tmp_path):
+        f = tmp_path / "bundle.txt"
+        f.write_text(
+            "first\n" + "z" * (ReadFileTool._MAX_CHARS * 2) + "\nlast\n",
+            encoding="utf-8",
+        )
+
+        first = await tool.execute(path=str(f))
+        assert "Use offset=2 to continue" in first
+
+        second = await tool.execute(path=str(f), offset=2)
+        assert "2| " in second
+        assert len(second) <= ReadFileTool._MAX_CHARS + 500
+        assert "Use offset=3 to continue" in second
+
+        third = await tool.execute(path=str(f), offset=3)
+        assert "3| last" in third
+
+    @pytest.mark.asyncio
     async def test_oversized_file_is_rejected_before_read(self, tool, tmp_path, monkeypatch):
         f = tmp_path / "huge.txt"
         with f.open("wb") as stream:

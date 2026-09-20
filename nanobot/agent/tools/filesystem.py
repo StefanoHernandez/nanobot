@@ -403,6 +403,11 @@ class ReadFileTool(_FsTool):
                 for line in numbered:
                     chars += len(line) + 1
                     if chars > self._MAX_CHARS:
+                        if not trimmed:
+                            # Do not leave the reader at the same offset when a
+                            # single numbered line exceeds the entire budget.
+                            # Return a bounded prefix and advance past the line.
+                            trimmed.append(line[: self._MAX_CHARS])
                         break
                     trimmed.append(line)
                 end = start + len(trimmed)
