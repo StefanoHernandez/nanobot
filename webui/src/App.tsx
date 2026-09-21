@@ -64,6 +64,7 @@ import { displayTitle, sortSessions } from "@/lib/chat-groups";
 import { deriveTitle } from "@/lib/format";
 import { NanobotClient } from "@/lib/nanobot-client";
 import { ThreadMessageCache } from "@/lib/thread-message-cache";
+import { FilePreviewStore } from "@/hooks/useFilePreviewState";
 import { ClientProvider, useClient } from "@/providers/ClientProvider";
 import type {
   BootstrapResponse,
@@ -1217,16 +1218,20 @@ function Shell({
   // Pane shells can unmount during navigation. Keep replay state for this app
   // session, pinning temporary chats because they cannot reload disk history.
   const retainedTemporaryChatIdsRef = useRef(new Set<string>());
+  const [filePreviewStore] = useState(() => new FilePreviewStore());
   const [threadMessageCache] = useState(() => new ThreadMessageCache(
     (key) => retainedTemporaryChatIdsRef.current.has(key),
   ));
   useEffect(() => {
     const retained = new Set(temporaryChatIds);
     for (const chatId of retainedTemporaryChatIdsRef.current) {
-      if (!retained.has(chatId)) threadMessageCache.delete(chatId);
+      if (!retained.has(chatId)) {
+        threadMessageCache.delete(chatId);
+        filePreviewStore.delete(`websocket:${chatId}`);
+      }
     }
     retainedTemporaryChatIdsRef.current = retained;
-  }, [temporaryChatIds, threadMessageCache]);
+  }, [temporaryChatIds, threadMessageCache, filePreviewStore]);
 
   const navigate = useCallback(
     (route: ShellRoute, options?: { replace?: boolean }) => {
@@ -2195,6 +2200,7 @@ function Shell({
       }
       if (!wasOpen) return;
       wasOpen = false;
+      filePreviewStore.clear();
       if (Object.keys(temporarySessionsRef.current).length === 0) return;
       temporarySessionsRef.current = {};
       setTemporarySessions({});
@@ -2202,7 +2208,7 @@ function Shell({
         navigate(defaultShellRoute(), { replace: true });
       }
     });
-  }, [client, navigate]);
+  }, [client, navigate, filePreviewStore]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2297,6 +2303,7 @@ function Shell({
           });
           return;
         }
+        filePreviewStore.delete(item.key);
       }
       setPendingDelete(null);
       if (deletingActive) {
@@ -2309,7 +2316,7 @@ function Shell({
     } catch (e) {
       console.error("Failed to delete session", e);
     }
-  }, [pendingDelete, deleteChat, activeKey, activeTabState, navigate, topicSessions]);
+  }, [pendingDelete, deleteChat, activeKey, activeTabState, navigate, topicSessions, filePreviewStore]);
 
   const onRequestDeleteMany = useCallback(async (items: SidebarDeleteItem[]) => {
     const uniqueItems = Array.from(new Map(items.map((item) => [item.key, item])).values());
@@ -2872,6 +2879,7 @@ function Shell({
                             temporary={temporaryChatRequested}
                             temporaryChatIds={temporaryChatIds}
                             messageCache={threadMessageCache}
+                            filePreviewStore={filePreviewStore}
                             temporaryChatEnabled={temporaryChatEnabled}
                             onTemporaryChatEnabledChange={
                               !activeKey ? onTemporaryChatEnabledChange : undefined
@@ -2918,6 +2926,7 @@ function Shell({
                           title={pane.title}
                           temporaryChatIds={temporaryChatIds}
                           messageCache={threadMessageCache}
+                          filePreviewStore={filePreviewStore}
                           onToggleSidebar={toggleSidebar}
                           onNewChat={onNewChat}
                           onCreateChat={onCreateChat}
