@@ -581,6 +581,8 @@
       "presetNamePlaceholder": "例：文章作成用",
       "advancedOptions": "詳細オプション",
       "advancedSummary": "コンテキスト {{context}} · 最大 {{max}} トークン",
+      "contextWindowHint": "{{tokens}} トークン",
+      "contextWindowError": "200k、1m、131072 など、正のトークン数を入力してください。",
       "maxTokens": "最大出力トークン",
       "temperature": "温度",
       "reasoningEffort": "推論の強度",

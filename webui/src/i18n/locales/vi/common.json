@@ -581,6 +581,8 @@
       "presetNamePlaceholder": "ví dụ: Viết nhanh",
       "advancedOptions": "Tùy chọn nâng cao",
       "advancedSummary": "Ngữ cảnh {{context}} · Tối đa {{max}} token",
+      "contextWindowHint": "{{tokens}} token",
+      "contextWindowError": "Nhập số lượng token dương, chẳng hạn 200k, 1m hoặc 131072.",
       "maxTokens": "Token đầu ra tối đa",
       "temperature": "Nhiệt độ",
       "reasoningEffort": "Mức suy luận",
