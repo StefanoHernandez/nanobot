@@ -29,6 +29,15 @@
     "invalid": "無法預覽此位址。",
     "frame": "網頁預覽：{{host}}"
   },
+  "starPrompt": {
+    "footerAction": "給 nanobot 一顆 Star",
+    "title": "感謝使用 nanobot",
+    "description": "歡迎到 GitHub 給顆 Star，支持我們持續改進。",
+    "action": "給個 Star",
+    "later": "暫時不用",
+    "never": "不再提醒",
+    "saveError": "網路可能出了點問題，之後可能還會跳出此提醒。"
+  },
   "app": {
     "brand": "nanobot",
     "loading": {

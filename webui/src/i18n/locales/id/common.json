@@ -29,6 +29,15 @@
     "invalid": "Alamat ini tidak dapat dipratinjau.",
     "frame": "Pratinjau situs: {{host}}"
   },
+  "starPrompt": {
+    "footerAction": "Beri bintang untuk nanobot",
+    "title": "Terima kasih telah menggunakan nanobot",
+    "description": "Beri bintang di GitHub untuk membantu kami terus menyempurnakan nanobot.",
+    "action": "Beri bintang",
+    "later": "Tidak sekarang",
+    "never": "Jangan tanyakan lagi",
+    "saveError": "Mungkin ada masalah jaringan. Pengingat ini mungkin muncul lagi."
+  },
   "app": {
     "brand": "nanobot",
     "loading": {

@@ -29,6 +29,15 @@
     "invalid": "Não é possível pré-visualizar este endereço.",
     "frame": "Prévia do site: {{host}}"
   },
+  "starPrompt": {
+    "footerAction": "Dê uma estrela ao nanobot",
+    "title": "Obrigado por usar o nanobot",
+    "description": "Dê uma estrela no GitHub para nos ajudar a continuar melhorando o nanobot.",
+    "action": "Dar uma estrela",
+    "later": "Agora não",
+    "never": "Não perguntar novamente",
+    "saveError": "Pode haver um problema de conexão. Este lembrete pode aparecer novamente."
+  },
   "app": {
     "brand": "nanobot",
     "loading": {

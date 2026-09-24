@@ -29,6 +29,15 @@
     "invalid": "Cette adresse ne peut pas être prévisualisée.",
     "frame": "Aperçu web : {{host}}"
   },
+  "starPrompt": {
+    "footerAction": "Ajouter une étoile à nanobot",
+    "title": "Merci d’utiliser nanobot",
+    "description": "Ajoutez une étoile sur GitHub pour nous aider à continuer à améliorer nanobot.",
+    "action": "Mettre une étoile",
+    "later": "Pas maintenant",
+    "never": "Ne plus demander",
+    "saveError": "Il y a peut-être un problème de connexion. Ce rappel pourrait réapparaître."
+  },
   "app": {
     "brand": "nanobot",
     "loading": {
