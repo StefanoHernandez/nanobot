@@ -1815,6 +1815,11 @@
     },
     "scrollToBottom": "Scroll to bottom",
     "loadEarlier": "Load earlier messages",
+    "history": {
+      "loading": "Loading earlier messages…",
+      "error": "Loading failed.",
+      "retry": "Retry"
+    },
     "forkedFromHistory": "Forked from history",
     "promptNavigator": {
       "open": "Open prompt navigator",

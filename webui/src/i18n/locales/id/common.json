@@ -1615,6 +1615,11 @@
     },
     "scrollToBottom": "Gulir ke bawah",
     "loadEarlier": "Muat pesan sebelumnya",
+    "history": {
+      "loading": "Memuat pesan sebelumnya…",
+      "error": "Gagal memuat.",
+      "retry": "Coba lagi"
+    },
     "forkedFromHistory": "Cabang dari riwayat",
     "promptNavigator": {
       "open": "Buka navigasi instruksi",

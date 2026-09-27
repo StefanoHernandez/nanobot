@@ -1815,6 +1815,11 @@
     },
     "scrollToBottom": "滚动到底部",
     "loadEarlier": "加载更早消息",
+    "history": {
+      "loading": "正在加载更早的消息…",
+      "error": "加载失败",
+      "retry": "重试"
+    },
     "forkedFromHistory": "从历史消息分叉",
     "promptNavigator": {
       "open": "打开提示词导航",
