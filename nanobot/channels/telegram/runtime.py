@@ -549,7 +549,7 @@ class TelegramChannel(BaseChannel):
     # Canonical hyphenated commands stay on a separate handler (below).
     TELEGRAM_BUS_SLASH_COMMAND_RE = re.compile(
         r"^/(?:new|compact|stop|restart|status|dream|history|goal|trigger|pairing|model|skill"
-        r"|dream_log|dream_restore|dream_prompt|evaluator_prompt|evaluator-prompt)(?:@\w+)?(?:\s+.*)?$"
+        r"|dream_log|dream_restore|dream_prompt|evaluator_prompt|evaluator-prompt)(?:@\w+)?(?:\s+[\s\S]*)?$"
     )
 
     @classmethod
@@ -606,10 +606,9 @@ class TelegramChannel(BaseChannel):
         """Map Telegram-safe command aliases back to canonical nanobot commands."""
         if not content.startswith("/"):
             return content
-        for alias, canonical in _TELEGRAM_COMMAND_ALIASES.items():
-            if content == alias or content.startswith(f"{alias} "):
-                return canonical + content[len(alias):]
-        return content
+        command = content.split(maxsplit=1)[0]
+        canonical = _TELEGRAM_COMMAND_ALIASES.get(command, command)
+        return canonical + content[len(command):]
 
     async def start(self) -> None:
         """Start the Telegram bot, rebuilding the app whenever polling stalls."""
@@ -708,7 +707,7 @@ class TelegramChannel(BaseChannel):
         self._app.add_handler(
             MessageHandler(
                 filters.Regex(
-                    r"^/(?:dream-log|dream-restore|dream-prompt)(?:@\w+)?(?:\s+.*)?$"
+                    r"^/(?:dream-log|dream-restore|dream-prompt)(?:@\w+)?(?:\s+[\s\S]*)?$"
                 ),
                 self._forward_command,
             )
@@ -1944,10 +1943,9 @@ class TelegramChannel(BaseChannel):
 
         # Strip @bot_username suffix if present
         content = message.text or ""
-        if content.startswith("/") and "@" in content:
-            cmd_part, *rest = content.split(" ", 1)
-            cmd_part = cmd_part.split("@")[0]
-            content = f"{cmd_part} {rest[0]}" if rest else cmd_part
+        if content.startswith("/"):
+            command = content.split(maxsplit=1)[0]
+            content = command.split("@", 1)[0] + content[len(command):]
         content = self._normalize_telegram_command(content)
 
         await self._handle_message(

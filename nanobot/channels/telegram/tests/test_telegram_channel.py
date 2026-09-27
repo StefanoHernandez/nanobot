@@ -2431,6 +2431,33 @@ async def test_forward_command_pairs_unauthorized_private_user(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("separator", [" ", "\t", "\n", "\r\n", "  \n"])
+@pytest.mark.parametrize("suffix", ["", "@nanobot_test"])
+async def test_forward_command_preserves_whitespace_and_argument_mentions(separator, suffix) -> None:
+    channel = TelegramChannel(
+        TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
+        MessageBus(),
+    )
+    _install_ready_app(channel)
+    handled = []
+
+    async def capture_handle(**kwargs) -> None:
+        handled.append(kwargs)
+
+    channel._handle_message = capture_handle
+    arguments = "contact@example.org\nkeep the second line"
+    text = f"/dream_prompt{suffix}{separator}{arguments}"
+    await channel._forward_command(_make_telegram_update(text=text), None)
+
+    assert handled[0]["content"] == f"/dream-prompt{separator}{arguments}"
+
+
+@pytest.mark.parametrize("text", ["/goal@nanobot_test\nfirst\nsecond", "/dream_prompt first\nsecond"])
+def test_bus_command_regex_accepts_multiline_arguments(text) -> None:
+    assert TelegramChannel.TELEGRAM_BUS_SLASH_COMMAND_RE.fullmatch(text)
+
+
+@pytest.mark.asyncio
 async def test_forward_command_preserves_dream_log_args_and_strips_bot_suffix() -> None:
     channel = TelegramChannel(
         TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
