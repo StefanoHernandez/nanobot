@@ -317,8 +317,15 @@ def _markdown_to_telegram_html(text: str) -> str:
     # 5. Escape HTML special characters
     text = _escape_telegram_html(text)
 
-    # 6. Links [text](url) - must be before bold/italic to handle nested cases
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
+    # 6. Links [text](url) - must be before bold/italic to handle nested cases.
+    # Park the URL in a placeholder so later inline-formatting passes cannot
+    # rewrite it (e.g. ``__init__.py`` must not become ``<b>init</b>.py``).
+    link_urls: list[str] = []
+    def save_link(m: re.Match[str]) -> str:
+        link_urls.append(m.group(2).replace('"', "&quot;"))
+        return f'<a href="\x00LK{len(link_urls) - 1}\x00">{m.group(1)}</a>'
+
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', save_link, text)
 
     # 7. Bold **text** or __text__
     text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
@@ -335,6 +342,10 @@ def _markdown_to_telegram_html(text: str) -> str:
 
     # 10.5. Numbered lists  1. item -> 1. item (keep number, normalize indent)
     text = re.sub(r'^(\d+)\.\s+', r'\1. ', text, flags=re.MULTILINE)
+
+    # 10.6. Restore link URLs protected in step 6
+    for i, url in enumerate(link_urls):
+        text = text.replace(f"\x00LK{i}\x00", url)
 
     # 11. Restore inline code with HTML tags
     for i, code in enumerate(inline_codes):

@@ -2960,6 +2960,40 @@ def test_markdown_to_html_mixed_formatting() -> None:
     assert "<b>bold text</b>" in result
 
 
+@pytest.mark.parametrize(
+    ("markdown", "expected"),
+    [
+        (
+            "[init](https://github.com/o/r/blob/main/pkg/__init__.py)",
+            '<a href="https://github.com/o/r/blob/main/pkg/__init__.py">init</a>',
+        ),
+        (
+            "see [css](https://example.com/_static_/a.css) ok",
+            'see <a href="https://example.com/_static_/a.css">css</a> ok',
+        ),
+        (
+            "[x](https://example.com/a**b**c~~d~~)",
+            '<a href="https://example.com/a**b**c~~d~~">x</a>',
+        ),
+    ],
+)
+def test_markdown_to_html_link_urls_are_not_formatted(markdown: str, expected: str) -> None:
+    """Inline-formatting passes must not inject tags into href attributes."""
+    assert _markdown_to_telegram_html(markdown) == expected
+
+
+def test_markdown_to_html_link_url_quotes_are_escaped() -> None:
+    result = _markdown_to_telegram_html('[q](https://example.com/?q="x"&y=1)')
+
+    assert result == '<a href="https://example.com/?q=&quot;x&quot;&amp;y=1">q</a>'
+
+
+def test_markdown_to_html_link_text_keeps_formatting() -> None:
+    result = _markdown_to_telegram_html("[**bold** _it_](https://example.com/a_b_c)")
+
+    assert result == '<a href="https://example.com/a_b_c"><b>bold</b> <i>it</i></a>'
+
+
 # ---------------------------------------------------------------------------
 # _strip_md_block tests
 # ---------------------------------------------------------------------------
