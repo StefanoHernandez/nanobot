@@ -918,6 +918,36 @@ def test_resolve_type_union_with_null() -> None:
     assert Tool._resolve_type(["string", "null"]) == "string"
 
 
+@pytest.mark.parametrize("raw_type", ["null", ["null"]])
+@pytest.mark.parametrize("value", ["", 0, False, [], {}])
+def test_null_only_schema_rejects_non_null_values(raw_type, value) -> None:
+    schema = {"type": raw_type}
+    assert Schema.validate_json_schema_value(value, schema, "value") == [
+        "value should be null"
+    ]
+    assert Schema.validate_json_schema_value(None, schema) == []
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": ["string", "null"], "enum": ["fast"]},
+        {"type": "string", "nullable": True, "enum": ["fast"]},
+        {"type": ["integer", "null"], "enum": [1]},
+    ],
+)
+def test_nullable_schema_still_enforces_enum(schema) -> None:
+    assert Schema.validate_json_schema_value(None, schema, "mode") == [
+        f"mode must be one of {schema['enum']}"
+    ]
+    assert Schema.validate_json_schema_value(None, {**schema, "enum": [None]}) == []
+
+
+def test_nullable_string_schema_enforces_enum() -> None:
+    assert StringSchema(nullable=True, enum=["fast"]).validate_value(None)
+    assert StringSchema(nullable=True, enum=["fast", None]).validate_value(None) == []
+
+
 def test_resolve_type_only_null() -> None:
     """Union type ['null'] resolves to None (no non-null type)."""
     assert Tool._resolve_type(["null"]) is None
