@@ -157,6 +157,21 @@ def test_add_job_rejects_missing_cron_expression(tmp_path, expr: str | None) -> 
     assert service.list_jobs(include_disabled=True) == []
 
 
+@pytest.mark.parametrize("every_ms", [None, 0, -60_000])
+def test_add_job_rejects_non_positive_interval(tmp_path, every_ms: int | None) -> None:
+    service = CronService(tmp_path / "cron" / "jobs.json")
+
+    with pytest.raises(ValueError, match="requires a positive 'every_ms'"):
+        service.add_job(
+            name="never runs",
+            schedule=CronSchedule(kind="every", every_ms=every_ms),
+            message="hello",
+            **_bound_chat(),
+        )
+
+    assert service.list_jobs(include_disabled=True) == []
+
+
 def test_add_job_rejects_invalid_cron_expression_before_persisting(tmp_path) -> None:
     service = CronService(tmp_path / "cron" / "jobs.json")
 

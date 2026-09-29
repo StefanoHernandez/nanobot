@@ -343,6 +343,29 @@ def test_add_job_rejects_multiple_schedule_fields(tmp_path) -> None:
     assert tool._cron.list_jobs() == []
 
 
+@pytest.mark.parametrize("every_seconds", [0, -60])
+def test_add_job_rejects_non_positive_interval(tmp_path, every_seconds: int) -> None:
+    tool = _make_tool(tmp_path)
+    with request_context(
+        RequestContext(channel="telegram", chat_id="chat-1", session_key="telegram:chat-1")
+    ):
+        result = tool._add_job(None, "Morning standup", every_seconds, None, None, None)
+
+    assert result == "Error: every_seconds must be a positive integer"
+    assert tool._cron.list_jobs(include_disabled=True) == []
+
+
+@pytest.mark.parametrize("every_seconds", [0, -60])
+def test_validate_params_rejects_non_positive_interval(tmp_path, every_seconds: int) -> None:
+    tool = _make_tool(tmp_path)
+
+    errors = tool.validate_params(
+        {"action": "add", "message": "Morning standup", "every_seconds": every_seconds}
+    )
+
+    assert any("every_seconds" in error for error in errors)
+
+
 def test_add_job_binds_current_session_key(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     with request_context(

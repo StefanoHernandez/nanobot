@@ -73,6 +73,8 @@ def _validate_schedule_for_add(schedule: CronSchedule) -> None:
     """Validate schedule fields that would otherwise create non-runnable jobs."""
     if schedule.tz and schedule.kind != "cron":
         raise ValueError("tz can only be used with cron schedules")
+    if schedule.kind == "every" and (schedule.every_ms is None or schedule.every_ms <= 0):
+        raise ValueError("every schedule requires a positive 'every_ms'")
 
     if schedule.kind == "cron":
         if not schedule.expr or not schedule.expr.strip():
