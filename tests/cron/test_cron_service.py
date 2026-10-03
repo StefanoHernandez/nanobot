@@ -1247,7 +1247,14 @@ def test_update_job_rejects_system_job(tmp_path) -> None:
     assert service.get_job("dream").name == "dream"
 
 
-def test_update_job_validates_schedule(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "schedule,error",
+    [
+        (CronSchedule(kind="cron", expr="0 9 * * *", tz="Bad/Zone"), "unknown timezone"),
+        (CronSchedule(kind="every", every_ms=0), "positive 'every_ms'"),
+    ],
+)
+def test_update_job_validates_schedule(tmp_path, schedule, error) -> None:
     service = CronService(tmp_path / "cron" / "jobs.json")
     job = service.add_job(
         name="validate",
@@ -1255,11 +1262,12 @@ def test_update_job_validates_schedule(tmp_path) -> None:
         message="hello",
         **_bound_chat(),
     )
-    with pytest.raises(ValueError, match="unknown timezone"):
-        service.update_job(
-            job.id,
-            schedule=CronSchedule(kind="cron", expr="0 9 * * *", tz="Bad/Zone"),
-        )
+    action_path = service.store_path.with_name("action.jsonl")
+    before = action_path.read_bytes()
+    with pytest.raises(ValueError, match=error):
+        service.update_job(job.id, schedule=schedule)
+    assert action_path.read_bytes() == before
+    assert service.get_job(job.id).schedule.every_ms == 60_000
 
 
 @pytest.mark.asyncio

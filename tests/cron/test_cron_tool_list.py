@@ -1,5 +1,6 @@
 """Tests for CronTool._list_jobs() output formatting."""
 
+import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -364,6 +365,42 @@ def test_validate_params_rejects_non_positive_interval(tmp_path, every_seconds: 
     )
 
     assert any("every_seconds" in error for error in errors)
+
+
+@pytest.mark.asyncio
+async def test_legacy_zero_interval_job_can_be_listed_repaired_and_removed(tmp_path) -> None:
+    tool = _make_tool(tmp_path)
+    store_path = tool._cron.store_path
+    store_path.parent.mkdir(parents=True)
+    # Older versions accepted and persisted zero-interval jobs that never ran.
+    store_path.write_text(json.dumps({
+        "version": 1,
+        "jobs": [{
+            "id": "legacy-zero",
+            "name": "Legacy reminder",
+            "enabled": True,
+            "schedule": {"kind": "every", "everyMs": 0},
+            "payload": {"kind": "agent_turn", "message": "hello", **_bound_chat()},
+        }],
+    }), encoding="utf-8")
+
+    assert "Legacy reminder" in await tool.execute(action="list")
+    renamed = tool._cron.update_job("legacy-zero", name="Repair me")
+    assert isinstance(renamed, CronJob)
+    assert renamed.schedule.every_ms == 0
+    repaired = tool._cron.update_job(
+        "legacy-zero", schedule=CronSchedule(kind="every", every_ms=60_000),
+    )
+    assert isinstance(repaired, CronJob)
+    assert repaired.state.next_run_at_ms is not None
+
+    reloaded = _make_tool(tmp_path)
+    assert "Repair me" in await reloaded.execute(action="list")
+    with request_context(RequestContext(
+        channel="websocket", chat_id="chat-1", session_key="websocket:chat-1",
+    )):
+        await reloaded.execute(action="remove", job_id="legacy-zero")
+    assert _make_tool(tmp_path)._cron.list_jobs(include_disabled=True) == []
 
 
 def test_add_job_binds_current_session_key(tmp_path) -> None:
