@@ -934,6 +934,7 @@ def test_null_only_schema_rejects_non_null_values(raw_type, value) -> None:
         {"type": ["string", "null"], "enum": ["fast"]},
         {"type": "string", "nullable": True, "enum": ["fast"]},
         {"type": ["integer", "null"], "enum": [1]},
+        {"type": ["string", "integer", "null"], "enum": ["fast", 1]},
     ],
 )
 def test_nullable_schema_still_enforces_enum(schema) -> None:
@@ -941,6 +942,8 @@ def test_nullable_schema_still_enforces_enum(schema) -> None:
         f"mode must be one of {schema['enum']}"
     ]
     assert Schema.validate_json_schema_value(None, {**schema, "enum": [None]}) == []
+    for value in schema["enum"]:
+        assert Schema.validate_json_schema_value(value, schema) == []
 
 
 def test_nullable_string_schema_enforces_enum() -> None:
