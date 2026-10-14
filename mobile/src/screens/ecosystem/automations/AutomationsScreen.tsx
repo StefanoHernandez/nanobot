@@ -79,7 +79,7 @@ export function AutomationsScreen({ now }: { now?: number }) {
       {error ? (
         <View style={styles.errorBox}>
           <Text style={[styles.errorText, { color: th.colors.destructive }]}>
-            {error}
+            {t("common.operationFailed", "Operazione non riuscita")}
           </Text>
         </View>
       ) : null}

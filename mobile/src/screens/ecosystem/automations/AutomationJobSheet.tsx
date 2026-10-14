@@ -33,6 +33,60 @@ export type AutomationJobSheetProps = {
   onFetchResult?: (id: string, runAtMs: number, kind: "cron" | "local_trigger") => Promise<{ response: string | null }>;
   onRefresh?: () => Promise<void>;
 };
+export function formatAtSchedule(atMs?: number | null): string {
+  if (typeof atMs !== "number" || isNaN(atMs) || atMs <= 0) return "";
+  const d = new Date(atMs);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString();
+}
+
+export function parseAtSchedule(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (/^\d{11,15}$/.test(trimmed)) {
+    const n = Number(trimmed);
+    if (!isNaN(n) && n > 0) return n;
+  }
+  const timestamp = Date.parse(trimmed);
+  if (!isNaN(timestamp)) {
+    return timestamp;
+  }
+  return null;
+}
+
+export function formatEverySchedule(everyMs?: number | null): string {
+  if (typeof everyMs !== "number" || isNaN(everyMs) || everyMs <= 0) return "";
+  const days = everyMs / 86_400_000;
+  if (days >= 1 && Number.isInteger(days)) {
+    return days === 1 ? "1 day" : `${days} days`;
+  }
+  const hours = everyMs / 3_600_000;
+  if (hours >= 1 && Number.isInteger(hours)) {
+    return hours === 1 ? "1 hour" : `${hours} hours`;
+  }
+  const mins = Math.round(everyMs / 60_000);
+  return mins === 1 ? "1 minute" : `${mins} minutes`;
+}
+
+export function parseEverySchedule(input: string): number | null {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)$/);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  if (isNaN(num) || num <= 0) return null;
+  const unit = match[2];
+  if (["d", "day", "days"].includes(unit)) {
+    return Math.round(num * 86_400_000);
+  }
+  if (["h", "hr", "hrs", "hour", "hours"].includes(unit)) {
+    return Math.round(num * 3_600_000);
+  }
+  if (["m", "min", "mins", "minute", "minutes"].includes(unit)) {
+    return Math.round(num * 60_000);
+  }
+  return null;
+}
 
 export function AutomationJobSheet({
   open,
@@ -82,13 +136,16 @@ export function AutomationJobSheet({
   useEffect(() => {
     if (job) {
       setMessageText(job.payload?.message || "");
-      const initSchedule =
-        job.schedule?.expr ||
-        (job.schedule?.every_ms !== undefined
-          ? String(job.schedule.every_ms)
-          : job.schedule?.at_ms !== undefined
-          ? String(job.schedule.at_ms)
-          : "");
+      let initSchedule = "";
+      if (job.schedule) {
+        if (job.schedule.kind === "at" || job.schedule.at_ms !== undefined) {
+          initSchedule = job.schedule.at_ms !== undefined ? formatAtSchedule(job.schedule.at_ms) : "";
+        } else if (job.schedule.kind === "every" || job.schedule.every_ms !== undefined) {
+          initSchedule = job.schedule.every_ms !== undefined ? formatEverySchedule(job.schedule.every_ms) : "";
+        } else {
+          initSchedule = job.schedule.expr || "";
+        }
+      }
       setScheduleExpr(initSchedule);
       initialScheduleRef.current = initSchedule;
       setEditError(null);
@@ -158,15 +215,25 @@ export function AutomationJobSheet({
         const edited = scheduleExpr.trim() !== initialScheduleRef.current.trim();
         if (edited) {
           if (kind === "at") {
+            const parsed = parseAtSchedule(scheduleExpr);
+            if (parsed === null) {
+              setEditError(t("automations.invalidSchedule", "Invalid schedule format"));
+              return;
+            }
             scheduleToSend = {
               kind: "at",
-              at_ms: Number(scheduleExpr.trim()) || job.schedule.at_ms,
+              at_ms: parsed,
               ...(tz ? { tz } : {}),
             };
           } else if (kind === "every") {
+            const parsed = parseEverySchedule(scheduleExpr);
+            if (parsed === null) {
+              setEditError(t("automations.invalidSchedule", "Invalid schedule format"));
+              return;
+            }
             scheduleToSend = {
               kind: "every",
-              every_ms: Number(scheduleExpr.trim()) || job.schedule.every_ms,
+              every_ms: parsed,
               ...(tz ? { tz } : {}),
             };
           } else {
@@ -194,7 +261,7 @@ export function AutomationJobSheet({
       initialScheduleRef.current = scheduleExpr.trim();
       toast.show(t("automations.saved", "Saved"));
     } catch (e) {
-      setEditError(e instanceof Error ? e.message : String(e));
+      setEditError(t("common.operationFailed", "Operazione non riuscita"));
     } finally {
       setSavingEdit(false);
     }
@@ -208,7 +275,7 @@ export function AutomationJobSheet({
       const payload = await fetchAutomationChats(session, job.id);
       setChatsPayload(payload);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
       setShowChatPicker(false);
     } finally {
       setLoadingChats(false);
@@ -227,7 +294,7 @@ export function AutomationJobSheet({
       setShowChatPicker(false);
       toast.show(t("automations.chatChanged", "Chat changed"));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     } finally {
       setChangingChat(false);
     }

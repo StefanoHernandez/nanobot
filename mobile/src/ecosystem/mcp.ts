@@ -127,6 +127,8 @@ export function useMcpOAuth(name: string, onDone?: () => void) {
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
+  const consecutiveErrors = useRef(0);
+
   useEffect(
     () => () => {
       gen.current++;
@@ -147,6 +149,7 @@ export function useMcpOAuth(name: string, onDone?: () => void) {
         `/api/settings/mcp-oauth/status?flow_id=${encodeURIComponent(f.flow_id)}`,
       );
       if (gen.current !== my) return;
+      consecutiveErrors.current = 0;
       if (st.status === "connected") {
         flowRef.current = null;
         setState("done");
@@ -161,8 +164,12 @@ export function useMcpOAuth(name: string, onDone?: () => void) {
       }
     } catch (e) {
       if (gen.current !== my) return;
-      setError(e instanceof Error ? e.message : String(e));
-      setState("error");
+      consecutiveErrors.current++;
+      if (consecutiveErrors.current >= 3) {
+        flowRef.current = null;
+        setError(e instanceof Error ? e.message : String(e));
+        setState("error");
+      }
     }
   }, [session]);
 
@@ -172,7 +179,11 @@ export function useMcpOAuth(name: string, onDone?: () => void) {
     expiresAtMs: flow ? expiresAt.current : undefined,
     tick: pollTick,
     onExpire: () => {
+      const f = flowRef.current;
       flowRef.current = null;
+      if (f?.flow_id) {
+        Promise.resolve(mutateRef.current("settings.mcp.oauth_cancel", { flow_id: f.flow_id })).catch(() => {});
+      }
       setError("expired");
       setState("error");
     },
@@ -181,6 +192,7 @@ export function useMcpOAuth(name: string, onDone?: () => void) {
   const start = useCallback(
     async (reset: boolean = false) => {
       const my = ++gen.current;
+      consecutiveErrors.current = 0;
       setError(null);
       try {
         const r = await mutate<McpOAuthFlowPayload>(
@@ -217,6 +229,7 @@ export function useMcpOAuth(name: string, onDone?: () => void) {
       const f = flowRef.current;
       if (!f) return;
       const my = ++gen.current;
+      consecutiveErrors.current = 0;
       setState("polling");
       try {
         const r = await mutate<McpOAuthFlowPayload>("settings.mcp.oauth_complete", {

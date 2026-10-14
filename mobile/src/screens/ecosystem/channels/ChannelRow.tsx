@@ -115,11 +115,17 @@ export function ChannelRow({ channel, onPress, onRefresh }: ChannelRowProps) {
               {instancesText}
             </Text>
           ) : null}
+          {!gateAllowed && !channel.enabled ? (
+            <Text style={{ color: th.colors.mutedForeground, fontSize: 12, marginTop: 4 }}>
+              {t("apps.gateBanner")}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.switchWrapper}>
           <Switch
             value={channel.enabled}
-            disabled={loading}
+            disabled={loading || (!channel.enabled && !gateAllowed)}
+            accessibilityHint={!gateAllowed && !channel.enabled ? t("apps.gateBanner") : undefined}
             onValueChange={(val) => void handleToggle(val)}
           />
         </View>

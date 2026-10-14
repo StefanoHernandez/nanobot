@@ -129,7 +129,7 @@ export function ChannelConnect({
       {state === "error" && (
         <View style={styles.statusBox}>
           <Text style={{ color: th.colors.destructive, marginBottom: 8 }}>
-            {error || t("common.error")}
+            {t("common.operationFailed", "Operazione non riuscita")}
           </Text>
           <Button
             title={t("channels.connect.retry")}

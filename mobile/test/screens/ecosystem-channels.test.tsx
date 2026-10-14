@@ -27,8 +27,13 @@ const mockAddListener = jest.fn((event: string, cb: () => void) => {
 const mockMutate = jest.fn();
 const mockRunRestart = jest.fn();
 
+let mockSettingsData: any = {
+  requires_restart: false,
+  runtime_config: { "tools.webui_allow_remote_package_install": true },
+};
+
 jest.mock("../../src/settings/store", () => ({
-  useSettings: () => ({ mutate: mockMutate, data: { requires_restart: false }, refresh: jest.fn() }),
+  useSettings: () => ({ mutate: mockMutate, data: mockSettingsData, refresh: jest.fn() }),
   useRestart: () => ({ pending: false, sections: [], state: "idle", run: mockRunRestart }),
 }));
 
@@ -458,4 +463,42 @@ describe("P4-U1 Ecosystem & Channels UI", () => {
     expect(toast.show).toHaveBeenCalledWith("Operation failed");
     expect(toast.show).not.toHaveBeenCalledWith("Database connection closed");
   });
+
+  test("I5: with the gate off, the enable switch on a disabled channel is disabled; disabling an enabled channel still works", async () => {
+    mockSettingsData = {
+      requires_restart: false,
+      runtime_config: { "tools.webui_allow_remote_package_install": false },
+    };
+
+    const disabledChannel: NanobotFeatureInfo = { ...sampleChannel, name: "telegram", enabled: false };
+    const enabledChannel: NanobotFeatureInfo = { ...sampleChannel, name: "discord", display_name: "Discord", enabled: true };
+
+    mockUseChannels.mockReturnValue({
+      channels: [disabledChannel, enabledChannel],
+      requiresRestart: false,
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+      apply: jest.fn(),
+    });
+
+    await renderWithTheme(<ChannelsScreen />);
+
+    // Gate banner and row hint are visible
+    expect(screen.getAllByText("Enable remote installs on your computer (Settings → Advanced)").length).toBeGreaterThanOrEqual(1);
+
+    const switches = screen.getAllByRole("switch");
+    expect(switches.length).toBe(2);
+
+    // Disabled channel switch is disabled
+    expect(switches[0].props.disabled).toBe(true);
+
+    // Enabled channel switch is NOT disabled
+    expect(switches[1].props.disabled).toBe(false);
+
+    // Disabling an enabled channel still works
+    await fireEvent(switches[1], "valueChange", false);
+    expect(mockChannelDisable).toHaveBeenCalledWith(mockMutate, "discord");
+  });
 });
+

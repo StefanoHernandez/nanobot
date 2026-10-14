@@ -109,20 +109,28 @@ export function useAutomations() {
   const [error, setError] = useState<string | null>(null);
   const gen = useRef(0);
 
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!session) return;
     const my = ++gen.current;
     setLoading(true);
     try {
       const p = await session.get<AutomationsPayload>("/api/webui/automations");
-      if (gen.current !== my) return;
+      if (gen.current !== my || !isMounted.current) return;
       setData(p);
       setError(null);
     } catch (e) {
-      if (gen.current !== my) return;
+      if (gen.current !== my || !isMounted.current) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (gen.current === my) setLoading(false);
+      if (gen.current === my && isMounted.current) setLoading(false);
     }
   }, [session]);
 
@@ -134,22 +142,30 @@ export function useAutomations() {
     async (id: string) => {
       const clickedAtMs = Date.now();
       const payload = await mutate<AutomationsPayload>("automation.run", { id });
-      setData(payload);
+      if (payload && isMounted.current) {
+        setData(payload);
+      }
 
-      let currentPayload = payload;
+      let currentPayload = payload || { jobs: [] };
       let res: { response: string | null } | null = null;
 
       if (session) {
         const maxAttempts = 30;
         for (let i = 0; i < maxAttempts; i++) {
-          const job = currentPayload.jobs?.find((j) => j.id === id);
+          if (!isMounted.current) break;
+
+          const job = currentPayload?.jobs?.find((j) => j.id === id);
           if (!job) {
             // job was deleted (e.g. delete_after_run one-shot)
             break;
           }
           const runs = job.state?.run_history;
-          const newestRun = runs && runs.length > 0 ? runs[runs.length - 1] : undefined;
-          if (newestRun && newestRun.run_at_ms >= clickedAtMs) {
+          const matchingRuns = runs?.filter((r) => r.run_at_ms >= clickedAtMs);
+          const newestRun = matchingRuns && matchingRuns.length > 0
+            ? matchingRuns.reduce((best, curr) => (curr.run_at_ms > best.run_at_ms ? curr : best))
+            : undefined;
+
+          if (newestRun) {
             try {
               res = await fetchAutomationRunResult(
                 session,
@@ -165,8 +181,11 @@ export function useAutomations() {
 
           if (i < maxAttempts - 1) {
             await new Promise((resolve) => setTimeout(resolve, 2000));
+            if (!isMounted.current) break;
             try {
-              currentPayload = await session.get<AutomationsPayload>("/api/webui/automations");
+              const fresh = await session.get<AutomationsPayload>("/api/webui/automations");
+              if (!isMounted.current) break;
+              currentPayload = fresh;
               setData(currentPayload);
             } catch {
               // continue
