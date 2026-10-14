@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { KeyboardAvoidingView, ScrollView, Switch, Text, View } from "react-native";
+import { KeyboardAvoidingView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import type { ModelRequestAPI } from "@/lib/types";
@@ -20,6 +20,7 @@ const ADD_CUSTOM = "__new_custom__";
 
 export function ProvidersPanel() {
   const t = useT();
+  const th = useTheme();
   const { data } = useSettings();
   const [sel, setSel] = useState<string | null>(null); // provider name, "+" picker, ADD_CUSTOM create form
   if (!data) return null;
@@ -29,18 +30,28 @@ export function ProvidersPanel() {
   return (
     <>
       <Head>{t("providers.title")}</Head>
-      {configured.map((p) => (
-        <ListItem key={p.name} title={p.label} subtitle={p.oauth_account ?? p.api_key_hint ?? t("providers.configured")} onPress={() => setSel(p.name)} />
-      ))}
+      {configured.length > 0 ? (
+        <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+          {configured.map((p, idx) => (
+            <View key={p.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+              <ListItem title={p.label} subtitle={p.oauth_account ?? p.api_key_hint ?? t("providers.configured")} onPress={() => setSel(p.name)} />
+            </View>
+          ))}
+        </View>
+      ) : null}
       <View style={{ padding: 16 }}>
         <Button title={t("providers.add")} variant="secondary" onPress={() => setSel("+")} />
       </View>
       <Sheet open={sel === "+"} onClose={() => setSel(null)} title={t("providers.add")}>
         <ScrollView style={{ maxHeight: 480 }}>
-          {available.map((p) => (
-            <ListItem key={p.name} title={p.label} subtitle={t("providers.notConfigured")} onPress={() => setSel(p.name)} />
+          {available.map((p, idx) => (
+            <View key={p.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+              <ListItem title={p.label} subtitle={t("providers.notConfigured")} onPress={() => setSel(p.name)} />
+            </View>
           ))}
-          <ListItem title={t("providers.addCustom")} onPress={() => setSel(ADD_CUSTOM)} />
+          <View style={available.length > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+            <ListItem title={t("providers.addCustom")} onPress={() => setSel(ADD_CUSTOM)} />
+          </View>
         </ScrollView>
       </Sheet>
       {row ? <ProviderSheet key={row.name} p={row} onClose={() => setSel(null)} /> : null}
@@ -80,21 +91,9 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
     return false;
   };
 
-  const submit = async () => {
-    const v = validateProviderForm(p, f);
-    if (!v.ok) return setErrors({ [v.field]: t(v.code === "required" ? "models.err.required" : "models.err.invalid") });
-    setErrors({});
-    const feature = requiredFeature(p);
-    if (feature) {
-      let installed = false; // fail closed: an unknown state is treated as not installed
-      try {
-        const r = await session?.get<{ features?: { name: string; installed?: boolean }[] }>("/api/settings/nanobot-features");
-        installed = !!r?.features?.find((x) => x.name === feature)?.installed;
-      } catch {}
-      if (!installed) return setInstalling(true);
-    }
-    await doSave();
-  };
+  const text = (k: keyof ProviderForm, label: string, multiline = false) => (
+    <TextField key={k} label={label} value={f[k] as string} onChangeText={set(k)} error={errors[k]} multiline={multiline} autoCapitalize="none" autoCorrect={false} />
+  );
 
   const doSave = async (enable?: string) => {
     setSaving(true);
@@ -116,23 +115,41 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
     }
   };
 
-  const text = (k: keyof ProviderForm, label: string, multiline = false) => (
-    <TextField key={k} label={label} value={f[k] as string} onChangeText={set(k)} error={errors[k]} multiline={multiline} autoCapitalize="none" autoCorrect={false} />
-  );
+  const submit = async () => {
+    const v = validateProviderForm(p, f);
+    if (!v.ok) {
+      setErrors({ [v.field]: t(`models.err.${v.code}`) });
+      return;
+    }
+    setErrors({});
+    const feat = requiredFeature(p);
+    if (feat) {
+      let installed = false; // fail closed: unknown state counts as not installed
+      try {
+        const r = await session?.get<{ features?: { name: string; installed?: boolean }[] }>("/api/settings/nanobot-features");
+        installed = !!r?.features?.find((x) => x.name === feat)?.installed;
+      } catch {}
+      if (!installed) {
+        setInstalling(true);
+        return;
+      }
+    }
+    await doSave();
+  };
 
   return (
     <Sheet open onClose={onClose} title={p.label}>
       <KeyboardAvoidingView behavior="padding">
         <ScrollView style={{ maxHeight: 520 }} keyboardShouldPersistTaps="handled">
+          {oauth ? <OAuthControl p={p} /> : null}
           {p.is_custom ? text("displayName", t("providers.displayName")) : null}
-          {oauth ? (
-            <OAuthControl p={p} />
-          ) : (
+          {!oauth ? (
             <HintSecretField
-              label={t("providers.apiKey")} hint={p.api_key_hint} value={f.apiKey} onChangeText={set("apiKey")} editing={editKey} onEdit={setEditKey} error={errors.apiKey}
-              labels={{ show: t("providers.show"), hide: t("providers.hide"), edit: t("providers.editKey"), keep: t("providers.cancelEdit") }}
+              label={t("providers.apiKey")} hint={p.api_key_hint} value={f.apiKey ?? ""} onChangeText={set("apiKey")}
+              editing={editKey} onEdit={setEditKey} error={errors.apiKey}
+              labels={{ show: t("providers.show"), hide: t("providers.hide"), edit: t("providers.editKey"), keep: t("providers.keepKey") }}
             />
-          )}
+          ) : null}
           {text("apiBase", t("providers.apiBase"))}
           {p.provider_api_configurable && apis.length > 1 ? (
             <>
@@ -142,7 +159,7 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
                   right={<Switch accessibilityLabel={a} value={supported.includes(a)} disabled={supported.includes(a) && supported.length === 1} onValueChange={(on) => setApi(on ? [...supported, a] : supported.filter((x) => x !== a), preferred)} />}
                 />
               ))}
-              <Text style={{ color: th.colors.foreground, fontSize: 13, marginBottom: 4 }}>{t("providers.defaultApi")}</Text>
+              <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{t("providers.defaultApi")}</Text>
               <Chips options={supported.map((a) => ({ value: a, label: a }))} value={preferred} onChange={(a) => setApi(supported, a)} />
             </>
           ) : null}
@@ -176,7 +193,7 @@ function OAuthControl({ p }: { p: Provider }) {
   const live = flow.state === "awaiting_user" || flow.state === "polling";
   return (
     <View style={{ marginBottom: 12, gap: 8 }}>
-      {p.oauth_account ? <Text style={{ color: th.colors.foreground }}>{t("providers.oauth.account", { a: p.oauth_account })}</Text> : null}
+      {p.oauth_account ? <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>{t("providers.oauth.account", { a: p.oauth_account })}</Text> : null}
       {!live ? (
         <>
           <Button title={t("providers.oauth.login")} variant={p.oauth_account ? "secondary" : "primary"} onPress={() => void flow.start()} />
@@ -189,7 +206,7 @@ function OAuthControl({ p }: { p: Provider }) {
           {flow.authUrl ? <Button title={t("providers.oauth.open")} variant="secondary" onPress={() => void WebBrowser.openBrowserAsync(flow.authUrl!)} /> : null}
           {flow.completionInput === "device_code" && flow.userCode ? (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text selectable style={{ flex: 1, color: th.colors.foreground, fontSize: 18 }}>{t("providers.oauth.code", { c: flow.userCode })}</Text>
+              <Text selectable style={{ flex: 1, color: th.colors.foreground, fontFamily: th.font.mono, fontSize: 18 }}>{t("providers.oauth.code", { c: flow.userCode })}</Text>
               <IconButton icon="content-copy" accessibilityLabel={t("providers.oauth.copy")} onPress={() => void Clipboard.setStringAsync(flow.userCode!).then(() => toast.show(t("providers.oauth.copied")))} />
             </View>
           ) : flow.completionInput ? (
@@ -198,11 +215,11 @@ function OAuthControl({ p }: { p: Provider }) {
               <Button title={t("providers.oauth.submit")} disabled={!resp.trim()} loading={flow.state === "polling"} onPress={() => void flow.submit(resp)} />
             </>
           ) : null}
-          {flow.state === "polling" ? <Text style={{ color: th.colors.mutedForeground }}>{t("providers.oauth.polling")}</Text> : null}
+          {flow.state === "polling" ? <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 14 }}>{t("providers.oauth.polling")}</Text> : null}
           <Button title={t("providers.oauth.cancel")} variant="ghost" onPress={() => void flow.cancel()} />
         </>
       )}
-      {flow.state === "error" ? <Text style={{ color: th.colors.destructive }}>{flow.errorCode === "expired" ? t("providers.oauth.expired") : flow.error}</Text> : null}
+      {flow.state === "error" ? <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 14 }}>{flow.errorCode === "expired" ? t("providers.oauth.expired") : flow.error}</Text> : null}
     </View>
   );
 }
@@ -241,7 +258,7 @@ function CustomProviderSheet({ onClose }: { onClose: () => void }) {
           <TextField label={t("providers.name")} value={name} onChangeText={setName} error={err.name} autoCapitalize="none" autoCorrect={false} />
           <TextField label={t("providers.apiBase")} value={base} onChangeText={setBase} error={err.base} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
           <SecretField label={t("providers.apiKey")} value={key} onChangeText={setKey} showLabel={t("providers.show")} hideLabel={t("providers.hide")} />
-          <View style={{ alignItems: "flex-end" }}>
+          <View style={{ alignItems: "flex-end", marginTop: 4 }}>
             <Button title={t("providers.create")} loading={saving} onPress={() => void create()} />
           </View>
         </ScrollView>

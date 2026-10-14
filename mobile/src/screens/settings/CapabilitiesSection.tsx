@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Switch, Text, View } from "react-native";
+import { KeyboardAvoidingView, StyleSheet, Switch, Text, View } from "react-native";
 import { useT } from "../../i18n";
 import {
   ASPECT_RATIOS, IMAGE_SIZES, imageGenPayload, selectImageProvider, transcriptionPayload, webSearchPayload,
@@ -50,8 +50,6 @@ const Row = ({ label, value, onChange, disabled }: { label: string; value: boole
   <ListItem title={label} right={<Switch accessibilityLabel={label} value={value} disabled={disabled} onValueChange={onChange} />} />
 );
 
-const Pad = ({ children }: { children: React.ReactNode }) => <View style={{ paddingHorizontal: 16 }}>{children}</View>;
-
 export function CapabilitiesSection() {
   const { data } = useSettings();
   if (!data) return null;
@@ -92,38 +90,47 @@ function ImageCard() {
   return (
     <>
       <Head>{t("caps.image.title")}</Head>
-      <Row
-        label={t("caps.image.enable")} value={f.enabled}
-        onChange={(v) => (v && !configured(f.provider) ? setHint(true) : (setHint(false), apply({ ...f, enabled: v })))}
-      />
-      {hint || (!f.enabled && !configured(f.provider)) ? <Pad><Text style={{ color: th.colors.destructive, marginBottom: 8 }}>{t("caps.configureProvider")}</Text></Pad> : null}
-      <Pad>
-        <Chips options={g.providers.map((p) => ({ value: p.name, label: p.label }))} value={f.provider} onChange={(p) => {
-          if (f.enabled && !configured(p)) return setHint(true); // never send enabled:true for an unconfigured provider
-          setHint(false);
-          apply(selectImageProvider(f, data!, p));
-        }} />
-        <TextField label={t("caps.model")} value={f.model} onChangeText={(v) => (touch(), setF({ ...f, model: v }))} autoCapitalize="none" autoCorrect={false} />
-        <Chips options={ASPECT_RATIOS.map((v) => ({ value: v, label: v }))} value={f.defaultAspectRatio} onChange={(v) => apply({ ...f, defaultAspectRatio: v })} />
-        <Chips options={IMAGE_SIZES.map((v) => ({ value: v, label: v }))} value={f.defaultImageSize} onChange={(v) => apply({ ...f, defaultImageSize: v })} />
-        <TextField label={t("caps.image.max")} value={max} onChangeText={(v) => (touch(), setMax(v))} keyboardType="number-pad" error={err.maxImagesPerTurn} />
-        <TextField label={t("caps.image.saveDir")} value={dir} onChangeText={(v) => (touch(), setDir(v))} autoCapitalize="none" autoCorrect={false} />
-        <View style={{ alignItems: "flex-end" }}>
-          <Button
-            title={t("caps.image.save")} loading={busy}
-            onPress={() => {
-              const c = coerceRuntimeValue(field("tools.image_generation.save_dir"), dir);
-              send(f, c.ok && dir !== (g.save_dir ?? "") ? () => runtime({ "tools.image_generation.save_dir": c.value }) : undefined);
-            }}
-          />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <Row
+          label={t("caps.image.enable")} value={f.enabled}
+          onChange={(v) => (v && !configured(f.provider) ? setHint(true) : (setHint(false), apply({ ...f, enabled: v })))}
+        />
+        {hint || (!f.enabled && !configured(f.provider)) ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13 }}>{t("caps.configureProvider")}</Text>
+          </View>
+        ) : null}
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border, padding: 16, gap: 12 }}>
+          <Chips options={g.providers.map((p) => ({ value: p.name, label: p.label }))} value={f.provider} onChange={(p) => {
+            if (f.enabled && !configured(p)) return setHint(true); // never send enabled:true for an unconfigured provider
+            setHint(false);
+            apply(selectImageProvider(f, data!, p));
+          }} />
+          <TextField label={t("caps.model")} value={f.model} onChangeText={(v) => (touch(), setF({ ...f, model: v }))} autoCapitalize="none" autoCorrect={false} />
+          <Chips options={ASPECT_RATIOS.map((v) => ({ value: v, label: v }))} value={f.defaultAspectRatio} onChange={(v) => apply({ ...f, defaultAspectRatio: v })} />
+          <Chips options={IMAGE_SIZES.map((v) => ({ value: v, label: v }))} value={f.defaultImageSize} onChange={(v) => apply({ ...f, defaultImageSize: v })} />
+          <TextField label={t("caps.image.max")} value={max} onChangeText={(v) => (touch(), setMax(v))} keyboardType="number-pad" error={err.maxImagesPerTurn} />
+          <TextField label={t("caps.image.saveDir")} value={dir} onChangeText={(v) => (touch(), setDir(v))} autoCapitalize="none" autoCorrect={false} />
+          <View style={{ alignItems: "flex-end", marginTop: 4 }}>
+            <Button
+              title={t("caps.image.save")} loading={busy}
+              onPress={() => {
+                const c = coerceRuntimeValue(field("tools.image_generation.save_dir"), dir);
+                if (!c.ok) return setErr({ saveDir: t(`system.err.${c.code}`) });
+                setErr({});
+                send(f, () => runtime({ "tools.image_generation.save_dir": c.value }));
+              }}
+            />
+          </View>
         </View>
-      </Pad>
+      </View>
     </>
   );
 }
 
 function WebCard() {
   const t = useT();
+  const th = useTheme();
   const { data } = useSettings();
   const { session } = useSession();
   const { mutate, busy, run, runtime } = useSave();
@@ -200,33 +207,37 @@ function WebCard() {
   return (
     <>
       <Head>{t("caps.web.title")}</Head>
-      <Row
-        label={t("caps.web.enable")} value={web.enable}
-        onChange={(v) => void run(() => runtime({ "tools.web.enable": v }))}
-      />
-      <Pad>
-        <Chips options={w.providers.map((p) => ({ value: p.name, label: p.label }))} value={f.provider} onChange={(p) => edit(() => setF({ ...f, provider: p, apiKey: "", keyEditing: false }))} />
-        {cred === "api_key" || cred === "optional_api_key" ? (
-          <HintSecretField
-            label={t("providers.apiKey")} hint={hint} value={f.apiKey ?? ""} onChangeText={(v) => edit(() => setF((prev) => ({ ...prev, apiKey: v })))}
-            editing={!!f.keyEditing} onEdit={(e) => edit(() => setF((prev) => ({ ...prev, keyEditing: e })))}
-            onKeep={() => edit(() => setF((prev) => ({ ...prev, keyEditing: false, apiKey: "" })))}
-            error={err.apiKey}
-            labels={{ show: t("providers.show"), hide: t("providers.hide"), edit: t("providers.editKey"), keep: t("providers.cancelEdit") }}
-          />
-        ) : null}
-        {cred === "base_url" ? <TextField label={t("providers.apiBase")} value={f.baseUrl ?? ""} onChangeText={(v) => edit(() => setF({ ...f, baseUrl: v }))} error={err.baseUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" /> : null}
-        <TextField label={t("caps.web.results")} value={nums.maxResults} onChangeText={(v) => edit(() => setNums({ ...nums, maxResults: v }))} keyboardType="number-pad" error={err.maxResults} />
-        <TextField label={t("caps.web.timeout")} value={nums.timeout} onChangeText={(v) => edit(() => setNums({ ...nums, timeout: v }))} keyboardType="number-pad" error={err.timeout} />
-      </Pad>
-      <Row label={t("caps.web.jina")} value={!!f.useJinaReader} onChange={(v) => edit(() => setF({ ...f, useJinaReader: v }))} />
-      <Pad>
-        <TextField label={t("caps.web.proxy")} value={proxy} onChangeText={(v) => edit(() => setProxy(v))} autoCapitalize="none" autoCorrect={false} />
-        <TextField label={t("caps.web.userAgent")} value={ua} onChangeText={(v) => edit(() => setUa(v))} autoCapitalize="none" autoCorrect={false} />
-        <View style={{ alignItems: "flex-end" }}>
-          <Button title={t("caps.web.save")} loading={busy} onPress={() => void submit()} />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <Row
+          label={t("caps.web.enable")} value={web.enable}
+          onChange={(v) => void run(() => runtime({ "tools.web.enable": v }))}
+        />
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border, padding: 16, gap: 12 }}>
+          <Chips options={w.providers.map((p) => ({ value: p.name, label: p.label }))} value={f.provider} onChange={(p) => edit(() => setF({ ...f, provider: p, apiKey: "", keyEditing: false }))} />
+          {cred === "api_key" || cred === "optional_api_key" ? (
+            <HintSecretField
+              label={t("providers.apiKey")} hint={hint} value={f.apiKey ?? ""} onChangeText={(v) => edit(() => setF((prev) => ({ ...prev, apiKey: v })))}
+              editing={!!f.keyEditing} onEdit={(e) => edit(() => setF((prev) => ({ ...prev, keyEditing: e })))}
+              onKeep={() => edit(() => setF((prev) => ({ ...prev, keyEditing: false, apiKey: "" })))}
+              error={err.apiKey}
+              labels={{ show: t("providers.show"), hide: t("providers.hide"), edit: t("providers.editKey"), keep: t("providers.cancelEdit") }}
+            />
+          ) : null}
+          {cred === "base_url" ? <TextField label={t("providers.apiBase")} value={f.baseUrl ?? ""} onChangeText={(v) => edit(() => setF({ ...f, baseUrl: v }))} error={err.baseUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" /> : null}
+          <TextField label={t("caps.web.results")} value={nums.maxResults} onChangeText={(v) => edit(() => setNums({ ...nums, maxResults: v }))} keyboardType="number-pad" error={err.maxResults} />
+          <TextField label={t("caps.web.timeout")} value={nums.timeout} onChangeText={(v) => edit(() => setNums({ ...nums, timeout: v }))} keyboardType="number-pad" error={err.timeout} />
         </View>
-      </Pad>
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <Row label={t("caps.web.jina")} value={!!f.useJinaReader} onChange={(v) => edit(() => setF({ ...f, useJinaReader: v }))} />
+        </View>
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border, padding: 16, gap: 12 }}>
+          <TextField label={t("caps.web.proxy")} value={proxy} onChangeText={(v) => edit(() => setProxy(v))} autoCapitalize="none" autoCorrect={false} />
+          <TextField label={t("caps.web.userAgent")} value={ua} onChangeText={(v) => edit(() => setUa(v))} autoCapitalize="none" autoCorrect={false} />
+          <View style={{ alignItems: "flex-end", marginTop: 4 }}>
+            <Button title={t("caps.web.save")} loading={busy} onPress={() => void submit()} />
+          </View>
+        </View>
+      </View>
       <Dialog
         open={installing} title={t("providers.featureTitle")} message={t("providers.featureMessage", { name: "olostep" })}
         confirmLabel={t("providers.featureConfirm")} cancelLabel={t("providers.cancel")}
@@ -243,6 +254,7 @@ function WebCard() {
 
 function TranscriptionCard() {
   const t = useT();
+  const th = useTheme();
   const { data } = useSettings();
   const { mutate, busy, run } = useSave();
   const tr = data!.transcription;
@@ -267,32 +279,37 @@ function TranscriptionCard() {
   return (
     <>
       <Head>{t("caps.tr.title")}</Head>
-      <Row label={t("caps.tr.enable")} value={f.enabled} onChange={(v) => apply({ ...f, enabled: v })} />
-      <Pad>
-        <Chips options={tr.providers.map((p) => ({ value: p.name, label: p.label ?? p.name }))} value={f.provider} onChange={(p) => apply({ ...f, provider: p })} />
-        {txt("model", t("caps.model"))}
-        {txt("language", t("caps.tr.language"))}
-        {txt("maxDurationSec", t("caps.tr.duration"), true)}
-        {txt("maxUploadMb", t("caps.tr.upload"), true)}
-        <View style={{ alignItems: "flex-end" }}>
-          <Button title={t("caps.tr.save")} loading={busy} onPress={() => send(f)} />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <Row label={t("caps.tr.enable")} value={f.enabled} onChange={(v) => apply({ ...f, enabled: v })} />
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border, padding: 16, gap: 12 }}>
+          <Chips options={tr.providers.map((p) => ({ value: p.name, label: p.label ?? p.name }))} value={f.provider} onChange={(p) => apply({ ...f, provider: p })} />
+          {txt("model", t("caps.model"))}
+          {txt("language", t("caps.tr.language"))}
+          {txt("maxDurationSec", t("caps.tr.duration"), true)}
+          {txt("maxUploadMb", t("caps.tr.upload"), true)}
+          <View style={{ alignItems: "flex-end", marginTop: 4 }}>
+            <Button title={t("caps.tr.save")} loading={busy} onPress={() => send(f)} />
+          </View>
         </View>
-      </Pad>
+      </View>
     </>
   );
 }
 
 function MemoryCard() {
   const t = useT();
+  const th = useTheme();
   const { data } = useSettings();
   const { busy, run, runtime } = useSave();
   return (
     <>
       <Head>{t("caps.memory.title")}</Head>
-      <Row
-        label={t("caps.memory.dream")} value={data!.runtime_config?.["agents.defaults.dream.enabled"] === true} disabled={busy}
-        onChange={(v) => void run(() => runtime({ "agents.defaults.dream.enabled": v }))}
-      />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <Row
+          label={t("caps.memory.dream")} value={data!.runtime_config?.["agents.defaults.dream.enabled"] === true} disabled={busy}
+          onChange={(v) => void run(() => runtime({ "agents.defaults.dream.enabled": v }))}
+        />
+      </View>
     </>
   );
 }

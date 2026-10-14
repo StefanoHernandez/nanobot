@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Switch, Text, View } from "react-native";
+import { KeyboardAvoidingView, StyleSheet, Switch, Text, View } from "react-native";
 import type { NanobotFeaturesPayload, RuntimeConfigValue } from "@/lib/types";
 import { useT } from "../../i18n";
 import {
@@ -79,7 +79,7 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
     const label = t(`system.fields.${f.path}`);
     const cur = values[f.path];
     const err = errors[f.path];
-    const errText = err ? <Text style={{ color: th.colors.destructive, fontSize: 12, paddingHorizontal: 16 }}>{err}</Text> : null;
+    const errText = err ? <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, paddingHorizontal: 16, marginTop: 4 }}>{err}</Text> : null;
     if (f.disabledOnRemote) {
       return <ListItem key={f.path} title={label} subtitle={t("system.remoteOnly")} right={<Switch accessibilityLabel={label} value={cur === true} disabled />} />;
     }
@@ -93,18 +93,18 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
     }
     if (IMMEDIATE.includes(f.kind)) {
       return (
-        <View key={f.path} style={{ paddingHorizontal: 16 }}>
-          <Text style={{ color: th.colors.foreground, fontSize: 13, marginBottom: 4 }}>{label}</Text>
+        <View key={f.path} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{label}</Text>
           <Chips
             options={(f.options ?? []).map((o) => ({ value: o, label: o || t("system.empty") }))} value={String(cur ?? "")}
             onChange={(v) => v !== String(cur ?? "") && request({ [f.path]: v }, f.group)}
           />
-          {err ? <Text style={{ color: th.colors.destructive, fontSize: 12 }}>{err}</Text> : null}
+          {err ? <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, marginTop: 4 }}>{err}</Text> : null}
         </View>
       );
     }
     return (
-      <View key={f.path} style={{ paddingHorizontal: 16 }}>
+      <View key={f.path} style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
         <TextField
           label={label} value={edits[f.path] ?? asText(cur)} error={err} autoCapitalize="none" autoCorrect={false}
           keyboardType={f.kind === "number" ? "numeric" : undefined} multiline={f.kind === "list"}
@@ -125,12 +125,18 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
         return (
           <View key={g}>
             <Head>{title}</Head>
-            {gf.map(row)}
-            {gf.some((f) => !IMMEDIATE.includes(f.kind) && !f.disabledOnRemote) ? (
-              <View style={{ paddingHorizontal: 16 }}>
-                <Button title={t("system.save", { group: title })} disabled={!dirty} loading={!!busyGroups[g]} onPress={() => saveGroup(g)} />
-              </View>
-            ) : null}
+            <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden", paddingVertical: 8 }}>
+              {gf.map((f, idx) => (
+                <View key={f.path} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+                  {row(f)}
+                </View>
+              ))}
+              {gf.some((f) => !IMMEDIATE.includes(f.kind) && !f.disabledOnRemote) ? (
+                <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                  <Button title={t("system.save", { group: title })} disabled={!dirty} loading={!!busyGroups[g]} onPress={() => saveGroup(g)} />
+                </View>
+              ) : null}
+            </View>
           </View>
         );
       })}
@@ -150,6 +156,7 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
 
 function Features() {
   const t = useT();
+  const th = useTheme();
   const { session } = useSession();
   const { mutate } = useSettings();
   const [list, setList] = useState<NanobotFeaturesPayload["features"]>([]);
@@ -183,12 +190,16 @@ function Features() {
   return (
     <>
       <Head>{t("system.features")}</Head>
-      {shown.map((f) => (
-        <ListItem
-          key={f.name} title={f.display_name} subtitle={f.status}
-          right={<Button title={f.enabled ? t("system.disable") : t("system.enable")} variant="secondary" loading={busy === f.name} onPress={() => setTarget({ name: f.name, enable: !f.enabled })} />}
-        />
-      ))}
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        {shown.map((f, idx) => (
+          <View key={f.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+            <ListItem
+              title={f.display_name} subtitle={f.status}
+              right={<Button title={f.enabled ? t("system.disable") : t("system.enable")} variant="secondary" loading={busy === f.name} onPress={() => setTarget({ name: f.name, enable: !f.enabled })} />}
+            />
+          </View>
+        ))}
+      </View>
       <Dialog
         open={!!target} destructive={!!target?.enable}
         title={target?.enable ? t("system.featureConfirmTitle") : t("system.featureDisable")}
@@ -202,14 +213,21 @@ function Features() {
 
 export function SystemSection() {
   const t = useT();
+  const th = useTheme();
   const { data } = useSettings();
   const { run } = useRestart();
   if (!data) return null;
   return (
     <>
-      <ListItem title={t("system.configPath")} subtitle={data.runtime?.config_path} />
-      <ListItem title={t("system.applyState")} subtitle={data.apply_state?.status ?? "idle"} />
-      <ListItem title={t("system.restartRow")} subtitle={t("system.restartHint")} onPress={() => void run()} />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
+        <ListItem title={t("system.configPath")} subtitle={data.runtime?.config_path} />
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem title={t("system.applyState")} subtitle={data.apply_state?.status ?? "idle"} />
+        </View>
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem title={t("system.restartRow")} subtitle={t("system.restartHint")} onPress={() => void run()} />
+        </View>
+      </View>
       <RuntimeGroups page="runtime" />
       <Features />
     </>

@@ -20,7 +20,7 @@ export function SettingsSection({ section }: { section: string }) {
   return (
     <SettingsShell title={s ? t(`settings.sections.${s}`) : t("settings.title")} onBack={() => goBackOr(router, "/settings")}>
       {s === "overview" ? <OverviewSection /> : s === "appearance" ? <AppearanceSection /> : s === "about" ? <AboutSection /> : s === "models" ? <ModelsSection /> : s === "capabilities" ? <CapabilitiesSection /> : s === "system" ? <SystemSection /> : s === "advanced" ? <AdvancedSection /> : (
-        <Text style={{ color: th.colors.mutedForeground, padding: 16 }}>{t("settings.comingSoon")}</Text>
+        <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 16, padding: 16 }}>{t("settings.comingSoon")}</Text>
       )}
     </SettingsShell>
   );

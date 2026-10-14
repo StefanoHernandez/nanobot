@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Linking, Text, View } from "react-native";
+import { Linking, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import type { VersionCheckResult } from "@/lib/api";
 import { useT } from "../../i18n";
@@ -32,31 +32,55 @@ export function AboutSection() {
     }
   };
   const open = (u: string) => () => void Linking.openURL(u).catch(() => {});
-  const line = (s: string) => <Text style={{ color: th.colors.mutedForeground, fontSize: 13, paddingHorizontal: 16, paddingVertical: 2 }}>{s}</Text>;
   const env = data?.environment;
 
   return (
     <>
       <Head>{t("settings.server")}</Head>
-      <ListItem title={profile?.name ?? "-"} subtitle={profile?.baseUrl} />
-      <View style={{ paddingHorizontal: 16 }}>
-        <Button title={t("settings.changeServer")} variant="secondary" onPress={() => router.push("/connect")} />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <ListItem title={profile?.name ?? "-"} subtitle={profile?.baseUrl} />
+        <View style={{ padding: 16, paddingTop: 4 }}>
+          <Button title={t("settings.changeServer")} variant="secondary" onPress={() => router.push("/connect")} />
+        </View>
       </View>
+
       <Head>{t("settings.about")}</Head>
-      {line(`${t("settings.appName")} - ${t("settings.version", { v: appVersion })}`)}
-      {line(t("settings.based", { sha: VENDOR_COMMIT.slice(0, 7), date: VENDOR_DATE }))}
-      {data?.version ? line(t("settings.serverVersion", { v: data.version.current, sha: (data.version.commit ?? "-").slice(0, 7) })) : null}
-      {env ? line(`${env.os} ${env.os_version} · ${env.architecture} · Python ${env.python_version}`) : null}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-        <Button title={t("settings.checkUpdates")} variant="secondary" loading={check === "busy"} onPress={() => void onCheck()} />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 16, gap: 6, overflow: "hidden" }}>
+        <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
+          {`${t("settings.appName")} - ${t("settings.version", { v: appVersion })}`}
+        </Text>
+        <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
+          {t("settings.based", { sha: VENDOR_COMMIT.slice(0, 7), date: VENDOR_DATE })}
+        </Text>
+        {data?.version ? (
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
+            {t("settings.serverVersion", { v: data.version.current, sha: (data.version.commit ?? "-").slice(0, 7) })}
+          </Text>
+        ) : null}
+        {env ? (
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
+            {`${env.os} ${env.os_version} · ${env.architecture} · Python ${env.python_version}`}
+          </Text>
+        ) : null}
+        <View style={{ paddingTop: 8 }}>
+          <Button title={t("settings.checkUpdates")} variant="secondary" loading={check === "busy"} onPress={() => void onCheck()} />
+        </View>
+        {check === "latest" ? <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, paddingTop: 4 }}>{t("settings.upToDate")}</Text> : null}
+        {check === "failed" ? <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, paddingTop: 4 }}>{t("settings.checkFailed")}</Text> : null}
+        {check.startsWith("v:") ? <Text style={{ color: th.colors.brand, fontFamily: th.font.medium, fontSize: 13, paddingTop: 4 }}>{t("settings.updateAvailable", { v: check.slice(2) })}</Text> : null}
       </View>
-      {check === "latest" ? line(t("settings.upToDate")) : null}
-      {check === "failed" ? line(t("settings.checkFailed")) : null}
-      {check.startsWith("v:") ? line(t("settings.updateAvailable", { v: check.slice(2) })) : null}
-      <ListItem title={t("settings.repo")} subtitle={REPO} onPress={open(REPO)} />
-      <ListItem title={t("settings.docs")} subtitle={data?.docs?.base_url ?? DOCS} onPress={open(data?.docs?.base_url ?? DOCS)} />
-      {line(t("settings.unofficial"))}
-      {line(t("settings.license"))}
+
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
+        <ListItem title={t("settings.repo")} subtitle={REPO} onPress={open(REPO)} />
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem title={t("settings.docs")} subtitle={data?.docs?.base_url ?? DOCS} onPress={open(data?.docs?.base_url ?? DOCS)} />
+        </View>
+      </View>
+
+      <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 4 }}>
+        <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>{t("settings.unofficial")}</Text>
+        <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>{t("settings.license")}</Text>
+      </View>
     </>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ModelRequestAPI } from "@/lib/types";
 import { useT } from "../../i18n";
 import {
@@ -46,35 +46,44 @@ export function ModelsSection() {
   return (
     <>
       <Head>{t("models.title")}</Head>
-      {order.map((name, i) => (
-        <ListItem
-          key={`${name}-${i}`}
-          title={name}
-          subtitle={byName.get(name)?.model}
-          left={i === 0 ? <Text style={{ backgroundColor: th.colors.primary, color: th.colors.primaryForeground, fontSize: 12, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.md, overflow: "hidden" }}>{t("models.primary")}</Text> : undefined}
-          onPress={byName.get(name) ? () => setEditing(byName.get(name)!) : undefined}
-          right={
-            editable ? (
-              <View style={{ flexDirection: "row" }}>
-                <IconButton icon="chevron-up" accessibilityLabel={t("models.moveUp", { name })} disabled={busy || i === 0} onPress={() => setOrder(callOrderOps.moveUp(order, i))} />
-                <IconButton icon="chevron-down" accessibilityLabel={t("models.moveDown", { name })} disabled={busy || i === order.length - 1} onPress={() => setOrder(callOrderOps.moveDown(order, i))} />
-                <IconButton icon="close" accessibilityLabel={t("models.remove", { name })} disabled={busy || order.length <= 1} onPress={() => setOrder(callOrderOps.remove(order, i))} />
-              </View>
-            ) : undefined
-          }
-        />
-      ))}
-      {disabled.length > 0 && editable ? <Head>{t("models.disabled")}</Head> : null}
-      {editable &&
-        disabled.map((g) => (
-          <ListItem
-            key={g.preset.name}
-            title={g.preset.name}
-            subtitle={[g.preset.model, g.variants.length ? t("models.variants", { n: g.variants.length }) : null].filter(Boolean).join(" · ")}
-            onPress={() => setEditing(g.preset)}
-            right={<Button title={t("models.addToOrder")} variant="secondary" disabled={busy} onPress={() => setOrder(callOrderOps.add(order, g.preset.name))} />}
-          />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        {order.map((name, i) => (
+          <View key={`${name}-${i}`} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+            <ListItem
+              title={name}
+              subtitle={byName.get(name)?.model}
+              left={i === 0 ? <Text style={{ backgroundColor: th.colors.brandSoft, color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.sm, overflow: "hidden" }}>{t("models.primary")}</Text> : undefined}
+              onPress={byName.get(name) ? () => setEditing(byName.get(name)!) : undefined}
+              right={
+                editable ? (
+                  <View style={{ flexDirection: "row" }}>
+                    <IconButton icon="chevron-up" accessibilityLabel={t("models.moveUp", { name })} disabled={busy || i === 0} onPress={() => setOrder(callOrderOps.moveUp(order, i))} />
+                    <IconButton icon="chevron-down" accessibilityLabel={t("models.moveDown", { name })} disabled={busy || i === order.length - 1} onPress={() => setOrder(callOrderOps.moveDown(order, i))} />
+                    <IconButton icon="close" accessibilityLabel={t("models.remove", { name })} disabled={busy || order.length <= 1} onPress={() => setOrder(callOrderOps.remove(order, i))} />
+                  </View>
+                ) : undefined
+              }
+            />
+          </View>
         ))}
+      </View>
+      {disabled.length > 0 && editable ? (
+        <>
+          <Head>{t("models.disabled")}</Head>
+          <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+            {disabled.map((g, idx) => (
+              <View key={g.preset.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+                <ListItem
+                  title={g.preset.name}
+                  subtitle={[g.preset.model, g.variants.length ? t("models.variants", { n: g.variants.length }) : null].filter(Boolean).join(" · ")}
+                  onPress={() => setEditing(g.preset)}
+                  right={<Button title={t("models.addToOrder")} variant="secondary" disabled={busy} onPress={() => setOrder(callOrderOps.add(order, g.preset.name))} />}
+                />
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
       <View style={{ padding: 16, gap: 8 }}>
         <Button title={t("models.addPreset")} variant="secondary" onPress={() => setEditing("new")} />
         {data.model_configuration_migratable ? (
@@ -190,11 +199,11 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
           <TextField label={t("models.name")} value={name} onChangeText={(v) => (setNameTouched(true), setName(v))} error={errors.name} autoCapitalize="none" autoCorrect={false} />
           {configured.length ? (
             <>
-              <Text style={{ color: th.colors.foreground, fontSize: 13, marginBottom: 4 }}>{t("models.provider")}</Text>
+              <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{t("models.provider")}</Text>
               <Chips options={configured.map((p) => ({ value: p.name, label: p.label }))} value={provider} onChange={setProvider} />
             </>
           ) : (
-            <Text style={{ color: th.colors.destructive, marginBottom: 12 }}>{t("models.noProviders")}</Text>
+            <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, marginBottom: 12 }}>{t("models.noProviders")}</Text>
           )}
           <TextField
             label={t("models.model")} value={model} onChangeText={pickTyped(setModel)} error={errors.model} autoCapitalize="none" autoCorrect={false}
@@ -206,7 +215,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
           ))}
           {efforts.length ? (
             <>
-              <Text style={{ color: th.colors.foreground, fontSize: 13, marginTop: 8, marginBottom: 4 }}>{t("models.effort")}</Text>
+              <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginTop: 8, marginBottom: 4 }}>{t("models.effort")}</Text>
               <Chips options={[{ value: "", label: t("models.effortDefault") }, ...efforts.map((x) => ({ value: x, label: x }))]} value={effort} onChange={setEffort} />
             </>
           ) : null}
@@ -215,7 +224,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
           <TextField label={t("models.temperature")} value={temp} onChangeText={setTemp} error={errors.temperature} keyboardType="decimal-pad" />
           {supported.length > 1 ? (
             <>
-              <Text style={{ color: th.colors.foreground, fontSize: 13, marginBottom: 4 }}>{t("models.api")}</Text>
+              <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{t("models.api")}</Text>
               <Chips options={apiOptions} value={apiPref} onChange={setApiPref} />
             </>
           ) : null}
@@ -232,7 +241,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
             ) : null}
             <Button title={t("models.save")} loading={saving} disabled={!configured.length} onPress={() => void save()} />
           </View>
-          {preset && !canDelete(preset.name, d.model_call_order) ? <Text style={{ color: th.colors.mutedForeground, fontSize: 12, textAlign: "right", marginTop: 4 }}>{t("models.primaryNoDelete")}</Text> : null}
+          {preset && !canDelete(preset.name, d.model_call_order) ? <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, textAlign: "right", marginTop: 4 }}>{t("models.primaryNoDelete")}</Text> : null}
         </ScrollView>
       </KeyboardAvoidingView>
       <Dialog
