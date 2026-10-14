@@ -1,7 +1,12 @@
-import React, { memo } from "react";
+import React, { memo, useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useStore } from "zustand";
 import type { UIMessage } from "@/lib/types";
 import type { TurnUnit } from "@/lib/activity-timeline";
+import { speechStore } from "../../extras/speech";
+import { useT } from "../../i18n";
+import { prefs } from "../../settings/prefs";
+import { IconButton } from "../../ui/components";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { useTheme } from "../../ui/ThemeProvider";
 import { ActivityRow } from "./ActivityRow";
@@ -11,9 +16,24 @@ import { ReasoningBlock } from "./ReasoningBlock";
 type Props = { unit: TurnUnit; live: boolean; onLongPress?: (m: UIMessage) => void };
 
 function MessageRowImpl({ unit, live, onLongPress }: Props) {
+  const t = useT();
   const th = useTheme();
+  const m = unit.type === "message" ? unit.message : null;
+  const isSpeaking = useStore(speechStore, (s) => (m ? s.speakingId === m.id : false));
+
+  const isFinishedAnswer =
+    !!m && m.role === "assistant" && !live && !m.isStreaming && m.kind !== "trace" && !!m.content;
+
+  useEffect(() => {
+    if (isFinishedAnswer && speechStore.getState().voicePending && prefs.voiceAutoRead()) {
+      speechStore.setState({ voicePending: false });
+      speechStore.getState().speak(m.id, m.content);
+    }
+  }, [isFinishedAnswer, m?.id, m?.content]);
+
   if (unit.type === "activity") return <ActivityRow messages={unit.messages} live={live} startedAtMs={unit.startedAtMs} />;
-  const m = unit.message;
+  if (!m) return null;
+
   if (m.role === "user")
     return (
       <View style={{ alignSelf: "flex-end", maxWidth: "85%", marginVertical: 4, padding: 10, borderRadius: th.radius.lg, backgroundColor: th.colors.secondary, opacity: m.deliveryStatus === "sending" ? 0.6 : 1 }}>
@@ -21,14 +41,24 @@ function MessageRowImpl({ unit, live, onLongPress }: Props) {
         {m.media?.length ? <MediaList media={m.media} /> : null}
       </View>
     );
+
   // finished, non-empty assistant answer: long-press opens the copy/fork menu
-  const finished = !!onLongPress && !live && !m.isStreaming && m.kind !== "trace" && !!m.content;
+  const finished = !!onLongPress && isFinishedAnswer;
   const Wrap = finished ? Pressable : View;
   return (
     <Wrap style={{ marginVertical: 4 }} {...(finished ? { onLongPress: () => onLongPress!(m) } : {})}>
       {m.reasoning ? <ReasoningBlock text={m.reasoning} streaming={!!m.reasoningStreaming} /> : null}
       {m.content ? <Markdown text={m.content} /> : null}
       {m.media?.length ? <MediaList media={m.media} /> : null}
+      {isFinishedAnswer ? (
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 4 }}>
+          <IconButton
+            icon={isSpeaking ? "stop-circle-outline" : "volume-high"}
+            accessibilityLabel={t(isSpeaking ? "speech.stop" : "speech.listen")}
+            onPress={() => speechStore.getState().toggle(m.id, m.content)}
+          />
+        </View>
+      ) : null}
     </Wrap>
   );
 }

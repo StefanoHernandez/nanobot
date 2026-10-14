@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, Animated, Text, View } from "react-native";
+import { speechStore } from "../../extras/speech";
 import { useVoiceInput } from "../../extras/voice";
 import { useT } from "../../i18n";
 import { IconButton, toast } from "../../ui/components";
@@ -25,7 +26,13 @@ function Dot() {
 export function VoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
   const t = useT();
   const th = useTheme();
-  const { state, elapsedMs, error, start, stop, cancel } = useVoiceInput(onTranscript);
+  const handleTranscript = (text: string) => {
+    if (text) {
+      speechStore.getState().markVoiceDictated();
+      onTranscript(text);
+    }
+  };
+  const { state, elapsedMs, error, start, stop, cancel } = useVoiceInput(handleTranscript);
 
   useEffect(() => {
     if (!error) return;
@@ -42,7 +49,7 @@ export function VoiceButton({ onTranscript }: { onTranscript: (text: string) => 
         <Dot />
         <Text style={{ color: th.colors.foreground, marginHorizontal: 6, fontVariant: ["tabular-nums"] }}>{mmss(elapsedMs)}</Text>
         <IconButton icon="close" accessibilityLabel={t("voice.cancel")} onPress={cancel} />
-        <IconButton icon="stop-circle-outline" accessibilityLabel={t("voice.stop")} onPress={() => void stop().then((x) => x && onTranscript(x))} />
+        <IconButton icon="stop-circle-outline" accessibilityLabel={t("voice.stop")} onPress={() => void stop().then((x) => x && handleTranscript(x))} />
       </View>
     );
   }

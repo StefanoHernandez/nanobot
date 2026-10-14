@@ -18,6 +18,7 @@ export function AppearanceSection() {
   const [lock, setLock] = useState(lockSettings.enabled());
   const [lang, setLang] = useState<Language>(prefs.language());
   const [sound, setSound] = useState(prefs.notificationSound());
+  const [voiceAutoRead, setVoiceAutoRead] = useState(prefs.voiceAutoRead?.() ?? false);
 
   const onLock = async (v: boolean) => {
     if (v) {
@@ -64,6 +65,20 @@ export function AppearanceSection() {
             onValueChange={(v) => {
               prefs.setNotificationSound(v);
               setSound(v);
+            }}
+          />
+        }
+      />
+      <ListItem
+        title={t("settings.voiceAutoRead")}
+        subtitle={t("settings.voiceAutoReadHelp")}
+        right={
+          <Switch
+            accessibilityLabel={t("settings.voiceAutoRead")}
+            value={voiceAutoRead}
+            onValueChange={(v) => {
+              prefs.setVoiceAutoRead?.(v);
+              setVoiceAutoRead(v);
             }}
           />
         }
