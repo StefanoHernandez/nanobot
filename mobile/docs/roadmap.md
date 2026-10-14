@@ -119,3 +119,31 @@ Docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban
 - **7 kanban:** the backend channel plus the `jobs.db` event tailer, as a model for "a task event wakes the agent".
 - **Maybe later:** the `/steer` command (redirect a running turn) and `/btw` (aside without derailing). They touch the agent loop, so the conflict risk is high.
 - **App API reference:** its REST/WS endpoint catalogue (sessions, workspace tree, usage, jobs) is a reference only.
+
+## Architecture & Implementation Guardrails (codebase audit, 2026-10-14)
+
+### 1. Bot personas do not exist in upstream nanobot (`nanobot/config/schema.py`)
+- **Problem:** Upstream has a single global `agents.defaults`, a single `SOUL.md` in the workspace, and `model_presets` that only change model/temperature/effort. `SubagentManager._build_tools()` (`nanobot/agent/subagent.py:205`) loads a fixed `scope="subagent"` tool registry and does not filter tools or skills per persona.
+- **Solution for Phase 7:** Define a `BotPersona` table/config in our separate module (`id`, `name`, `icon`, `role_prompt`, `model_preset`, `allowed_tools`, `allowed_skills`). When the dispatcher spawns a bot turn, inject `role_prompt` via `RuntimeContextBlock` (`nanobot/runtime_context.py`) rather than mutating `SOUL.md`, and pass a persona-filtered `ToolRegistry` + `LLMRuntime` to `AgentRunner`. This keeps upstream files untouched.
+
+### 2. Multi-agent collaboration, review loops and board group chat
+- **Problem:** `SubagentManager.spawn()` is fire-and-forget. If a reviewer sends a task back (`request_review` → changes requested) or bots talk in a board group chat, naive event triggers cause infinite bot-to-bot ping-pong loops and exhaust `max_concurrent_subagents` (4) on luffy.
+- **Solution for Phase 7:**
+  - **Persistent session per `(task_id, bot_id)`** (e.g. `kanban:<task_id>:<bot_id>`): when a reviewer sends a task back, the worker resumes its own session with full prior context instead of starting cold.
+  - **Explicit turn-taking in board group chat:** bots never auto-reply to every message. A bot wakes up only on an explicit `@mention` or orchestrator dispatch, with a hard **hop limit** (e.g. max 3 consecutive bot-to-bot hops without human input or a card state transition).
+  - **Structured handoff artifacts:** alongside the text `summary`, each task run records `artifacts` (modified/created file paths, commit hashes, or git diffs) automatically injected into child tasks and reviewer prompts.
+
+### 3. Workspace git & file-state isolation across parallel bots
+- **Problem:** `MemoryStore` (`nanobot/agent/memory.py:88`) binds a `GitStore` to the workspace, and file tools enforce `FileStateStore` read-before-write checks. Two bots editing the same directory concurrently will corrupt working trees or fail `FileStates` checks.
+- **Solution for Phase 7:** Default parallel code tasks on the same repository to isolated **`git worktree`** (or isolated `scratch` directories), with an Integrator/Reviewer bot (or dispatcher step) merging approved branches.
+
+### 4. Hybrid memory (Phase 6) & RAM budget on luffy (3.6 GB total, ~1.9 GB free)
+- **Problem:** Upstream spawns stdio MCP servers as separate subprocesses (`ToolLoader` / MCP client). If `nanobot-memory` loads the `multilingual-e5-small` ONNX model (~150–250 MB RAM) inside an MCP stdio subprocess while the gateway also loads it (or multiple subagents spawn MCP subprocesses), luffy will hit OOM. Additionally, upstream `Dream` (`nanobot/agent/memory.py`) periodically commits `MEMORY.md` via `GitStore`, so writing to `MEMORY.md` from `nanobot-memory` would cause git conflicts.
+- **Solution for Phases 6 & 7:**
+  - Run `nanobot-memory` and `nanobot-kanban` **in-process inside the gateway** (or via a single shared local HTTP/SSE endpoint) and expose agent tools through Python **`entry_points(group="nanobot.tools")`** (`nanobot/agent/tools/loader.py:68` already auto-discovers them with `_scopes = {"core", "subagent"}` and zero upstream edits). Lazy-load the ONNX session and unload it after idle timeout.
+  - Keep `MEMORY.md` exclusively owned by upstream `Dream`; store structured facts, vectors and relations in SQLite (`memory.db`) and inject relevant recall via a `RuntimeContextProvider`.
+
+### 5. Phase 5 & 5b mobile-specific edge cases
+- **Offline outbox (`P5-O1`) vs stream resumption:** On reconnect, `threadStore.hydrate` may keep an unfinished assistant bubble open. The outbox flush must wait until `hydrate` finishes **and** `runStatus` for that chat is `idle` before sending queued messages.
+- **QR device pairing (`Phase 5b`) vs in-memory gateway tokens:** `GatewayTokenStore` (`nanobot/webui/gateway_tokens.py`) stores session/API tokens in RAM only (`time.monotonic()`), so gateway restarts wipe them. In Phase 5b, `/webui/bootstrap` must accept the persistent `device_token` (validated against SHA-256 hashes in SQLite/JSON on disk) to mint fresh short-lived WS/API tokens seamlessly across luffy restarts.
+
