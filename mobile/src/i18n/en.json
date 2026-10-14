@@ -757,5 +757,8 @@
   "widget": {
     "openingNewChat": "Opening new chat…",
     "newChat": "New chat"
+  },
+  "home": {
+    "hello": "Hi, I'm {{name}}"
   }
 }

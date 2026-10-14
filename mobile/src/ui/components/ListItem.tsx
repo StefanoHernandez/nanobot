@@ -23,7 +23,7 @@ export function ListItem({ title, subtitle, onPress, onLongPress, right, left }:
       {left}
       <View style={styles.body}>
         <Text numberOfLines={1} style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 16 }}>{title}</Text>
-        {subtitle ? <Text numberOfLines={2} style={{ color: th.colors.mutedForeground, fontSize: 13 }}>{subtitle}</Text> : null}
+        {subtitle ? <Text numberOfLines={2} style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 14, lineHeight: 19 }}>{subtitle}</Text> : null}
       </View>
       {right}
     </Pressable>

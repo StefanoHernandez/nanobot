@@ -27,13 +27,13 @@ export function Button({ title, onPress, variant = "primary", disabled, loading,
       accessibilityState={accessibilityState ?? { disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
       onPress={onPress}
-      style={[styles.base, { backgroundColor: bg, borderRadius: th.radius.md, opacity: inactive ? 0.5 : 1 }]}
+      style={[styles.base, { backgroundColor: bg, borderRadius: 999, opacity: inactive ? 0.5 : 1 }]}
     >
-      {loading ? <ActivityIndicator color={fg} /> : <Text style={{ color: fg, fontFamily: th.font.medium, fontSize: 15 }}>{title}</Text>}
+      {loading ? <ActivityIndicator color={fg} /> : <Text style={{ color: fg, fontFamily: th.font.medium, fontSize: 16 }}>{title}</Text>}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { minHeight: 48, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  base: { minHeight: 48, paddingHorizontal: 20, alignItems: "center", justifyContent: "center" },
 });
