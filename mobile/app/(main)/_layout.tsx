@@ -6,7 +6,7 @@ import { SharePickerSheet } from "../../src/extras/SharePickerSheet";
 import { useTheme } from "../../src/ui/ThemeProvider";
 
 export default function MainLayout() {
-  const { colors } = useTheme();
+  const { colors, font } = useTheme();
   // Banner above the drawer: visible on Home and in threads (a thread has its own header; both sit below it).
   return (
     <View style={{ flex: 1 }}>
@@ -19,6 +19,7 @@ export default function MainLayout() {
           swipeEdgeWidth: 40,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
+          headerTitleStyle: { fontFamily: font.display, fontSize: 20 },
           headerShadowVisible: false,
           drawerStyle: { backgroundColor: colors.background },
         }}
