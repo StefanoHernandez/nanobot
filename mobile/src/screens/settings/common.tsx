@@ -44,8 +44,8 @@ export function HintSecretField({ label, hint, value, onChangeText, editing, onE
     return (
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: th.colors.foreground, fontSize: 13, marginBottom: 4 }}>{label}</Text>
-          <Text style={{ color: th.colors.mutedForeground, fontSize: 15 }}>{hint}</Text>
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{label}</Text>
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15 }}>{hint}</Text>
         </View>
         <IconButton icon="pencil" accessibilityLabel={labels.edit} onPress={() => onEdit(true)} />
       </View>

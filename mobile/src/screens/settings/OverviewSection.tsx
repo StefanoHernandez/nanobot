@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import type { SettingsPayload } from "@/lib/types";
 import { useT } from "../../i18n";
@@ -37,7 +37,7 @@ export function OverviewSection() {
   return (
     <>
       <Head>{t("settings.usage30")}</Head>
-      <View style={{ paddingHorizontal: 16, gap: 8 }}>
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 16, gap: 10 }}>
         <View testID="usage-bars" style={{ flexDirection: "row", alignItems: "flex-end", height: 72, gap: 2 }}>
           {days.map((d) => (
             <View
@@ -46,19 +46,31 @@ export function OverviewSection() {
             />
           ))}
         </View>
-        <Text style={{ color: th.colors.foreground, fontSize: 14 }}>{t("settings.usageTotal", { n: total.toLocaleString() })}</Text>
-        <Text style={{ color: th.colors.mutedForeground, fontSize: 13 }}>{t("settings.usagePeak", { n: peak.toLocaleString() })}</Text>
+        <View style={{ gap: 2 }}>
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>{t("settings.usageTotal", { n: total.toLocaleString() })}</Text>
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>{t("settings.usagePeak", { n: peak.toLocaleString() })}</Text>
+        </View>
       </View>
+
       <Head>{t("settings.currentModel")}</Head>
-      <ListItem
-        title={a?.model ?? "-"}
-        subtitle={[a?.resolved_provider ?? a?.provider, a?.model_preset].filter(Boolean).join(" · ")}
-        onPress={go("models")}
-      />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <ListItem
+          title={a?.model ?? "-"}
+          subtitle={[a?.resolved_provider ?? a?.provider, a?.model_preset].filter(Boolean).join(" · ")}
+          onPress={go("models")}
+        />
+      </View>
+
       <Head>{t("settings.sections.capabilities")}</Head>
-      <ListItem title={t("settings.web")} subtitle={on(data?.web?.enable)} onPress={go("capabilities")} />
-      <ListItem title={t("settings.image")} subtitle={on(data?.image_generation?.enabled)} onPress={go("capabilities")} />
-      <ListItem title={t("settings.voice")} subtitle={on(data?.transcription?.enabled)} onPress={go("capabilities")} />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <ListItem title={t("settings.web")} subtitle={on(data?.web?.enable)} onPress={go("capabilities")} />
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem title={t("settings.image")} subtitle={on(data?.image_generation?.enabled)} onPress={go("capabilities")} />
+        </View>
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem title={t("settings.voice")} subtitle={on(data?.transcription?.enabled)} onPress={go("capabilities")} />
+        </View>
+      </View>
     </>
   );
 }
