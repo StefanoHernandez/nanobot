@@ -47,11 +47,15 @@
         {
           "disableIOS": true,
           "androidIntentFilters": [
-            "text/plain",
-            "image/*"
+            "text/*",
+            "image/*",
+            "application/*",
+            "*/*"
           ],
           "androidMultiIntentFilters": [
-            "image/*"
+            "image/*",
+            "application/*",
+            "*/*"
           ]
         }
       ],
