@@ -40,7 +40,8 @@
       "retry": "Nuovo tentativo in corso"
     },
     "changeModel": "Cambia modello",
-    "chooseModel": "Scegli il modello"
+    "chooseModel": "Scegli il modello",
+    "historyError": "Impossibile caricare lo storico di questa chat."
   },
   "extras": {
     "channel": "Risposte",

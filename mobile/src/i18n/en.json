@@ -40,7 +40,8 @@
       "retry": "Retrying"
     },
     "changeModel": "Change model",
-    "chooseModel": "Choose model"
+    "chooseModel": "Choose model",
+    "historyError": "Couldn't load this chat's history."
   },
   "extras": {
     "channel": "Replies",
