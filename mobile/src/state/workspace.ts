@@ -75,7 +75,10 @@ export async function setWorkspaceScope(session: NanobotSession, key: string, sc
     };
     const timer = setTimeout(() => {
       if (awaiting === me) awaiting = null;
-      workspaceStore.getState().setError(key, "workspace_scope_timeout");
+      const cur = chatsStore.getState().session;
+      if (cur === session) {
+        workspaceStore.getState().setError(key, "workspace_scope_timeout");
+      }
       reject(new Error("workspace_scope_timeout"));
     }, SCOPE_TIMEOUT_MS);
     awaiting = me;
@@ -94,7 +97,15 @@ export function useWorkspace(key: string) {
 
   useEffect(() => {
     if (off || info) return;
-    session!.get<WorkspacesPayload>("/api/workspaces").then((p) => workspaceStore.setState({ info: p }), () => {});
+    session!
+      .get<WorkspacesPayload>("/api/workspaces")
+      .then(
+        (p) => {
+          const cur = chatsStore.getState().session;
+          if (cur === session) workspaceStore.setState({ info: p });
+        },
+        () => {},
+      );
   }, [off, session, info]);
 
   const browse = useCallback(

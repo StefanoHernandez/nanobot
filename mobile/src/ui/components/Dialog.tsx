@@ -2,6 +2,7 @@ import React from "react";
 import { KeyboardAvoidingView, Modal, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../ThemeProvider";
 import { Button } from "./Button";
+import { ToastHost } from "./ToastHost";
 
 export type DialogProps = {
   open: boolean;
@@ -30,6 +31,7 @@ export function Dialog({ open, title, message, confirmLabel, cancelLabel, onConf
           </View>
         </View>
       </KeyboardAvoidingView>
+      {open ? <ToastHost /> : null}
     </Modal>
   );
 }

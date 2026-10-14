@@ -4,6 +4,7 @@ import { profiles, type Profile } from "../core/profiles";
 import { chatsStore } from "./chatsStore";
 import { subagentsStore } from "./subagentsStore";
 import { settingsStore } from "../settings/store";
+import { clearCatalogCache } from "../settings/models";
 import { threadStore } from "./threadStore";
 
 type S = {
@@ -23,11 +24,12 @@ export const sessionStore = createStore<S>((set, get) => {
     seq++;
     unsub?.();
     unsub = null;
-    get().session?.stop();
+    get().session?.stop?.();
     chatsStore.getState().bind(null);
     threadStore.getState().reset();
     subagentsStore.getState().reset();
     settingsStore.getState().reset();
+    clearCatalogCache();
     set({ session: null, state: "none", profile: null });
   };
 

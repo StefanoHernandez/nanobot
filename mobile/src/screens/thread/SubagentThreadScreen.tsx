@@ -19,13 +19,30 @@ export function SubagentThreadScreen({ chatKey, taskId, onBack }: { chatKey: str
   const [messages, setMessages] = useState<UIMessage[] | null>(null);
   const [failed, setFailed] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    if (!session) return;
+    setFailed(false);
+    setMessages(null);
+    loadSubagentThread(session, chatKey, taskId).then(
+      (m) => {
+        if (active) setMessages(m);
+      },
+      () => {
+        if (active) setFailed(true);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [session, chatKey, taskId]);
+
   const load = useCallback(() => {
     if (!session) return;
     setFailed(false);
     setMessages(null);
     loadSubagentThread(session, chatKey, taskId).then(setMessages, () => setFailed(true));
   }, [session, chatKey, taskId]);
-  useEffect(load, [load]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>

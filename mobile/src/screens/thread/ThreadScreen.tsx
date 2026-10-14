@@ -42,7 +42,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={{ flex: 1 }}><MessageList chatKey={chatKey} forkBoundary={forkBoundary} messages={messages} running={running} notices={notices} /></View>
         {isWritable(chatKey) ? (
-          <Composer chatKey={chatKey} />
+          <Composer chatKey={chatKey} key={chatKey} />
         ) : (
           <Text style={{ textAlign: "center", color: th.colors.mutedForeground, padding: 16 }}>{t("thread.readOnly")}</Text>
         )}
