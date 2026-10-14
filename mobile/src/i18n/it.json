@@ -38,7 +38,9 @@
       "fallback": "Modello di riserva in uso",
       "stream_error": "Il turno non è riuscito",
       "retry": "Nuovo tentativo in corso"
-    }
+    },
+    "changeModel": "Cambia modello",
+    "chooseModel": "Scegli il modello"
   },
   "extras": {
     "channel": "Risposte",
