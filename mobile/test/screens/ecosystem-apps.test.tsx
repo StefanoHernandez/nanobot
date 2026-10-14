@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Linking } from "react-native";
 import { i18n } from "../../src/i18n";
@@ -19,13 +19,24 @@ let mockSettingsData: any = {
   },
 };
 
+const mockRefreshSettings = jest.fn();
+
+let appFocusListeners: Array<() => void> = [];
+const mockAddListener = jest.fn((event: string, cb: () => void) => {
+  if (event === "focus") appFocusListeners.push(cb);
+  return () => {
+    appFocusListeners = appFocusListeners.filter((l) => l !== cb);
+  };
+});
+
 jest.mock("../../src/settings/store", () => ({
-  useSettings: () => ({ mutate: mockMutate, data: mockSettingsData, refresh: jest.fn() }),
+  useSettings: () => ({ mutate: mockMutate, data: mockSettingsData, refresh: mockRefreshSettings }),
   useRestart: () => ({ pending: false, sections: [], state: "idle", run: jest.fn() }),
 }));
 
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  useNavigation: () => ({ addListener: mockAddListener }),
 }));
 
 const mockInstall = jest.fn();
@@ -528,6 +539,118 @@ describe("P4-U2 Apps UI (CLI apps, MCP, plugins)", () => {
     await fireEvent.press(saveBtn);
 
     expect(mockEnable).toHaveBeenCalled();
-    expect(toast.show).toHaveBeenCalledWith("Network error");
+    expect(toast.show).toHaveBeenCalledWith("Operation failed");
+    expect(toast.show).not.toHaveBeenCalledWith("Network error");
+  });
+
+  test("I9: AppsScreen refreshes settings on focus", async () => {
+    mockRefreshSettings.mockClear();
+    await renderWithTheme(<AppsScreen />);
+    appFocusListeners.forEach((fn) => fn());
+    expect(mockRefreshSettings).toHaveBeenCalled();
+  });
+
+  test("I11: PluginsTab tracks in-flight state and ignores second toggle during enable", async () => {
+    let resolveEnable: (val: any) => void;
+    const pendingEnablePromise = new Promise((resolve) => {
+      resolveEnable = resolve;
+    });
+    const mockEnable = jest.fn(() => pendingEnablePromise);
+
+    mockUseFeatures.mockReturnValue({
+      features: [sampleFeature],
+      requiresRestart: false,
+      loading: false,
+      refresh: jest.fn(),
+      enable: mockEnable,
+      disable: jest.fn(),
+    });
+    mockSettingsData.runtime_config["tools.webui_allow_remote_package_install"] = true;
+
+    await renderWithTheme(<AppsScreen />);
+    await fireEvent.press(screen.getByText("Plugin"));
+
+    const switchEl = screen.getByRole("switch");
+    await fireEvent(switchEl, "valueChange", true);
+
+    // Confirm dialog
+    const confirmBtn = screen.getByText("Confirm");
+    await fireEvent.press(confirmBtn);
+
+    expect(mockEnable).toHaveBeenCalledTimes(1);
+    expect(mockEnable).toHaveBeenCalledWith("code_interpreter");
+
+    // While enable is in-flight, switch is disabled and second toggle is ignored
+    expect(switchEl.props.accessibilityState?.disabled ?? switchEl.props.disabled).toBe(true);
+    await fireEvent(switchEl, "valueChange", true);
+    expect(mockEnable).toHaveBeenCalledTimes(1);
+
+    // Resolve the enable
+    await act(async () => {
+      resolveEnable!({ timedOut: false });
+    });
+  });
+
+  test("M15: CliAppsTab tracks in-flight state per app without blocking other apps", async () => {
+    const mockInstall = jest.fn(() => new Promise(() => {})); // pending
+    const app1: CliAppInfo = { ...sampleCliApp, name: "app1", display_name: "App 1", status: "not_installed" };
+    const app2: CliAppInfo = { ...sampleCliApp, name: "app2", display_name: "App 2", status: "installed" };
+
+    mockUseCliApps.mockReturnValue({
+      apps: [app1, app2],
+      loading: false,
+      refresh: jest.fn(),
+      install: mockInstall,
+      update: jest.fn(),
+      uninstall: jest.fn(),
+      test: jest.fn(),
+    });
+    mockSettingsData.runtime_config["tools.webui_allow_remote_package_install"] = true;
+
+    await renderWithTheme(<AppsScreen />);
+
+    // Tap Install on app1
+    const installBtn = screen.getByText("Install");
+    await fireEvent.press(installBtn);
+    const confirmBtn = screen.getByText("Confirm");
+    await fireEvent.press(confirmBtn);
+
+    expect(mockInstall).toHaveBeenCalledWith("app1");
+
+    // app2 still has its buttons enabled (e.g. Test, Update)
+    const testBtn = screen.getByText("Test");
+    expect(testBtn.props.accessibilityState?.disabled ?? testBtn.props.disabled).toBeFalsy();
+  });
+
+  test("I7: McpSheet uses enable and tools passed down as props", async () => {
+    const mockEnable = jest.fn().mockResolvedValue({});
+    const mockTools = jest.fn().mockResolvedValue({});
+
+    mockSettingsData.runtime_config["tools.webui_allow_remote_package_install"] = true;
+    mockUseMcp.mockReturnValue({
+      presets: [{ ...samplePreset, enabled: true }],
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+      enable: mockEnable,
+      disable: jest.fn(),
+      remove: jest.fn(),
+      test: jest.fn(),
+      reconnect: jest.fn(),
+      tools: mockTools,
+    });
+
+    await renderWithTheme(<AppsScreen />);
+    await fireEvent.press(screen.getByText("MCP"));
+
+    // Open sheet
+    await fireEvent.press(screen.getByText("GitHub"));
+
+    // Save triggers prop enable and prop tools
+    const saveBtn = screen.getByText("Save");
+    await fireEvent.press(saveBtn);
+
+    expect(mockEnable).toHaveBeenCalledWith("github", expect.any(Object));
+    expect(mockTools).toHaveBeenCalledWith("github", expect.any(Array));
   });
 });

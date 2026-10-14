@@ -9,18 +9,27 @@ export function McpOAuthSheet({
   open,
   presetName,
   onClose,
+  onDone,
 }: {
   open: boolean;
   presetName: string;
   onClose: () => void;
+  onDone?: () => void;
 }) {
   const t = useT();
   const th = useTheme();
-  const oauth = useMcpOAuth(presetName);
+  const oauth = useMcpOAuth(presetName, onDone);
   const [callbackUrl, setCallbackUrl] = useState("");
   const [starting, setStarting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const submittingRef = useRef(false);
+
+  React.useEffect(() => {
+    if (oauth.state === "done") {
+      onDone?.();
+      onClose();
+    }
+  }, [oauth.state, onDone, onClose]);
 
   if (!open) return null;
 

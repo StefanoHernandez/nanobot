@@ -5,14 +5,22 @@ import { useT } from "../../../i18n";
 import { useChannelConnect } from "../../../ecosystem/channels";
 import { Button, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
-import type { NanobotFeatureInfo } from "@/lib/types";
+import type { NanobotFeatureInfo, NanobotFeaturesPayload } from "@/lib/types";
 
 export const supportsConnect = (ch: NanobotFeatureInfo): boolean => {
   const CONNECT_CHANNELS = ["feishu", "linear", "whatsapp", "weixin", "lark"];
   return CONNECT_CHANNELS.includes(ch.name) || (ch.capabilities?.includes("connect") ?? false);
 };
 
-export function ChannelConnect({ channel, instanceId }: { channel: NanobotFeatureInfo; instanceId?: string }) {
+export function ChannelConnect({
+  channel,
+  instanceId,
+  onFeatures,
+}: {
+  channel: NanobotFeatureInfo;
+  instanceId?: string;
+  onFeatures?: (p: NanobotFeaturesPayload) => void;
+}) {
   const t = useT();
   const th = useTheme();
   const {
@@ -25,7 +33,7 @@ export function ChannelConnect({ channel, instanceId }: { channel: NanobotFeatur
     start,
     cancel,
     submitVerifyCode,
-  } = useChannelConnect(channel.name, instanceId);
+  } = useChannelConnect(channel.name, instanceId, onFeatures);
 
   const [verifyCode, setVerifyCode] = useState("");
 
@@ -121,7 +129,7 @@ export function ChannelConnect({ channel, instanceId }: { channel: NanobotFeatur
       {state === "error" && (
         <View style={styles.statusBox}>
           <Text style={{ color: th.colors.destructive, marginBottom: 8 }}>
-            {error || t("common.error")}
+            {t("common.operationFailed", "Operazione non riuscita")}
           </Text>
           <Button
             title={t("channels.connect.retry")}

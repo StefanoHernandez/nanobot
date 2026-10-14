@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { Button, IconButton } from "../../../ui/components";
@@ -16,8 +16,17 @@ export type AppsTab = "cli" | "mcp" | "plugin";
 export function AppsScreen() {
   const t = useT();
   const th = useTheme();
-  const { data: settings } = useSettings();
+  const nav = useNavigation?.();
+  const { data: settings, refresh: refreshSettings } = useSettings();
   const [tab, setTab] = useState<AppsTab>("cli");
+
+  useEffect(() => {
+    if (!settings) void refreshSettings();
+    const unsub = nav?.addListener?.("focus", () => {
+      void refreshSettings();
+    });
+    return () => unsub?.();
+  }, [nav, refreshSettings, settings]);
 
   const gateAllowed = installGate(settings).allowed;
 

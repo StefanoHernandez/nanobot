@@ -145,6 +145,148 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
     expect(expResult.current.error).toBe("expired");
   });
 
+  test("I6: useMcpOAuth gateway-redirect flow polls immediately without callback_url, and unmount cancels live flow", async () => {
+    mockMutate.mockReset();
+    jest.useFakeTimers();
+    mockSession.get.mockReset();
+    const onDone = jest.fn();
+
+    // Gateway-redirect payload: completion_input is undefined/absent
+    mockMutate.mockResolvedValueOnce({
+      flow_id: "flow-gateway",
+      status: "authorization_required",
+      expires_in: 300,
+      authorization_url: "https://auth.example.com",
+    });
+
+    mockSession.get
+      .mockResolvedValueOnce({ flow_id: "flow-gateway", status: "connecting" })
+      .mockResolvedValueOnce({ flow_id: "flow-gateway", status: "connected" });
+
+    const { result, unmount } = await renderHook(() => useMcpOAuth("linear", onDone));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    // When completion_input is absent, it goes straight to polling
+    expect(result.current.state).toBe("polling");
+    expect(result.current.authUrl).toBe("https://auth.example.com");
+
+    // Advance timer to trigger poll
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1500);
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(result.current.state).toBe("done");
+    expect(onDone).toHaveBeenCalled();
+    await unmount();
+
+    // Unmount cancel test: start a new flow and unmount
+    mockMutate.mockResolvedValueOnce({
+      flow_id: "flow-to-cancel",
+      status: "authorization_required",
+      expires_in: 300,
+    });
+    mockSession.get.mockResolvedValue({ flow_id: "flow-to-cancel", status: "connecting" });
+
+    const { result: cancelHook, unmount: cancelUnmount } = await renderHook(() => useMcpOAuth("linear"));
+    await act(async () => {
+      await cancelHook.current.start();
+    });
+
+    // Unmount while pending
+    await cancelUnmount();
+    expect(mockMutate).toHaveBeenCalledWith("settings.mcp.oauth_cancel", { flow_id: "flow-to-cancel" });
+    jest.useRealTimers();
+  });
+
+  test("I6: one transient poll error keeps polling, tolerating up to 3 errors", async () => {
+    jest.useFakeTimers();
+    mockMutate.mockReset();
+    mockSession.get.mockReset();
+    const onDone = jest.fn();
+
+    mockMutate.mockResolvedValueOnce({
+      flow_id: "flow-transient",
+      status: "authorization_required",
+      expires_in: 300,
+      authorization_url: "https://auth.example.com",
+    });
+
+    // 1st poll: transient error
+    mockSession.get.mockRejectedValueOnce(new Error("Transient network failure"));
+    // 2nd poll: still connecting
+    mockSession.get.mockResolvedValueOnce({ flow_id: "flow-transient", status: "connecting" });
+    // 3rd poll: connected!
+    mockSession.get.mockResolvedValueOnce({ flow_id: "flow-transient", status: "connected" });
+
+    const { result } = await renderHook(() => useMcpOAuth("linear", onDone));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(result.current.state).toBe("polling");
+
+    // 1st tick: error occurs, but hook remains in "polling"
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.state).toBe("polling");
+    expect(result.current.error).toBeNull();
+
+    // 2nd tick: success "connecting"
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.state).toBe("polling");
+
+    // 3rd tick: connected -> "done"
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.state).toBe("done");
+    expect(onDone).toHaveBeenCalled();
+
+    jest.useRealTimers();
+  });
+
+  test("I6: on expiry, sends oauth_cancel once", async () => {
+    jest.useFakeTimers();
+    mockMutate.mockReset();
+    mockSession.get.mockReset();
+
+    mockMutate.mockResolvedValueOnce({
+      flow_id: "flow-expiring",
+      status: "authorization_required",
+      expires_in: 1, // 1 second
+      authorization_url: "https://auth.example.com",
+    });
+
+    const { result } = await renderHook(() => useMcpOAuth("linear"));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    expect(result.current.state).toBe("polling");
+
+    // Advance timer past expiry
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(result.current.state).toBe("error");
+    expect(result.current.error).toBe("expired");
+    expect(mockMutate).toHaveBeenCalledWith("settings.mcp.oauth_cancel", { flow_id: "flow-expiring" });
+
+    jest.useRealTimers();
+  });
+
   test("the useSkills() result has no delete", async () => {
     mockSession.get.mockResolvedValue({ skills: [] });
 
@@ -167,7 +309,7 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
           id: "job-1",
           name: "Job 1",
           kind: "cron",
-          state: { run_history: [{ run_at_ms: 1700000000000, status: "ok" }] },
+          state: { run_history: [{ run_at_ms: Date.now() + 500, status: "ok" }] },
         },
       ],
     });
@@ -183,6 +325,97 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
     expect(mockSession.get).toHaveBeenCalledWith(
       expect.stringContaining("/api/webui/automations/result?id=job-1"),
     );
+  });
+
+  test("M14: unmounting during polling makes no further session.get calls", async () => {
+    jest.useFakeTimers();
+    mockMutate.mockResolvedValueOnce({
+      jobs: [
+        {
+          id: "job-poll",
+          name: "Job Poll",
+          kind: "cron",
+          state: { run_history: [] },
+        },
+      ],
+    });
+
+    mockSession.get.mockResolvedValue({
+      jobs: [
+        {
+          id: "job-poll",
+          name: "Job Poll",
+          kind: "cron",
+          state: { run_history: [] },
+        },
+      ],
+    });
+
+    const { result, unmount } = await renderHook(() => useAutomations());
+
+    let runPromise: Promise<any>;
+    await act(async () => {
+      runPromise = result.current.run("job-poll");
+    });
+
+    // Advance 1 tick (2000ms)
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2100);
+    });
+
+    const callCountBeforeUnmount = mockSession.get.mock.calls.length;
+    expect(callCountBeforeUnmount).toBeGreaterThan(0);
+
+    // Unmount during polling
+    await unmount();
+
+    // Advance more time
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(10000);
+    });
+
+    // No further session.get calls after unmount
+    expect(mockSession.get.mock.calls.length).toBe(callCountBeforeUnmount);
+    await act(async () => {
+      await runPromise;
+    });
+    jest.useRealTimers();
+  });
+
+  test("M14: picks the run newer than the click by run_at_ms, not by array position", async () => {
+    const clickedAt = Date.now();
+    mockMutate.mockResolvedValueOnce({
+      jobs: [
+        {
+          id: "job-order",
+          name: "Job Order",
+          kind: "cron",
+          state: {
+            run_history: [
+              { run_at_ms: clickedAt + 500, status: "ok" }, // newer than click, but FIRST in array
+              { run_at_ms: clickedAt - 1000, status: "ok" }, // older than click, but LAST in array
+            ],
+          },
+        },
+      ],
+    });
+    mockSession.get.mockImplementation(async (url: string) => {
+      if (url.includes("/api/webui/automations/result")) {
+        return { response: "Result from newer run" };
+      }
+      return { jobs: [] };
+    });
+
+    const { result } = await renderHook(() => useAutomations());
+    let res: any;
+    await act(async () => {
+      res = await result.current.run("job-order");
+    });
+
+    expect(mockSession.get).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/webui/automations/result?id=job-order&run_at_ms=${clickedAt + 500}`),
+    );
+    expect(res.result).toBe("Result from newer run");
   });
 
   test("groupByDay ordering, including today, tomorrow and later, with jobs inside a day sorted by time", () => {
@@ -273,5 +506,57 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
     expect(calledValues).not.toHaveProperty("atMs");
     expect(calledValues).not.toHaveProperty("everyMs");
     expect(calledValues.schedule).toHaveProperty("at_ms");
+  });
+
+  test("M14: run(id) polls /api/webui/automations until run_history >= clicked_at", async () => {
+    jest.useFakeTimers();
+    const clickedAt = Date.now();
+
+    mockSession.get.mockResolvedValueOnce({
+      jobs: [{ id: "job-sync", name: "Job Sync", kind: "cron", state: { run_history: [] } }],
+    });
+
+    const { result } = await renderHook(() => useAutomations());
+
+    mockMutate.mockResolvedValueOnce({
+      jobs: [
+        {
+          id: "job-sync",
+          name: "Job Sync",
+          kind: "cron",
+          state: { run_history: [{ run_at_ms: clickedAt - 1000, status: "ok" }] },
+        },
+      ],
+    });
+
+    mockSession.get.mockResolvedValueOnce({
+      jobs: [
+        {
+          id: "job-sync",
+          name: "Job Sync",
+          kind: "cron",
+          state: { run_history: [{ run_at_ms: clickedAt + 200, status: "ok" }] },
+        },
+      ],
+    });
+
+    mockSession.get.mockResolvedValueOnce({ response: "Execution done!" });
+
+    let runPromise: Promise<any>;
+    act(() => {
+      runPromise = result.current.run("job-sync");
+    });
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2500);
+    });
+
+    const runResult = await runPromise!;
+    expect(runResult.result).toBe("Execution done!");
+    expect(mockSession.get).toHaveBeenCalledWith("/api/webui/automations");
+    expect(mockSession.get).toHaveBeenCalledWith(
+      expect.stringContaining("/api/webui/automations/result?id=job-sync"),
+    );
+    jest.useRealTimers();
   });
 });

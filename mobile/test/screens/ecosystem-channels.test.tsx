@@ -1,9 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { i18n } from "../../src/i18n";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
+import { toast } from "../../src/ui/components/Toast";
 import { ChatDrawer } from "../../src/screens/chats/ChatDrawer";
 import { ChannelsScreen } from "../../src/screens/ecosystem/channels/ChannelsScreen";
 import { ChannelSheet } from "../../src/screens/ecosystem/channels/ChannelSheet";
@@ -11,11 +12,28 @@ import EcosystemIndex from "../../app/ecosystem/index";
 import * as channelsModule from "../../src/ecosystem/channels";
 import type { NanobotFeatureInfo } from "@/lib/types";
 
+jest.mock("../../src/ui/components/Toast", () => ({
+  toast: { show: jest.fn() },
+}));
+
+let focusListeners: Array<() => void> = [];
+const mockAddListener = jest.fn((event: string, cb: () => void) => {
+  if (event === "focus") focusListeners.push(cb);
+  return () => {
+    focusListeners = focusListeners.filter((l) => l !== cb);
+  };
+});
+
 const mockMutate = jest.fn();
 const mockRunRestart = jest.fn();
 
+let mockSettingsData: any = {
+  requires_restart: false,
+  runtime_config: { "tools.webui_allow_remote_package_install": true },
+};
+
 jest.mock("../../src/settings/store", () => ({
-  useSettings: () => ({ mutate: mockMutate, data: { requires_restart: false }, refresh: jest.fn() }),
+  useSettings: () => ({ mutate: mockMutate, data: mockSettingsData, refresh: jest.fn() }),
   useRestart: () => ({ pending: false, sections: [], state: "idle", run: mockRunRestart }),
 }));
 
@@ -56,7 +74,7 @@ jest.mock("../../src/state/sessionStore", () => ({
 
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), navigate: jest.fn() },
-  useNavigation: () => ({ addListener: jest.fn(() => () => {}), dispatch: jest.fn() }),
+  useNavigation: () => ({ addListener: mockAddListener, dispatch: jest.fn() }),
   usePathname: () => "/ecosystem/channels",
 }));
 
@@ -118,6 +136,7 @@ const renderWithTheme = async (ui: React.ReactElement) => {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  focusListeners = [];
   await i18n.changeLanguage("en");
   mockUseChannels.mockReturnValue({
     channels: [sampleChannel],
@@ -179,11 +198,13 @@ describe("P4-U1 Ecosystem & Channels UI", () => {
     expect(router.push).toHaveBeenCalledWith("/ecosystem/automations");
   });
 
-  test("the enable switch calls channelEnable with the name", async () => {
+  test("the enable switch calls channelEnable with the name after confirmation", async () => {
     await renderWithTheme(<ChannelsScreen />);
     const switches = screen.getAllByRole("switch");
     expect(switches.length).toBeGreaterThan(0);
     await fireEvent(switches[0], "valueChange", true);
+    const confirmBtn = screen.getByText("Confirm");
+    await fireEvent.press(confirmBtn);
     expect(mockChannelEnable).toHaveBeenCalledWith(mockMutate, "telegram");
   });
 
@@ -325,4 +346,159 @@ describe("P4-U1 Ecosystem & Channels UI", () => {
     await fireEvent.press(denyBtn);
     expect(mockDeny).toHaveBeenCalledWith("ABC");
   });
+
+  test("I5: ChannelRow toggle enable shows confirm dialog; cancel dismisses without enabling", async () => {
+    await renderWithTheme(<ChannelsScreen />);
+    const switches = screen.getAllByRole("switch");
+    await fireEvent(switches[0], "valueChange", true);
+    const cancelBtn = screen.getByText("Cancel");
+    await fireEvent.press(cancelBtn);
+    expect(mockChannelEnable).not.toHaveBeenCalled();
+  });
+
+  test("I5: ChannelRow toggle enable shows policy toast on 403 error", async () => {
+    mockChannelEnable.mockRejectedValueOnce({ status: 403 });
+    await renderWithTheme(<ChannelsScreen />);
+    const switches = screen.getAllByRole("switch");
+    await fireEvent(switches[0], "valueChange", true);
+    const confirmBtn = screen.getByText("Confirm");
+    await fireEvent.press(confirmBtn);
+    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/PC|host|remote/i));
+  });
+
+  test("I5: ChannelRow toggle enable shows timeout toast when timedOut is true", async () => {
+    mockChannelEnable.mockResolvedValueOnce({ timedOut: true });
+    await renderWithTheme(<ChannelsScreen />);
+    const switches = screen.getAllByRole("switch");
+    await fireEvent(switches[0], "valueChange", true);
+    const confirmBtn = screen.getByText("Confirm");
+    await fireEvent.press(confirmBtn);
+    expect(toast.show).toHaveBeenCalledWith("Still running, refreshing the list");
+  });
+
+  test("I10: ChannelsScreen refreshes channels and pairing on focus and pull-to-refresh", async () => {
+    const mockChannelsRefresh = jest.fn();
+    const mockPairingRefresh = jest.fn();
+    mockUseChannels.mockReturnValue({
+      channels: [sampleChannel],
+      requiresRestart: false,
+      loading: false,
+      error: null,
+      refresh: mockChannelsRefresh,
+      apply: jest.fn(),
+    });
+    mockUsePairing.mockReturnValue({
+      requests: [],
+      error: null,
+      refresh: mockPairingRefresh,
+      approve: jest.fn(),
+      deny: jest.fn(),
+    });
+
+    await renderWithTheme(<ChannelsScreen />);
+
+    // Trigger focus listener
+    focusListeners.forEach((fn) => fn());
+    expect(mockChannelsRefresh).toHaveBeenCalled();
+    expect(mockPairingRefresh).toHaveBeenCalled();
+
+    mockChannelsRefresh.mockClear();
+    mockPairingRefresh.mockClear();
+
+    // Pull to refresh
+    const list = screen.getByTestId("channels-scroll");
+    const { refreshControl } = list.props;
+    await act(async () => {
+      refreshControl.props.onRefresh();
+    });
+    expect(mockChannelsRefresh).toHaveBeenCalled();
+    expect(mockPairingRefresh).toHaveBeenCalled();
+  });
+
+  test("I10 & M8: PairingSection approve and deny catch errors and show toast", async () => {
+    const mockApprove = jest.fn().mockRejectedValueOnce(new Error("500 internal server error db crashed"));
+    const mockDeny = jest.fn().mockRejectedValueOnce(new Error("500 internal server error network drop"));
+    mockUsePairing.mockReturnValue({
+      requests: [{ code: "XYZ", sender_id: "user99", channel: "telegram" }],
+      approve: mockApprove,
+      deny: mockDeny,
+      refresh: jest.fn(),
+      error: null,
+    });
+
+    await renderWithTheme(<ChannelsScreen />);
+
+    // Press Approve and confirm
+    await fireEvent.press(screen.getByText("Approve"));
+    const confirmBtn = screen.getByText("Confirm");
+    await fireEvent.press(confirmBtn);
+
+    expect(mockApprove).toHaveBeenCalledWith("XYZ");
+    expect(toast.show).toHaveBeenCalledWith("Operation failed");
+    expect(toast.show).not.toHaveBeenCalledWith("500 internal server error db crashed");
+
+    // Press Deny
+    await fireEvent.press(screen.getByText("Deny"));
+    expect(mockDeny).toHaveBeenCalledWith("XYZ");
+    expect(toast.show).toHaveBeenCalledWith("Operation failed");
+    expect(toast.show).not.toHaveBeenCalledWith("500 internal server error network drop");
+  });
+
+  test("M8: ChannelRow toggle disable error shows generic toast, not raw server error", async () => {
+    mockChannelDisable.mockRejectedValueOnce(new Error("Database connection closed"));
+    mockUseChannels.mockReturnValue({
+      channels: [{ ...sampleChannel, enabled: true }],
+      requiresRestart: false,
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+      apply: jest.fn(),
+    });
+
+    await renderWithTheme(<ChannelsScreen />);
+    const switches = screen.getAllByRole("switch");
+    await fireEvent(switches[0], "valueChange", false);
+
+    expect(mockChannelDisable).toHaveBeenCalledWith(mockMutate, "telegram");
+    expect(toast.show).toHaveBeenCalledWith("Operation failed");
+    expect(toast.show).not.toHaveBeenCalledWith("Database connection closed");
+  });
+
+  test("I5: with the gate off, the enable switch on a disabled channel is disabled; disabling an enabled channel still works", async () => {
+    mockSettingsData = {
+      requires_restart: false,
+      runtime_config: { "tools.webui_allow_remote_package_install": false },
+    };
+
+    const disabledChannel: NanobotFeatureInfo = { ...sampleChannel, name: "telegram", enabled: false };
+    const enabledChannel: NanobotFeatureInfo = { ...sampleChannel, name: "discord", display_name: "Discord", enabled: true };
+
+    mockUseChannels.mockReturnValue({
+      channels: [disabledChannel, enabledChannel],
+      requiresRestart: false,
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+      apply: jest.fn(),
+    });
+
+    await renderWithTheme(<ChannelsScreen />);
+
+    // Gate banner and row hint are visible
+    expect(screen.getAllByText("Enable remote installs on your computer (Settings → Advanced)").length).toBeGreaterThanOrEqual(1);
+
+    const switches = screen.getAllByRole("switch");
+    expect(switches.length).toBe(2);
+
+    // Disabled channel switch is disabled
+    expect(switches[0].props.disabled).toBe(true);
+
+    // Enabled channel switch is NOT disabled
+    expect(switches[1].props.disabled).toBe(false);
+
+    // Disabling an enabled channel still works
+    await fireEvent(switches[1], "valueChange", false);
+    expect(mockChannelDisable).toHaveBeenCalledWith(mockMutate, "discord");
+  });
 });
+
