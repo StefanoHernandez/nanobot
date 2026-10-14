@@ -97,7 +97,9 @@ export const outboxStore = createStore<OutboxState>((set, get) => ({
   resumeItem(chatKey: string, itemId: string) {
     const { activeProfileId, queues } = get();
     if (!activeProfileId) return;
-    const list = (queues[chatKey] ?? []).map((it) => (it.id === itemId ? { ...it, paused: false } : it));
+    // Unpause the whole chat queue: flushing is head-first, so unpausing only a later item would do nothing.
+    const list = (queues[chatKey] ?? []).map((it) => ({ ...it, paused: false }));
+    if (!list.some((it) => it.id === itemId)) return;
     const nextQueues = { ...queues, [chatKey]: list };
     set({ queues: nextQueues });
     saveQueues(activeProfileId, nextQueues);
@@ -113,19 +115,20 @@ export const outboxStore = createStore<OutboxState>((set, get) => ({
     if (!activeProfileId || s.profile?.id !== activeProfileId) return false;
 
     const slice = threadStore.getState().threads[chatKey];
-    if (!slice || !slice.loaded || slice.running || slice.uploading) return false;
+    if (!slice || !slice.loaded || slice.hydrating || slice.running || slice.uploading) return false;
 
     const list = queues[chatKey] ?? [];
     if (list.length === 0) return false;
     const head = list[0];
     if (head.paused) return false;
 
-    const remaining = list.slice(1);
-    const nextQueues = { ...queues, [chatKey]: remaining };
+    // Dequeue only after send() accepted it: a refused send stays queued (paused) instead of being lost.
+    const sent = threadStore.getState().send(s.session, chatKey, head.text, head.opts);
+    const cur = get().queues[chatKey] ?? [];
+    const remaining = sent ? cur.filter((it) => it.id !== head.id) : cur.map((it) => (it.id === head.id ? { ...it, paused: true } : it));
+    const nextQueues = { ...get().queues, [chatKey]: remaining };
     set({ queues: nextQueues });
     saveQueues(activeProfileId, nextQueues);
-
-    threadStore.getState().send(s.session, chatKey, head.text, head.opts);
-    return true;
+    return sent;
   },
 }));

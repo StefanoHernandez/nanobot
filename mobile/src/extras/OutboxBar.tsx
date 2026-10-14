@@ -20,6 +20,7 @@ export function OutboxBar({ chatKey }: { chatKey: string }) {
   const loaded = useStore(threadStore, (s) => !!s.threads[chatKey]?.loaded);
   const running = useStore(threadStore, (s) => !!s.threads[chatKey]?.running);
   const uploading = useStore(threadStore, (s) => !!s.threads[chatKey]?.uploading);
+  const hydrating = useStore(threadStore, (s) => !!s.threads[chatKey]?.hydrating);
 
   const queue = useStore(outboxStore, (s) => s.queues[chatKey] ?? EMPTY_QUEUE);
   const head = queue[0];
@@ -29,10 +30,10 @@ export function OutboxBar({ chatKey }: { chatKey: string }) {
   }, [profile?.id]);
 
   useEffect(() => {
-    if (state === "open" && loaded && !running && !uploading && head && !head.paused) {
+    if (state === "open" && loaded && !hydrating && !running && !uploading && head && !head.paused) {
       outboxStore.getState().flushNext(chatKey);
     }
-  }, [chatKey, state, loaded, running, uploading, head?.id, head?.paused]);
+  }, [chatKey, state, loaded, hydrating, running, uploading, head?.id, head?.paused]);
 
   if (queue.length === 0) {
     return null;
