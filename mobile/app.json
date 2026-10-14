@@ -28,6 +28,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withNanobotWidget",
       "expo-router",
       "expo-secure-store",
       [

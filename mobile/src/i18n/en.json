@@ -736,5 +736,11 @@
     "paused": "Pending — tap to send",
     "cancel": "Cancel",
     "sendNow": "Send now"
+  },
+  "widget": {
+    "openingNewChat": "Opening new chat…",
+    "connected": "Connected",
+    "disconnected": "Not connected",
+    "newChat": "New chat"
   }
 }
