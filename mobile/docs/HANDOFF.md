@@ -38,7 +38,8 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 - **Briefs P5b-*, P6-*, P7-*** (written by Argon) are **frozen**. Phase 5b needs a design pass with Claude first; see the review.
 - **Fork base:** `main` = upstream **`main` @ `cd2a8637`** (same commit as `mobile/vendor/`) + our commits. Changed from v0.3.5 on 2026-10-14: on v0.3.5, old chats opened empty (protocol mismatch).
 - **Server "arduino"** (nickname luffy): runs official v0.3.5 until the user installs branch `arduino` (command in roadmap "Fork operations").
-- **Device test 2026-10-14 (APK from 86b514a4) bugs, to fix next:** old chats empty (fixed by tracking main), no model picker in chat, SVG blank in chat and gallery (RN Image can't draw SVG), read-aloud not stopped on leaving chat (Drawer keeps ThreadScreen mounted: use focus), long answers over ~4000 chars not read. New: "Audio replies" toggle (on-device TTS) that shows/hides Listen. Then the UI redesign with frontend-design (user finds it flat).
+- **Device test 2026-10-14 bugs: fixed** in `3c7f90ea` (APK #2): model picker on the header badge (`/model`), SVG via react-native-svg, "Audio replies" toggle (off by default), speech stops on blur and reads long answers in chunks, history load error + Retry. Old chats empty = server on v0.3.5: fixed by installing branch `arduino` (user does it).
+- **Next:** block B minors (I8 picker, I15 toast race, outbox other chats, offline new-chat, share overwrite) as one agy brief; red `mobile-ci` on GitHub (need the log); then the **UI redesign** with frontend-design (user finds the UI flat).
 - **This Linux PC:** worktrees `../nanobot-agy` and `../nanobot-agy3`. Run jest with `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8` (2 tests assume en-US number format).
 
 ## Next steps, in order
