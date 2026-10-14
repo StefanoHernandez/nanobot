@@ -23,7 +23,7 @@ The server runs on **luffy**, an Arduino UNO Q, and is reached from the phone ov
 | `mobile/docs/` | all app docs: spec, plans, roadmap, wiki, agy briefs, reports and reviews |
 | `mobile/vendor/` | a frozen copy of the nanobot WebUI protocol code. **Never edit it.** |
 | `.github/workflows/mobile-ci.yml` | app tests on every PR and push touching `mobile/`, plus a vendor drift report |
-| `.github/workflows/upstream-sync.yml` | weekly PR merging HKUDS/nanobot |
+| `.github/workflows/upstream-sync.yml` | weekly: if HKUDS/nanobot published a new **release tag**, open a PR `upstream-sync/<tag>` merging it, with the app checks run on the merged tree |
 | branch `main` | **the integration branch**. It replaces the old `dev` from the previous repo. |
 | branch `agy/FIX-A`, `agy/FIX-B` | open fix work (see below) |
 
@@ -36,6 +36,7 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 - **Final whole-branch review** of Phases 2-4: `mobile/docs/agy/reviews/final-review-p234.md`. Its fixes are split in two:
   - **`agy/FIX-A`** (thread, composer, core, settings). First round done; `dev`/`main` already merged in, 443 tests green. **Still to do:** `mobile/docs/agy/briefs/FIX-A-fix1.md`. Its step 1 (merge dev and resolve the FileViewer conflict) is **already done**, so start from step 2 (I13, I14, I15, M19, M21-M25, guard strength).
   - **`agy/FIX-B`** (ecosystem). First round done; dev merged in, 449 tests green. **Still to do:** `mobile/docs/agy/briefs/FIX-B-fix1.md`.
+- **Fork base:** `main` = upstream release **v0.3.5** + our commits.
 - **luffy** still runs **official nanobot v0.3.5** (uv tool from PyPI). The fork is not installed there yet; that starts in Phase 5b.
 
 ## Next steps, in order
@@ -45,7 +46,8 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 4. Phase 5 leftovers (REVIEWER.md §3b): P5-S1 share-to-nanobot, P5-O1 offline outbox, P5-T1 read-aloud, P5-W1 widget/tile. Then the final APK.
 5. **Claude only (needs design):**
    - **Phase 5b** QR device pairing: fork server plus app.
-   - **Before 5b:** rebase the fork onto release tag `v0.3.5` (the user OK'd the tracking of releases; **a force push of `main` needs explicit user OK at that moment**), switch `upstream-sync.yml` to release tags, and add the `build-luffy` workflow (prebuilt WebUI on branch `luffy`).
+   - **Done 2026-10-14:** the fork `main` is based on release `v0.3.5`, the same version luffy runs, and `upstream-sync.yml` tracks release tags.
+   - **Before 5b:** add the `build-luffy` workflow (prebuilt WebUI on branch `luffy`).
    - Then Phase 6 hybrid memory, and Phase 7 multi-bot kanban.
 
 ## Resuming on a new PC

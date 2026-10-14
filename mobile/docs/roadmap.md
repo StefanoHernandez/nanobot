@@ -26,7 +26,7 @@
 ## Fork operations (decided 2026-10-14)
 - **Repo:** `https://github.com/StefanoHernandez/nanobot` (public fork of HKUDS/nanobot, MIT). Never commit secrets: config, keys and the WebUI secret stay in `~/.nanobot` on luffy.
 - **Mac clone:** `~/Documents/Progetti_personali/nanobot`, with remotes `origin` (fork) and `upstream` (HKUDS).
-- **Version policy:** the fork tracks upstream **release tags** (stable), not `main`. In Phase 5b, rebase the fork onto `v0.3.5`, the version luffy runs today, and switch `upstream-sync.yml` to merge the newest release tag.
+- **Version policy:** the fork tracks upstream **release tags** (stable), not `main`. Done 2026-10-14: the fork is based on `v0.3.5`, and `upstream-sync.yml` merges the newest release tag, running the app checks on the merged tree.
 - **Upstream sync:** `.github/workflows/upstream-sync.yml` runs every Monday at 06:00 UTC, or manually from the Actions tab. It opens a PR from `upstream-sync`, with "CONFLICTS" in the title when the auto-merge fails. One-time GitHub settings:
   - enable Actions on the fork;
   - Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
