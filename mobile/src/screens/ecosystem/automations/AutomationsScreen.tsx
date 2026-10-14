@@ -71,14 +71,14 @@ export function AutomationsScreen({ now }: { now?: number }) {
           accessibilityLabel={t("common.back", "Back")}
           onPress={() => goBackOr(router, "/ecosystem")}
         />
-        <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+        <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.display }]}>
           {t("automations.title")}
         </Text>
       </View>
 
       {error ? (
         <View style={styles.errorBox}>
-          <Text style={[styles.errorText, { color: th.colors.destructive }]}>
+          <Text style={[styles.errorText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
             {t("common.operationFailed", "Operazione non riuscita")}
           </Text>
         </View>
@@ -96,11 +96,11 @@ export function AutomationsScreen({ now }: { now?: number }) {
           />
         }
         renderSectionHeader={({ section: { title } }) => (
-          <View style={[styles.sectionHeader, { backgroundColor: th.colors.muted }]}>
+          <View style={[styles.sectionHeader, { backgroundColor: th.colors.background }]}>
             <Text
               style={[
                 styles.sectionHeaderText,
-                { color: th.colors.foreground, fontFamily: th.font.medium },
+                { color: th.colors.foreground, fontFamily: th.font.displayBold },
               ]}
             >
               {title}
@@ -122,7 +122,7 @@ export function AutomationsScreen({ now }: { now?: number }) {
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Text style={[styles.emptyText, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {t("automations.empty")}
               </Text>
             </View>
@@ -160,7 +160,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    fontSize: 18,
+    fontSize: 22,
+    lineHeight: 28,
   },
   errorBox: {
     padding: 12,
@@ -170,12 +171,11 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   sectionHeaderText: {
-    fontSize: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 17,
   },
   emptyContainer: {
     padding: 32,

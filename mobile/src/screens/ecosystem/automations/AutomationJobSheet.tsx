@@ -327,16 +327,16 @@ export function AutomationJobSheet({
           <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
             {/* Meta info */}
             <View style={styles.section}>
-              <Text style={[styles.metaText, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.metaText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {t("automations.schedule")}: {scheduleStr}
               </Text>
               {nextRunTime ? (
-                <Text style={[styles.metaText, { color: th.colors.mutedForeground }]}>
+                <Text style={[styles.metaText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                   {t("automations.nextRun", { time: nextRunTime })}
                 </Text>
               ) : null}
               {targetChat ? (
-                <Text style={[styles.metaText, { color: th.colors.primary }]}>
+                <Text style={[styles.metaText, { color: th.colors.primary, fontFamily: th.font.regular }]}>
                   {t("automations.targetChat", { title: targetChat })}
                 </Text>
               ) : null}
@@ -359,7 +359,7 @@ export function AutomationJobSheet({
               </View>
             ) : runResult ? (
               <View style={[styles.resultCard, { backgroundColor: th.colors.card, borderColor: th.colors.border }]}>
-                <Text style={[styles.resultHeader, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                <Text style={[styles.resultHeader, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
                   {t("automations.runResult")}
                 </Text>
                 <Markdown text={runResult} />
@@ -368,7 +368,7 @@ export function AutomationJobSheet({
 
             {/* Edit Section */}
             <View style={[styles.section, { borderTopColor: th.colors.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16 }]}>
-              <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+              <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
                 {t("automations.edit")}
               </Text>
 
@@ -386,7 +386,7 @@ export function AutomationJobSheet({
               />
 
               {editError ? (
-                <Text style={[styles.errorText, { color: th.colors.destructive }]}>
+                <Text style={[styles.errorText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
                   {editError}
                 </Text>
               ) : null}
@@ -409,7 +409,7 @@ export function AutomationJobSheet({
 
               {showChatPicker ? (
                 <View style={[styles.pickerBox, { backgroundColor: th.colors.card, borderColor: th.colors.border }]}>
-                  <Text style={[styles.pickerTitle, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                  <Text style={[styles.pickerTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
                     {t("automations.selectChat")}
                   </Text>
                   {loadingChats ? (
@@ -430,7 +430,7 @@ export function AutomationJobSheet({
                         <Text style={[styles.chatTitle, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
                           {c.title}
                         </Text>
-                        <Text style={[styles.chatChannel, { color: th.colors.mutedForeground }]}>
+                        <Text style={[styles.chatChannel, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                           {c.channel}
                         </Text>
                       </Pressable>
@@ -443,7 +443,7 @@ export function AutomationJobSheet({
             {/* Past Runs Section */}
             {pastRuns.length > 0 ? (
               <View style={[styles.section, { borderTopColor: th.colors.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16 }]}>
-                <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
                   {t("automations.pastRuns")}
                 </Text>
                 {pastRuns.map((r, i) => (
@@ -452,7 +452,7 @@ export function AutomationJobSheet({
                     style={[styles.pastRunRow, { borderBottomColor: th.colors.border }]}
                     onPress={() => void handleSelectPastRun(r)}
                   >
-                    <Text style={[styles.pastRunDate, { color: th.colors.foreground }]}>
+                    <Text style={[styles.pastRunDate, { color: th.colors.foreground, fontFamily: th.font.regular }]}>
                       {new Date(r.run_at_ms).toLocaleString()}
                     </Text>
                     <Text
@@ -460,6 +460,7 @@ export function AutomationJobSheet({
                         styles.pastRunStatus,
                         {
                           color: r.status === "ok" ? th.colors.primary : th.colors.destructive,
+                          fontFamily: th.font.medium,
                         },
                       ]}
                     >
@@ -536,16 +537,16 @@ const styles = StyleSheet.create({
   },
   resultCard: {
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 16,
   },
   resultHeader: {
-    fontSize: 14,
+    fontSize: 15,
     marginBottom: 6,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 16,
     marginBottom: 4,
   },
   errorText: {
@@ -553,7 +554,7 @@ const styles = StyleSheet.create({
   },
   pickerBox: {
     marginTop: 8,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 8,
     gap: 4,
@@ -566,7 +567,7 @@ const styles = StyleSheet.create({
   chatItem: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 8,
     minHeight: 48,
     justifyContent: "center",
   },
@@ -574,7 +575,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   chatChannel: {
-    fontSize: 12,
+    fontSize: 13,
   },
   pastRunRow: {
     flexDirection: "row",
@@ -589,6 +590,5 @@ const styles = StyleSheet.create({
   },
   pastRunStatus: {
     fontSize: 13,
-    fontWeight: "600",
   },
 });

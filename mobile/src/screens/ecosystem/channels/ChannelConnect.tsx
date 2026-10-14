@@ -41,7 +41,7 @@ export function ChannelConnect({
 
   return (
     <View style={[styles.container, { borderColor: th.colors.border, backgroundColor: th.colors.card, borderRadius: th.radius.md }]}>
-      <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+      <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
         {t("channels.connect.button")}
       </Text>
 
@@ -56,8 +56,8 @@ export function ChannelConnect({
       {state === "waiting" && (
         <View style={styles.waitingContainer}>
           {qrUrl ? (
-            <View style={[styles.qrWrapper, { backgroundColor: "#fff", borderRadius: th.radius.md }]}>
-              <QRCode value={qrUrl} size={180} />
+            <View style={[styles.qrWrapper, { backgroundColor: th.colors.card, borderRadius: th.radius.md }]}>
+              <QRCode value={qrUrl} size={180} color={th.colors.cardForeground} backgroundColor={th.colors.card} />
             </View>
           ) : null}
 
@@ -70,7 +70,7 @@ export function ChannelConnect({
           ) : null}
 
           {message ? (
-            <Text style={{ color: th.colors.mutedForeground, fontSize: 13, textAlign: "center" }}>
+            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, textAlign: "center" }}>
               {message}
             </Text>
           ) : null}
@@ -90,7 +90,7 @@ export function ChannelConnect({
                 disabled={!verifyCode.trim()}
               />
               {verificationFailed ? (
-                <Text style={{ color: th.colors.destructive, fontSize: 13 }}>
+                <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13 }}>
                   {t("channels.connect.verificationFailed")}
                 </Text>
               ) : null}
@@ -107,7 +107,7 @@ export function ChannelConnect({
 
       {state === "done" && (
         <View style={styles.statusBox}>
-          <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium }}>
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
             {t("channels.connect.done")}
           </Text>
         </View>
@@ -115,7 +115,7 @@ export function ChannelConnect({
 
       {state === "expired" && (
         <View style={styles.statusBox}>
-          <Text style={{ color: th.colors.destructive, marginBottom: 8 }}>
+          <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 15, marginBottom: 8 }}>
             {t("channels.connect.expired")}
           </Text>
           <Button
@@ -128,7 +128,7 @@ export function ChannelConnect({
 
       {state === "error" && (
         <View style={styles.statusBox}>
-          <Text style={{ color: th.colors.destructive, marginBottom: 8 }}>
+          <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 15, marginBottom: 8 }}>
             {t("common.operationFailed", "Operazione non riuscita")}
           </Text>
           <Button
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 12,
   },
-  title: { fontSize: 15 },
+  title: { fontSize: 17 },
   waitingContainer: { alignItems: "center", gap: 12 },
   qrWrapper: { padding: 12, alignItems: "center", justifyContent: "center" },
   verifyContainer: { width: "100%", gap: 8, marginTop: 8 },

@@ -93,7 +93,7 @@ export function McpOAuthSheet({
           {oauth.state === "polling" ? (
             <View style={styles.pollingRow}>
               <ActivityIndicator color={th.colors.primary} />
-              <Text style={[styles.stateText, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.stateText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {t("mcp.polling")}
               </Text>
             </View>
@@ -119,7 +119,7 @@ export function McpOAuthSheet({
           ) : null}
 
           {oauth.error ? (
-            <Text style={[styles.errorText, { color: th.colors.destructive }]}>
+            <Text style={[styles.errorText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
               {t("mcp.oauthError")}
             </Text>
           ) : null}

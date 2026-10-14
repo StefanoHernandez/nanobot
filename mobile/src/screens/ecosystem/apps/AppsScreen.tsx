@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
-import { Button, IconButton, goBackOr } from "../../../ui/components";
+import { IconButton, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { useSettings } from "../../../settings/store";
 import { installGate } from "../../../ecosystem/common";
@@ -35,49 +35,89 @@ export function AppsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: th.colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: th.colors.border }]}>
+      <View style={styles.header}>
         <IconButton
           icon="arrow-left"
           accessibilityLabel={t("common.back", "Back")}
           onPress={() => goBackOr(router, "/ecosystem")}
         />
-        <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+        <Text accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.display }]}>
           {t("apps.title")}
         </Text>
       </View>
 
       {!gateAllowed ? (
-        <View style={[styles.gateBanner, { backgroundColor: th.colors.accent }]}>
-          <Text style={[styles.gateBannerText, { color: th.colors.accentForeground }]}>
+        <View style={[styles.gateBanner, { backgroundColor: th.colors.muted, borderRadius: th.radius.md }]}>
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, lineHeight: 18 }}>
             {t("apps.gateBanner")}
           </Text>
         </View>
       ) : null}
 
-      <View style={[styles.tabBar, { borderBottomColor: th.colors.border }]}>
-        <View style={styles.tabButtonsRow}>
-          <Button
-            title={t("apps.tabs.cli", "CLI")}
-            variant={tab === "cli" ? "primary" : "ghost"}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === "cli" }}
-            onPress={() => setTab("cli")}
-          />
-          <Button
-            title={t("apps.tabs.mcp", "MCP")}
-            variant={tab === "mcp" ? "primary" : "ghost"}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === "mcp" }}
-            onPress={() => setTab("mcp")}
-          />
-          <Button
-            title={t("apps.tabs.plugin", "Plugin")}
-            variant={tab === "plugin" ? "primary" : "ghost"}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === "plugin" }}
-            onPress={() => setTab("plugin")}
-          />
-        </View>
+      <View style={[styles.tabBar, { backgroundColor: th.colors.muted, borderRadius: 999 }]}>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === "cli" }}
+          onPress={() => setTab("cli")}
+          style={[
+            styles.tabSegment,
+            {
+              backgroundColor: tab === "cli" ? th.colors.card : "transparent",
+            },
+          ]}
+        >
+          <Text
+            style={{
+              color: tab === "cli" ? th.colors.foreground : th.colors.mutedForeground,
+              fontFamily: tab === "cli" ? th.font.medium : th.font.regular,
+              fontSize: 15,
+            }}
+          >
+            {t("apps.tabs.cli", "CLI")}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === "mcp" }}
+          onPress={() => setTab("mcp")}
+          style={[
+            styles.tabSegment,
+            {
+              backgroundColor: tab === "mcp" ? th.colors.card : "transparent",
+            },
+          ]}
+        >
+          <Text
+            style={{
+              color: tab === "mcp" ? th.colors.foreground : th.colors.mutedForeground,
+              fontFamily: tab === "mcp" ? th.font.medium : th.font.regular,
+              fontSize: 15,
+            }}
+          >
+            {t("apps.tabs.mcp", "MCP")}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === "plugin" }}
+          onPress={() => setTab("plugin")}
+          style={[
+            styles.tabSegment,
+            {
+              backgroundColor: tab === "plugin" ? th.colors.card : "transparent",
+            },
+          ]}
+        >
+          <Text
+            style={{
+              color: tab === "plugin" ? th.colors.foreground : th.colors.mutedForeground,
+              fontFamily: tab === "plugin" ? th.font.medium : th.font.regular,
+              fontSize: 15,
+            }}
+          >
+            {t("apps.tabs.plugin", "Plugin")}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.tabContent}>
@@ -100,29 +140,34 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: 1,
+    paddingVertical: 4,
     minHeight: 56,
   },
   title: {
-    fontSize: 18,
+    fontSize: 22,
+    lineHeight: 28,
     marginLeft: 4,
+    flex: 1,
   },
   gateBanner: {
+    marginHorizontal: 16,
+    marginVertical: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  gateBannerText: {
-    fontSize: 14,
-    lineHeight: 20,
+    paddingVertical: 10,
   },
   tabBar: {
-    borderBottomWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  tabButtonsRow: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 4,
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
+  },
+  tabSegment: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabContent: {
     flex: 1,

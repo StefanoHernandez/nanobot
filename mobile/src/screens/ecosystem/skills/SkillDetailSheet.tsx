@@ -59,12 +59,12 @@ export function SkillDetailSheet({
           </View>
         ) : error ? (
           <View style={styles.errorWrapper}>
-            <Text style={[styles.errorText, { color: th.colors.destructive }]}>{error}</Text>
+            <Text style={[styles.errorText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>{error}</Text>
           </View>
         ) : skillDetail ? (
           <ScrollView style={styles.scroll}>
             {skillDetail.description ? (
-              <Text style={[styles.description, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.description, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {skillDetail.description}
               </Text>
             ) : null}
@@ -103,7 +103,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   description: {
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 22,
     marginBottom: 12,
   },
   closeWrapper: {
