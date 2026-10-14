@@ -138,6 +138,7 @@
     "leaveMessage": "Changes are saved but not applied until you restart. Leave anyway?",
     "leave": "Leave",
     "stay": "Stay",
+    "loadError": "Could not load settings",
     "language": "Language",
     "sound": "Notification sound",
     "soundHelp": "Play a sound for notifications",
@@ -285,6 +286,7 @@
     "openWith": "Open with…",
     "tooLarge": "File too large to preview",
     "readError": "Could not read the file",
+    "notAvailable": "File not available",
     "showingRows": "Showing {{shown}} of {{total}} rows",
     "truncatedPreview": "Preview truncated — use Open with…"
   },
@@ -352,6 +354,9 @@
     "editKey": "Edit API key",
     "defaultApi": "Default request API",
     "cancelEdit": "Keep current key",
+    "clearKeyTitle": "Remove saved API key?",
+    "clearKeyMessage": "This will delete the API key saved on the server. Are you sure?",
+    "clearKeyConfirm": "Remove key",
     "show": "Show key",
     "hide": "Hide key",
     "apiBase": "API base URL",
@@ -396,7 +401,10 @@
     "full": "Full access",
     "confirmTitle": "Allow full access?",
     "confirmMessage": "Full access gives the agent shell access without project scoping. Anything it runs can read and change files outside the workspace. Only enable this if you trust the model and your prompts.",
-    "confirm": "Allow full access"
+    "confirm": "Allow full access",
+    "confirmLocalTitle": "Allow local service access?",
+    "confirmLocalMessage": "Allowing local service access lets tools running in nanobot connect to services on 127.0.0.1 and localhost of the host machine.",
+    "confirmLocal": "Allow access"
   },
   "caps": {
     "configureProvider": "Configure provider",

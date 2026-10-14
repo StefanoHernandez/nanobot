@@ -24,7 +24,9 @@ function mk(over: Record<string, unknown> = {}) {
     client,
     get: jest.fn(async () => payload("fresh")),
     mutate: jest.fn(async () => payload("m")),
+    stop: jest.fn(),
   } as never as NanobotSession;
+  sessionStore.setState({ session });
   return { session, client, emit: (s: string) => handlers.forEach((h) => h(s)) };
 }
 

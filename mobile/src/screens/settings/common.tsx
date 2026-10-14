@@ -34,8 +34,9 @@ export function SecretField({ label, value, onChangeText, error, showLabel, hide
 }
 
 /** Write-only key: read-only hint with a pencil while a key is stored, password input while editing. */
-export function HintSecretField({ label, hint, value, onChangeText, editing, onEdit, error, labels }: {
+export function HintSecretField({ label, hint, value, onChangeText, editing, onEdit, onKeep, error, labels }: {
   label: string; hint?: string | null; value: string; onChangeText: (v: string) => void; editing: boolean; onEdit: (e: boolean) => void;
+  onKeep?: () => void;
   error?: string; labels: { show: string; hide: string; edit: string; keep: string };
 }) {
   const th = useTheme();
@@ -53,7 +54,19 @@ export function HintSecretField({ label, hint, value, onChangeText, editing, onE
   return (
     <>
       <SecretField label={label} value={value} onChangeText={onChangeText} error={error} showLabel={labels.show} hideLabel={labels.hide} />
-      {hint ? <Button title={labels.keep} variant="ghost" onPress={() => (onEdit(false), onChangeText(""))} /> : null}
+      {hint ? (
+        <Button
+          title={labels.keep}
+          variant="ghost"
+          onPress={() => {
+            if (onKeep) onKeep();
+            else {
+              onEdit(false);
+              onChangeText("");
+            }
+          }}
+        />
+      ) : null}
     </>
   );
 }

@@ -68,6 +68,8 @@ type S = {
   setPendingFiles(key: string, files: LocalFile[]): void;
   stop(session: NanobotSession, key: string): void;
   setDraft(key: string, text: string): void;
+  clearSendError(key: string): void;
+  cancelLeave(key: string): void;
 };
 
 const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, pendingFiles: [], forkBoundary: null, temporary: false };
@@ -403,10 +405,14 @@ export function createThreadStore() {
             for (const f of files) prepared.push(await prepareImage(f, lim.max_file_bytes));
             const v = validateFiles(prepared, lim);
             if (!v.ok) throw new Error(v.reason);
+            const cap0 = session.uploadCapability;
             const refs = await uploadFiles(session, prepared);
+            if (rts.get(key) !== rt) return;
+            if (session.uploadCapability !== cap0) throw new Error("upload_unavailable");
             session.client.sendMessage(chatIdOf(key), text, refs, options);
             patch(key, (s) => ({ uploading: false, pendingFiles: [], ...(s.draft.trim() === text.trim() ? { draft: "" } : {}) }));
           } catch (e) {
+            if (rts.get(key) !== rt) return;
             const code = e instanceof Error ? e.message : "upload_failed";
             patch(key, (s) => {
               const messages = s.messages.map((m) => (m.id === rowId ? { ...m, deliveryStatus: "failed" as const } : m));
@@ -434,6 +440,14 @@ export function createThreadStore() {
       setDraft(key, draft) {
         patch(key, () => ({ draft }));
       },
+
+      clearSendError(key) {
+        patch(key, () => ({ sendError: null }));
+      },
+
+      cancelLeave(key) {
+        cancelLeave(key);
+      },
     };
   });
 }
@@ -450,6 +464,7 @@ export function useThreadSlice(key: string) {
     setPendingFiles: (files: LocalFile[]) => threadStore.getState().setPendingFiles(key, files),
     stop: () => session && threadStore.getState().stop(session, key),
     setDraft: (text: string) => threadStore.getState().setDraft(key, text),
+    clearSendError: () => threadStore.getState().clearSendError(key),
   };
 }
 

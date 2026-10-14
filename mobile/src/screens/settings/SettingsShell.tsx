@@ -13,17 +13,20 @@ export function SettingsShell({ title, onBack, guard, children }: { title: strin
   const th = useTheme();
   const nav = useNavigation();
   const { pending, state, run } = useRestart();
-  const { data, refresh } = useSettings();
+  const { data, loading, error, refresh } = useSettings();
   const allowLeave = useRef(false);
   const [leave, setLeave] = useState<{ go: () => void } | null>(null);
 
   useEffect(() => {
     if (!data) void refresh();
+  }, [data, refresh]);
+
+  useEffect(() => {
     const unsub = nav?.addListener?.("focus", () => {
       void refresh();
     });
     return () => unsub?.();
-  }, [data, refresh, nav]);
+  }, [refresh, nav]);
 
   useEffect(() => {
     if (!guard || !pending) return;
@@ -45,6 +48,12 @@ export function SettingsShell({ title, onBack, guard, children }: { title: strin
         <IconButton icon="arrow-left" accessibilityLabel={t("settings.back")} onPress={onBack} />
         <Text style={{ color: th.colors.foreground, fontSize: 18 }}>{title}</Text>
       </View>
+      {error ? (
+        <View style={{ backgroundColor: th.colors.card, borderColor: th.colors.destructive, borderWidth: 1, padding: 12, margin: 16, borderRadius: th.radius.md, gap: 8 }}>
+          <Text style={{ color: th.colors.destructive, fontSize: 14 }}>{error}</Text>
+          <Button title={t("common.retry")} onPress={() => void refresh()} loading={loading} variant="secondary" />
+        </View>
+      ) : null}
       {pending || state !== "idle" ? (
         <View style={{ backgroundColor: th.colors.accent, padding: 12, gap: 8 }}>
           <Text style={{ color: th.colors.accentForeground, fontSize: 14 }}>

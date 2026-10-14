@@ -27,14 +27,14 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
   const { data, mutate } = useSettings();
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busyGroups, setBusyGroups] = useState<Record<string, boolean>>({});
   const [confirm, setConfirm] = useState<Record<string, RuntimeConfigValue> | null>(null);
   const values = (data?.runtime_config ?? {}) as Record<string, RuntimeConfigValue>;
   const fields = visibleFields(page, values);
   if (!data) return null;
 
   const send = async (vals: Record<string, RuntimeConfigValue>, group: string) => {
-    setBusy(group);
+    setBusyGroups((prev) => ({ ...prev, [group]: true }));
     const paths = Object.keys(vals);
     try {
       await mutate("settings.runtime_config.update", { values: vals });
@@ -46,7 +46,11 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
       if (f) setErrors((x) => ({ ...x, [f.path]: m }));
       else toast.show(m);
     } finally {
-      setBusy(null);
+      setBusyGroups((prev) => {
+        const next = { ...prev };
+        delete next[group];
+        return next;
+      });
     }
   };
   const request = (vals: Record<string, RuntimeConfigValue>, group: string) => {
@@ -124,7 +128,7 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
             {gf.map(row)}
             {gf.some((f) => !IMMEDIATE.includes(f.kind) && !f.disabledOnRemote) ? (
               <View style={{ paddingHorizontal: 16 }}>
-                <Button title={t("system.save", { group: title })} disabled={!dirty} loading={busy === g} onPress={() => saveGroup(g)} />
+                <Button title={t("system.save", { group: title })} disabled={!dirty} loading={!!busyGroups[g]} onPress={() => saveGroup(g)} />
               </View>
             ) : null}
           </View>

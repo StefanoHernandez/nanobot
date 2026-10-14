@@ -178,9 +178,14 @@ function WebCard() {
       setF((x) => ({ ...x, apiKey: "", keyEditing: false })); // drop the typed key
     });
 
+  const [confirmClearKey, setConfirmClearKey] = useState(false);
+
   const submit = async () => {
     const p = webSearchPayload({ ...f, maxResults: Number(nums.maxResults), timeout: Number(nums.timeout) }, data!);
     if (!p.ok) return void doSave();
+    if (f.keyEditing && !f.apiKey?.trim() && hint) {
+      return setConfirmClearKey(true);
+    }
     if (f.provider === "olostep") {
       let installed = false; // fail closed: unknown state counts as not installed
       try {
@@ -203,8 +208,10 @@ function WebCard() {
         <Chips options={w.providers.map((p) => ({ value: p.name, label: p.label }))} value={f.provider} onChange={(p) => edit(() => setF({ ...f, provider: p, apiKey: "", keyEditing: false }))} />
         {cred === "api_key" || cred === "optional_api_key" ? (
           <HintSecretField
-            label={t("providers.apiKey")} hint={hint} value={f.apiKey ?? ""} onChangeText={(v) => edit(() => setF({ ...f, apiKey: v }))}
-            editing={!!f.keyEditing} onEdit={(e) => edit(() => setF({ ...f, keyEditing: e }))} error={err.apiKey}
+            label={t("providers.apiKey")} hint={hint} value={f.apiKey ?? ""} onChangeText={(v) => edit(() => setF((prev) => ({ ...prev, apiKey: v })))}
+            editing={!!f.keyEditing} onEdit={(e) => edit(() => setF((prev) => ({ ...prev, keyEditing: e })))}
+            onKeep={() => edit(() => setF((prev) => ({ ...prev, keyEditing: false, apiKey: "" })))}
+            error={err.apiKey}
             labels={{ show: t("providers.show"), hide: t("providers.hide"), edit: t("providers.editKey"), keep: t("providers.cancelEdit") }}
           />
         ) : null}
@@ -224,6 +231,11 @@ function WebCard() {
         open={installing} title={t("providers.featureTitle")} message={t("providers.featureMessage", { name: "olostep" })}
         confirmLabel={t("providers.featureConfirm")} cancelLabel={t("providers.cancel")}
         onCancel={() => setInstalling(false)} onConfirm={() => (setInstalling(false), void doSave(true))}
+      />
+      <Dialog
+        open={confirmClearKey} destructive title={t("providers.clearKeyTitle")} message={t("providers.clearKeyMessage")}
+        confirmLabel={t("providers.clearKeyConfirm")} cancelLabel={t("common.cancel")}
+        onCancel={() => setConfirmClearKey(false)} onConfirm={() => (setConfirmClearKey(false), void doSave())}
       />
     </>
   );

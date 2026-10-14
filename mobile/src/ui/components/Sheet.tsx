@@ -2,6 +2,7 @@ import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../ThemeProvider";
+import { ToastHost } from "./ToastHost";
 
 export type SheetProps = {
   open: boolean;
@@ -30,6 +31,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
         {title ? <Text style={{ color: th.colors.popoverForeground, fontFamily: th.font.medium, fontSize: 17, marginBottom: 12 }}>{title}</Text> : null}
         {children}
       </View>
+      {open ? <ToastHost /> : null}
     </Modal>
   );
 }
