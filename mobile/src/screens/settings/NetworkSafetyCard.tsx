@@ -1,15 +1,17 @@
 import React, { useState } from "react";
-import { Switch } from "react-native";
+import { Switch, View } from "react-native";
 import { useT } from "../../i18n";
 import { isDangerousAccessMode } from "../../settings/runtimeFields";
 import { networkSafetyPayload } from "../../settings/capabilities";
 import { useSettings } from "../../settings/store";
 import { Dialog, ListItem, toast } from "../../ui/components";
+import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 
 /** Placed on the Advanced page by P3-U4. */
 export function NetworkSafetyCard() {
   const t = useT();
+  const th = useTheme();
   const { data, mutate } = useSettings();
   const [confirming, setConfirming] = useState(false);
   const [confirmingLocal, setConfirmingLocal] = useState(false);
@@ -26,15 +28,19 @@ export function NetworkSafetyCard() {
   return (
     <>
       <Head>{t("netsafe.title")}</Head>
-      <ListItem
-        title={t("netsafe.local")} subtitle={t("netsafe.localHelp")}
-        right={<Switch accessibilityLabel={t("netsafe.local")} value={a.webui_allow_local_service_access} onValueChange={(v) => (v ? setConfirmingLocal(true) : void save(false, mode))} />}
-      />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <ListItem
+          title={t("netsafe.local")} subtitle={t("netsafe.localHelp")}
+          right={<Switch accessibilityLabel={t("netsafe.local")} value={a.webui_allow_local_service_access} onValueChange={(v) => (v ? setConfirmingLocal(true) : void save(false, mode))} />}
+        />
+      </View>
       <Head>{t("netsafe.mode")}</Head>
-      <Chips
-        options={[{ value: "default", label: t("netsafe.default") }, { value: "full", label: t("netsafe.full") }]} value={mode}
-        onChange={(m) => (m === mode ? undefined : isDangerousAccessMode(m) ? setConfirming(true) : void save(a.webui_allow_local_service_access, m))}
-      />
+      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 12 }}>
+        <Chips
+          options={[{ value: "default", label: t("netsafe.default") }, { value: "full", label: t("netsafe.full") }]} value={mode}
+          onChange={(m) => (m === mode ? undefined : isDangerousAccessMode(m) ? setConfirming(true) : void save(a.webui_allow_local_service_access, m))}
+        />
+      </View>
       <Dialog
         open={confirming} destructive title={t("netsafe.confirmTitle")} message={t("netsafe.confirmMessage")}
         confirmLabel={t("netsafe.confirm")} cancelLabel={t("common.cancel")}
