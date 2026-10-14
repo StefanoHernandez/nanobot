@@ -366,7 +366,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
         />
 
         <View style={[styles.rightSlot, { flexDirection: "row" }]}>
-          {voiceOk ? <VoiceButton onTranscript={appendTranscript} /> : null}
+          {voiceOk ? <VoiceButton chatKey={chatKey} onTranscript={appendTranscript} /> : null}
           {voiceOk && !hasContent && !running ? null : isRunningEmpty ? (
             <IconButton
               icon="stop-circle-outline"

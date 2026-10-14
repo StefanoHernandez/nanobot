@@ -23,12 +23,12 @@ function Dot() {
 }
 
 /** The transcript is handed to onTranscript (appended to the draft by the caller); never sent. */
-export function VoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
+export function VoiceButton({ chatKey, onTranscript }: { chatKey: string; onTranscript: (text: string) => void }) {
   const t = useT();
   const th = useTheme();
   const handleTranscript = (text: string) => {
     if (text) {
-      speechStore.getState().markVoiceDictated();
+      speechStore.getState().markVoiceDictated(chatKey);
       onTranscript(text);
     }
   };
