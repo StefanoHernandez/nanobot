@@ -742,5 +742,11 @@
   "speech": {
     "listen": "Listen",
     "stop": "Stop reading"
+  },
+  "widget": {
+    "openingNewChat": "Opening new chat…",
+    "connected": "Connected",
+    "disconnected": "Not connected",
+    "newChat": "New chat"
   }
 }
