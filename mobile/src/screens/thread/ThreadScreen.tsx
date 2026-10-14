@@ -6,7 +6,10 @@ import { IconButton } from "../../ui/components/IconButton";
 import { useTheme } from "../../ui/ThemeProvider";
 import { router } from "expo-router";
 import { isWritable } from "../../state/chatsStore";
-import { useThread } from "../../state/threadStore";
+import { threadStore, useThread } from "../../state/threadStore";
+import { useStore } from "zustand";
+import { useSession } from "../../state/sessionStore";
+import { Button } from "../../ui/components/Button";
 import { CommandDrawerButton } from "../../extras/CommandDrawer";
 import { OutboxBar } from "../../extras/OutboxBar";
 import { Composer } from "./Composer";
@@ -20,6 +23,8 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const th = useTheme();
   const t = useT();
   const { messages, running, notices, model, preset, temporary, forkBoundary } = useThread(chatKey);
+  const loadError = useStore(threadStore, (s) => !!s.threads[chatKey]?.loadError);
+  const { session } = useSession();
 
   const hasImages = React.useMemo(() => collectThreadImages(messages, "").length > 0, [messages]);
 
@@ -41,6 +46,12 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
         {isWritable(chatKey) ? <CommandDrawerButton chatKey={chatKey} /> : null}
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        {loadError ? (
+          <View accessibilityRole="alert" style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12, backgroundColor: th.colors.muted }}>
+            <Text style={{ flex: 1, color: th.colors.foreground }}>{t("thread.historyError")}</Text>
+            <Button title={t("common.retry")} variant="secondary" onPress={() => session && void threadStore.getState().load(session, chatKey)} />
+          </View>
+        ) : null}
         <View style={{ flex: 1 }}><MessageList chatKey={chatKey} forkBoundary={forkBoundary} messages={messages} running={running} notices={notices} /></View>
         {isWritable(chatKey) ? (
           <>
