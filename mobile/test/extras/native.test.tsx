@@ -22,7 +22,7 @@ import * as LA from "expo-local-authentication";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
 import { chatPath, keyOfResponse, setupNotifications, startTurnNotifications } from "../../src/extras/notifications";
-import { handleShare, applyShareToChat, shareStore, type ShareDeps } from "../../src/extras/share";
+import { handleShare, applyShareToChat, shareStore, isSharedPathAllowed, type ShareDeps } from "../../src/extras/share";
 import { SharePickerSheet } from "../../src/extras/SharePickerSheet";
 import { LockGate, isRelockDue, lockSettings, lockStore } from "../../src/extras/lock";
 import { profiles } from "../../src/core/profiles";
@@ -118,8 +118,8 @@ describe("share", () => {
   });
   it("shared image -> new chat, pendingFiles set, nothing sent", async () => {
     const { d, calls } = mk();
-    await handleShare({ type: "file", files: [{ path: "/cache/a.png", mimeType: "image/png", fileName: "a.png", size: 5 }] }, d);
-    expect(calls).toEqual(["new", "nav:/chat/websocket%3An", "files:websocket:n:a.png|image/png|file:///cache/a.png"]);
+    await handleShare({ type: "file", files: [{ path: "/mock/cache/a.png", mimeType: "image/png", fileName: "a.png", size: 5 }] }, d);
+    expect(calls).toEqual(["new", "nav:/chat/websocket%3An", "files:websocket:n:a.png|image/png|file:///mock/cache/a.png"]);
   });
   it("empty file intent toasts, no chat", async () => {
     const { d, calls } = mk();
@@ -139,14 +139,14 @@ describe("share", () => {
     await handleShare({
       type: "file",
       text: "check this document",
-      files: [{ path: "/cache/report.pdf", mimeType: "application/pdf", fileName: "report.pdf", size: 100 }],
+      files: [{ path: "/mock/cache/report.pdf", mimeType: "application/pdf", fileName: "report.pdf", size: 100 }],
     });
     const pending = shareStore.getState().pending;
     expect(pending).not.toBeNull();
     expect(pending?.text).toBe("check this document");
     expect(pending?.files).toHaveLength(1);
     expect(pending?.files[0]).toEqual({
-      uri: "file:///cache/report.pdf",
+      uri: "file:///mock/cache/report.pdf",
       mime: "application/pdf",
       name: "report.pdf",
       size: 100,
@@ -331,5 +331,18 @@ describe("LockGate", () => {
     expect(dismiss).not.toHaveBeenCalled();
     await act(async () => lockStore.setState({ locked: true }));
     expect(dismiss).toHaveBeenCalled();
+  });
+});
+
+describe("share path allowlist", () => {
+  const cache = "file:///data/user/0/dev.nanobot.mobile/cache/";
+  it("accepts only direct children of the cache dir (where content:// shares are copied)", () => {
+    expect(isSharedPathAllowed("/data/user/0/dev.nanobot.mobile/cache/IMG_1.jpg", cache)).toBe(true);
+    expect(isSharedPathAllowed("file:///data/user/0/dev.nanobot.mobile/cache/a.pdf", cache)).toBe(true);
+    expect(isSharedPathAllowed("/data/user/0/dev.nanobot.mobile/files/mmkv/default", cache)).toBe(false);
+    expect(isSharedPathAllowed("/data/user/0/dev.nanobot.mobile/cache/media/secret.png", cache)).toBe(false);
+    expect(isSharedPathAllowed("/data/user/0/dev.nanobot.mobile/cache/../files/x", cache)).toBe(false);
+    expect(isSharedPathAllowed("/sdcard/Download/a.png", cache)).toBe(false);
+    expect(isSharedPathAllowed("relative.png", cache)).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { File } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import { createStore, useStore } from "zustand";
 import { profiles } from "../core/profiles";
 import type { LocalFile } from "../core/upload";
@@ -48,6 +48,18 @@ const real: ShareDeps = {
   openPicker: (p) => shareStore.setState({ pending: p }),
 };
 
+/**
+ * expo-share-intent copies every content:// share into the root of the app cache dir, so a legitimate
+ * shared file is always a direct child of it. Anything else (a raw file:// path from another app, e.g.
+ * pointing at one of our private files or a cache subfolder with downloaded media) is refused.
+ */
+export function isSharedPathAllowed(path: string, cacheUri: string = Paths.cache?.uri ?? "file:///cache"): boolean {
+  const strip = (p: string) => p.replace(/^file:\/\//, "").replace(/\/+$/, "");
+  const file = strip(path);
+  if (!file.startsWith("/") || /(^|\/)\.\.?(\/|$)/.test(file)) return false;
+  return file.slice(0, file.lastIndexOf("/")) === strip(cacheUri);
+}
+
 function sizeOf(path: string): number {
   try {
     return new File(path.startsWith("/") ? `file://${path}` : path).size || 0;
@@ -90,7 +102,7 @@ export async function handleShare(intent: Intent, d: ShareDeps = real): Promise<
     return;
   }
   const text = intent.text?.trim() || "";
-  const files: LocalFile[] = (intent.files ?? []).map((f) => ({
+  const files: LocalFile[] = (intent.files ?? []).filter((f) => isSharedPathAllowed(f.path)).map((f) => ({
     uri: f.path.startsWith("/") ? `file://${f.path}` : f.path,
     name: f.fileName || "file",
     mime: f.mimeType || "application/octet-stream",
