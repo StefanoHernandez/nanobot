@@ -44,19 +44,19 @@ export function SettingsShell({ title, onBack, guard, children }: { title: strin
   const busy = state === "restarting";
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
-      <View style={{ flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: th.colors.border }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 4 }}>
         <IconButton icon="arrow-left" accessibilityLabel={t("settings.back")} onPress={onBack} />
-        <Text style={{ color: th.colors.foreground, fontSize: 18 }}>{title}</Text>
+        <Text accessibilityRole="header" numberOfLines={1} style={{ flex: 1, color: th.colors.foreground, fontFamily: th.font.display, fontSize: 22, lineHeight: 28 }}>{title}</Text>
       </View>
       {error ? (
         <View style={{ backgroundColor: th.colors.card, borderColor: th.colors.destructive, borderWidth: 1, padding: 12, margin: 16, borderRadius: th.radius.md, gap: 8 }}>
-          <Text style={{ color: th.colors.destructive, fontSize: 14 }}>{error}</Text>
+          <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 15 }}>{error}</Text>
           <Button title={t("common.retry")} onPress={() => void refresh()} loading={loading} variant="secondary" />
         </View>
       ) : null}
       {pending || state !== "idle" ? (
-        <View style={{ backgroundColor: th.colors.accent, padding: 12, gap: 8 }}>
-          <Text style={{ color: th.colors.accentForeground, fontSize: 14 }}>
+        <View style={{ backgroundColor: th.colors.brandSoft, padding: 14, gap: 8, marginHorizontal: 16, marginBottom: 8, borderRadius: th.radius.md }}>
+          <Text style={{ color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 15 }}>
             {state === "restarting" ? t("settings.restarting") : state === "timeout" ? t("settings.restartTimeout") : state === "done" && !pending ? t("settings.restartDone") : t("settings.restartNotice")}
           </Text>
           {pending || state === "timeout" ? <Button title={t("settings.restart")} onPress={() => void run()} loading={busy} variant="secondary" /> : null}
