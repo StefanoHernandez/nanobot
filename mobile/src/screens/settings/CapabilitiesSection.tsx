@@ -116,9 +116,7 @@ function ImageCard() {
               title={t("caps.image.save")} loading={busy}
               onPress={() => {
                 const c = coerceRuntimeValue(field("tools.image_generation.save_dir"), dir);
-                if (!c.ok) return setErr({ saveDir: t(`system.err.${c.code}`) });
-                setErr({});
-                send(f, () => runtime({ "tools.image_generation.save_dir": c.value }));
+                send(f, c.ok && dir !== (g.save_dir ?? "") ? () => runtime({ "tools.image_generation.save_dir": c.value }) : undefined);
               }}
             />
           </View>

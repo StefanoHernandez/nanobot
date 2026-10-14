@@ -56,8 +56,9 @@ export function ChannelConnect({
       {state === "waiting" && (
         <View style={styles.waitingContainer}>
           {qrUrl ? (
-            <View style={[styles.qrWrapper, { backgroundColor: th.colors.card, borderRadius: th.radius.md }]}>
-              <QRCode value={qrUrl} size={180} color={th.colors.cardForeground} backgroundColor={th.colors.card} />
+            // QR stays dark-on-white with a quiet zone in both themes: many scanners can't read inverted codes.
+            <View style={[styles.qrWrapper, { backgroundColor: "white", borderRadius: th.radius.md, padding: 16 }]}>
+              <QRCode value={qrUrl} size={180} color="black" backgroundColor="white" />
             </View>
           ) : null}
 
