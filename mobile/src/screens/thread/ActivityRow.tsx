@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { UIFileEdit, UIMessage } from "@/lib/types";
@@ -67,11 +68,14 @@ export function ActivityRow({ messages, live, startedAtMs }: { messages: UIMessa
 
   return (
     <View style={{ marginVertical: 4 }}>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setManual(!open)} style={{ minHeight: 48, justifyContent: "center" }}>
-        <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.medium, fontSize: 13 }}>{title} {open ? "▾" : "▸"}</Text>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setManual(!open)} style={{ minHeight: 48, justifyContent: "center", alignSelf: "flex-start" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: th.colors.brandSoft, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 }}>
+          <MaterialCommunityIcons name={live ? "cog-outline" : "check"} size={14} color={th.colors.brandSoftForeground} />
+          <Text style={{ color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13 }}>{title} {open ? "▾" : "▸"}</Text>
+        </View>
       </Pressable>
       {open ? (
-        <View style={{ borderLeftWidth: 2, borderLeftColor: th.colors.border, paddingLeft: 10 }}>
+        <View style={{ borderLeftWidth: 2, borderLeftColor: th.colors.brandSoft, paddingLeft: 12, marginLeft: 10 }}>
           {messages.map((m) => {
             if (m.activityKind === "model") return m.content.trim() ? <Markdown key={m.id} text={m.content} fontSize={14} /> : null;
             if (isReasoningOnlyAssistant(m)) return <ReasoningBlock key={m.id} text={m.reasoning ?? ""} streaming={live && !!m.reasoningStreaming} />;

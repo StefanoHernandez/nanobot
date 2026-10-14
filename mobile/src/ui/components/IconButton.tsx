@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../ThemeProvider";
 
@@ -11,9 +11,11 @@ export type IconButtonProps = {
   disabled?: boolean;
   loading?: boolean;
   color?: string;
+  /** Draws a round filled button (e.g. the brand-coloured send); `color` is the icon colour on it. */
+  fill?: string;
 };
 
-export function IconButton({ icon, onPress, accessibilityLabel, size = 24, disabled, loading, color }: IconButtonProps) {
+export function IconButton({ icon, onPress, accessibilityLabel, size = 24, disabled, loading, color, fill }: IconButtonProps) {
   const th = useTheme();
   const isDisabled = !!disabled || !!loading;
   return (
@@ -33,7 +35,11 @@ export function IconButton({ icon, onPress, accessibilityLabel, size = 24, disab
         },
       ]}
     >
-      {loading ? (
+      {fill ? (
+        <View style={{ width: size + 16, height: size + 16, borderRadius: (size + 16) / 2, backgroundColor: fill, alignItems: "center", justifyContent: "center" }}>
+          {loading ? <ActivityIndicator size="small" color={color} /> : <MaterialCommunityIcons name={icon} size={size - 2} color={color ?? th.colors.foreground} />}
+        </View>
+      ) : loading ? (
         <ActivityIndicator size="small" color={th.colors.foreground} />
       ) : (
         <MaterialCommunityIcons name={icon} size={size} color={color ?? th.colors.foreground} />

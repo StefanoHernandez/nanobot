@@ -310,7 +310,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
   const isRunningEmpty = running && !hasContent;
 
   return (
-    <View style={[styles.container, { borderTopColor: th.colors.border }]}>
+    <View style={[styles.container, { backgroundColor: th.colors.card, borderRadius: th.radius.lg }]}>
       {isSlash ? (
         <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
       ) : isMention && activeMention ? (
@@ -358,8 +358,8 @@ export function Composer({ chatKey }: { chatKey: string }) {
             {
               color: th.colors.foreground,
               fontFamily: th.font.regular,
-              backgroundColor: th.colors.background,
-              borderColor: th.colors.border,
+              backgroundColor: "transparent",
+              borderColor: "transparent",
               borderRadius: th.radius.md,
             },
           ]}
@@ -375,7 +375,9 @@ export function Composer({ chatKey }: { chatKey: string }) {
             />
           ) : running ? (
             <IconButton
-              icon="send"
+              icon="arrow-up"
+              fill={th.colors.brand}
+              color={th.colors.brandForeground}
               accessibilityLabel={t("composer.steer")}
               disabled={!canSend}
               loading={uploading}
@@ -383,7 +385,9 @@ export function Composer({ chatKey }: { chatKey: string }) {
             />
           ) : (
             <IconButton
-              icon="send"
+              icon="arrow-up"
+              fill={th.colors.brand}
+              color={th.colors.brandForeground}
               accessibilityLabel={t("composer.send")}
               disabled={!canSend}
               loading={uploading}
@@ -413,9 +417,11 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderTopWidth: 1,
+    marginHorizontal: 10,
+    marginBottom: 8,
+    marginTop: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
   },
   inputRow: {
     flexDirection: "row",
@@ -434,7 +440,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 10,
-    fontSize: 15,
+    fontSize: 16,
   },
   rightSlot: {
     justifyContent: "flex-end",

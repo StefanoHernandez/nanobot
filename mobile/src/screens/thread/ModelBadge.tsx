@@ -49,11 +49,11 @@ export function ModelBadge({ chatKey, preset, model }: { chatKey: string; preset
         onPress={() => void show()}
         accessibilityRole={canPick ? "button" : undefined}
         accessibilityLabel={t("thread.changeModel")}
-        hitSlop={8}
-        style={{ minHeight: 48, justifyContent: "center", alignSelf: "flex-start" }}
+        hitSlop={12}
+        style={{ alignSelf: "flex-start", flexShrink: 1 }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: th.colors.muted, borderRadius: th.radius.sm, paddingHorizontal: 8, paddingVertical: 4, maxWidth: 180 }}>
-          <Text numberOfLines={1} style={{ color: th.colors.foreground, fontSize: 12, flexShrink: 1 }}>{name ?? t("thread.chooseModel")}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: th.colors.card, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: 170 }}>
+          <Text numberOfLines={1} style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 12, flexShrink: 1 }}>{name ?? t("thread.chooseModel")}</Text>
           {canPick ? <Text style={{ color: th.colors.mutedForeground, fontSize: 10, marginLeft: 4 }}>▼</Text> : null}
         </View>
       </Pressable>

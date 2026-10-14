@@ -21,7 +21,7 @@ function Inline({ tokens, ctx }: { tokens?: Token[]; ctx: Ctx }): React.ReactEle
       {(tokens ?? []).map((t, i) => {
         switch (t.type) {
           case "strong":
-            return <Text key={i} style={{ fontFamily: th.font.medium, fontWeight: "700" }}><Inline tokens={(t as Tokens.Strong).tokens} ctx={ctx} /></Text>;
+            return <Text key={i} style={{ fontFamily: th.font.medium }}><Inline tokens={(t as Tokens.Strong).tokens} ctx={ctx} /></Text>;
           case "em":
             return <Text key={i} style={{ fontStyle: "italic" }}><Inline tokens={(t as Tokens.Em).tokens} ctx={ctx} /></Text>;
           case "del":
@@ -57,7 +57,7 @@ function Blocks({ tokens, ctx, top }: { tokens: Token[]; ctx: Ctx; top?: boolean
             return null;
           case "heading": {
             const h = t as Tokens.Heading;
-            return <Text key={i} style={[body, { fontFamily: th.font.medium, fontWeight: "700", fontSize: base + Math.max(0, 5 - h.depth) * 2, marginTop: 8 }]}><Inline tokens={h.tokens} ctx={ctx} /></Text>;
+            return <Text key={i} style={[body, { fontFamily: h.depth <= 3 ? th.font.displayBold : th.font.medium, fontSize: base + Math.max(0, 5 - h.depth) * 2, lineHeight: (base + Math.max(0, 5 - h.depth) * 2) * 1.25, marginTop: 10 }]}><Inline tokens={h.tokens} ctx={ctx} /></Text>;
           }
           case "paragraph":
           case "text": {
