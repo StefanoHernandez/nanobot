@@ -46,10 +46,10 @@ export async function refreshSettings(session: NanobotSession): Promise<void> {
   try {
     const d = await session.get<SettingsPayload>("/api/settings");
     const cur = sessionStore.getState().session;
-    if (!cur || cur === session) settingsStore.setState({ data: d, loading: false, error: null });
+    if (cur === session) settingsStore.setState({ data: d, loading: false, error: null });
   } catch (e) {
     const cur = sessionStore.getState().session;
-    if (!cur || cur === session) {
+    if (cur === session) {
       settingsStore.setState({ loading: false, error: e instanceof Error ? e.message : String(e) });
     }
   }

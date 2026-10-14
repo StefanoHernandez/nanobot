@@ -76,7 +76,7 @@ export async function setWorkspaceScope(session: NanobotSession, key: string, sc
     const timer = setTimeout(() => {
       if (awaiting === me) awaiting = null;
       const cur = chatsStore.getState().session;
-      if (!cur || cur === session) {
+      if (cur === session) {
         workspaceStore.getState().setError(key, "workspace_scope_timeout");
       }
       reject(new Error("workspace_scope_timeout"));
@@ -102,7 +102,7 @@ export function useWorkspace(key: string) {
       .then(
         (p) => {
           const cur = chatsStore.getState().session;
-          if (!cur || cur === session) workspaceStore.setState({ info: p });
+          if (cur === session) workspaceStore.setState({ info: p });
         },
         () => {},
       );
