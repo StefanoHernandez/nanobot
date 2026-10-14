@@ -38,6 +38,8 @@ export type ThreadSlice = {
   uploading: boolean;
   /** True while a (re)hydrate fetch is in flight; the outbox waits for it before sending. */
   hydrating?: boolean;
+  /** Last history fetch failed (network, or a server/app protocol mismatch). The UI offers Retry. */
+  loadError?: boolean;
   /** Composer attachment chips, kept here so share and navigation preserve them. Cleared after a successful send. */
   pendingFiles: LocalFile[];
   /** Message count before the fork point (draw the "forked from here" divider after it), else null. */
@@ -237,7 +239,7 @@ export function createThreadStore() {
         }
       };
       const runGen = writable ? client.getRunGeneration(chatId) : 0;
-      patch(key, () => ({ hydrating: true }));
+      patch(key, () => ({ hydrating: true, loadError: false }));
       try {
         const raw = await session.get<unknown>(threadPath(key)).catch((e: { status?: number }) => {
           if (e?.status === 404) return null;
@@ -333,15 +335,17 @@ export function createThreadStore() {
               else if (wasDown) {
                 wasDown = false;
                 if (chatsStore.getState().isTemporary(key)) return; // the server dropped it; the vendor never reattaches
-                hydrate(session, key).catch(() => {});
+                hydrate(session, key).catch(() => patch(key, () => ({ loadError: true })));
               }
             }),
           );
         }
         try {
           await hydrate(session, key);
-        } catch {
-          patch(key, () => ({ loaded: true }));
+        } catch (e) {
+          // Never show a silently empty chat: mark the failure so the thread can offer Retry.
+          if (__DEV__) console.warn("thread history load failed", e instanceof Error ? e.message : e);
+          patch(key, () => ({ loaded: true, loadError: true }));
         }
       },
 
