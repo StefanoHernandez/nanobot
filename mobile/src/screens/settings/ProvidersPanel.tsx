@@ -147,7 +147,7 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
             <HintSecretField
               label={t("providers.apiKey")} hint={p.api_key_hint} value={f.apiKey ?? ""} onChangeText={set("apiKey")}
               editing={editKey} onEdit={setEditKey} error={errors.apiKey}
-              labels={{ show: t("providers.show"), hide: t("providers.hide"), edit: t("providers.editKey"), keep: t("providers.keepKey") }}
+              labels={{ show: t("providers.show"), hide: t("providers.hide"), edit: t("providers.editKey"), keep: t("providers.cancelEdit") }}
             />
           ) : null}
           {text("apiBase", t("providers.apiBase"))}
