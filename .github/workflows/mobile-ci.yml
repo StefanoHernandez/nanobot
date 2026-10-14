@@ -5,7 +5,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
+    paths: ["mobile/**", "webui/src/lib/**", "webui/packages/**", "packages/client-events/**", ".github/workflows/mobile-ci.yml"]
   workflow_dispatch:
 
 jobs:
@@ -26,15 +26,16 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx jest --ci
       # The app uses a frozen copy of the WebUI protocol code (mobile/vendor).
-      # Report drift against the server's current WebUI so upstream protocol
-      # changes are visible in the upstream-sync PR (informational, never fails).
-      - name: Vendor drift report
+      # The fork tracks upstream main and mobile/vendor must be an exact copy of the same commit's
+      # WebUI client: a mismatch means the app and the server speak different protocols. Hard fail.
+      - name: Vendor matches server WebUI
         working-directory: .
         run: |
-          for f in lib/types.ts lib/nanobot-client.ts lib/api.ts; do
-            v="mobile/vendor/nanobot/webui/src/$f"; u="webui/src/$f"
-            [ -f "$v" ] && [ -f "$u" ] || continue
-            if ! diff -q "$v" "$u" >/dev/null; then
-              echo "::warning file=$v::differs from $u ($(diff "$v" "$u" | grep -c '^[<>]') changed lines) - check protocol compatibility"
+          bad=0
+          for v in $(cd mobile/vendor/nanobot && find webui packages -type f); do
+            if ! cmp -s "mobile/vendor/nanobot/$v" "$v"; then
+              echo "::error file=mobile/vendor/nanobot/$v::differs from $v - run: bash mobile/scripts/sync-nanobot.sh ."
+              bad=1
             fi
           done
+          exit $bad

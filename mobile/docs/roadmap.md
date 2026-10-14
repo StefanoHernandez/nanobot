@@ -26,21 +26,21 @@
 ## Fork operations (decided 2026-10-14)
 - **Repo:** `https://github.com/StefanoHernandez/nanobot` (public fork of HKUDS/nanobot, MIT). Never commit secrets: config, keys and the WebUI secret stay in `~/.nanobot` on luffy.
 - **Mac clone:** `~/Documents/Progetti_personali/nanobot`, with remotes `origin` (fork) and `upstream` (HKUDS).
-- **Version policy:** the fork tracks upstream **release tags** (stable), not `main`. Done 2026-10-14: the fork is based on `v0.3.5`, and `upstream-sync.yml` merges the newest release tag, running the app checks on the merged tree.
+- **Version policy (changed 2026-10-14 evening, user decision):** the fork tracks upstream **`main`**, not release tags. Reason: the app's `mobile/vendor/` WebUI client came from upstream main `cd2a863`, while the server ran release v0.3.5; the protocols differed (chat history `messages` vs `events`, missing APIs) and old chats opened empty. Rule: **`mobile/vendor/` is always an exact copy of the same upstream commit the fork is merged at.** `upstream-sync.yml` merges upstream main weekly and re-syncs `vendor/` in the same PR; `mobile-ci` fails if they differ.
 - **Upstream sync:** `.github/workflows/upstream-sync.yml` runs every Monday at 06:00 UTC, or manually from the Actions tab. It opens a PR from `upstream-sync`, with "CONFLICTS" in the title when the auto-merge fails. One-time GitHub settings:
   - enable Actions on the fork;
   - Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
 - **Where things happen:**
   - **Mac:** code and fast tests (Claude writes briefs, agy implements).
-  - **GitHub Actions:** compile the WebUI, and publish branch `luffy` (code plus prebuilt `nanobot/web/dist`). To be added in Phase 5b.
+  - **GitHub Actions:** `build-arduino.yml` compiles the WebUI on every push to `main` and force-publishes branch `arduino` (code plus prebuilt `nanobot/web/dist`).
   - **luffy:** never compiles; it only installs.
-- **luffy facts (2026-10-14):**
+- **Server facts (2026-10-14).** The machine is called **arduino** ("luffy" is the user's nickname for it):
   - nanobot v0.3.5 is installed with `uv tool` from PyPI, at `~/.local/share/uv/tools/nanobot-ai`;
   - node 24 and npm, no bun;
   - 4 cores, 3.6 GB RAM (about 1.9 GB free with Hermes running), 1.8 GB swap, 7 GB free disk.
-  - Building the WebUI on luffy would be slow and swap-heavy, hence the `luffy` branch.
+  - Building the WebUI on luffy would be slow and swap-heavy, hence the `arduino` branch.
 - **Install or update the fork on luffy** (no GitHub account needed, the repo is public):
-  `NANOBOT_SKIP_WEBUI_BUILD=1 uv tool install --force "nanobot-ai @ git+https://github.com/StefanoHernandez/nanobot@luffy"`, then `nanobot gateway stop` and `nanobot gateway --background`.
+  `NANOBOT_SKIP_WEBUI_BUILD=1 uv tool install --force "nanobot-ai @ git+https://github.com/StefanoHernandez/nanobot@arduino"`, then `nanobot gateway stop` and `nanobot gateway --background`.
 - **Roll back to official:** `uv tool install --force nanobot-ai`, then restart the gateway. `~/.nanobot` is shared and untouched.
 - **Switching nanobot ↔ Hermes on luffy:**
   - nanobot on: `pkill -f hermes`, `nanobot gateway --background`, `sudo tailscale serve --bg 8765`;
