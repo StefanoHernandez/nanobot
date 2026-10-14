@@ -41,75 +41,97 @@ export type Theme = {
     ring: string;
     overlay: string;
     overlayForeground: string;
+    /** The bot's colour (sunflower): eyes, send button, "alive" accents. Never for errors. */
+    brand: string;
+    brandForeground: string;
+    /** Tool-activity chips. */
+    brandSoft: string;
+    brandSoftForeground: string;
+    userBubble: string;
+    userBubbleForeground: string;
   };
   radius: { sm: number; md: number; lg: number };
   spacing: (n: number) => number;
-  font: { regular: string; medium: string; mono: string };
+  /** Atkinson Hyperlegible for UI/body, Bricolage Grotesque for display (see docs/design/companion.md). */
+  font: { regular: string; medium: string; mono: string; display: string; displayBold: string };
 };
 
-// HSL triplets copied by hand from docs/agy/assets/nanobot-globals.css (`:root` = light, `.dark` = dark).
-// `var(--x)` references are resolved to the referenced token's triplet.
-const LIGHT = {
-  background: "0 0% 100%",
-  foreground: "240 3% 12%",
-  card: "0 0% 100%",
-  cardForeground: "240 3% 12%",
-  popover: "0 0% 100%",
-  popoverForeground: "240 3% 12%",
-  primary: "240 4% 16%",
-  primaryForeground: "0 0% 98%",
-  secondary: "0 0% 96.1%",
-  secondaryForeground: "0 0% 9%",
-  muted: "0 0% 96.1%",
-  mutedForeground: "0 0% 45.1%",
-  accent: "0 0% 96.1%",
-  accentForeground: "0 0% 9%",
-  destructive: "0 84.2% 60.2%",
-  destructiveForeground: "0 0% 98%",
-  success: "142.1 76.2% 36.3%",
-  border: "40 8% 90.5%",
-  input: "40 8% 90.5%",
-  ring: "0 0% 3.9%",
-  overlay: "0 0% 4%",
-  overlayForeground: "0 0% 98%",
+// Design direction "Compagno" (mobile/docs/design/companion.md).
+const LIGHT: Theme["colors"] = {
+  background: "#eef0ff",
+  foreground: "#1e2150",
+  card: "#ffffff",
+  cardForeground: "#1e2150",
+  popover: "#ffffff",
+  popoverForeground: "#1e2150",
+  primary: "#1e2150",
+  primaryForeground: "#ffffff",
+  secondary: "#e1e4fb",
+  secondaryForeground: "#1e2150",
+  muted: "#e1e4fb",
+  mutedForeground: "#5a5e9a",
+  accent: "#dcdffa",
+  accentForeground: "#1e2150",
+  destructive: "#c2413b",
+  destructiveForeground: "#ffffff",
+  success: "#2e8a5b",
+  border: "#d3d7f3",
+  input: "#d3d7f3",
+  ring: "#f4b63f",
+  overlay: "#14163a",
+  overlayForeground: "#ffffff",
+  brand: "#f4b63f",
+  brandForeground: "#1e2150",
+  brandSoft: "#fce7b8",
+  brandSoftForeground: "#6b4a07",
+  userBubble: "#1e2150",
+  userBubbleForeground: "#ffffff",
 };
 
-const DARK_CARD = "0 0% 22%";
-const DARK_BORDER = "0 0% 28%";
-const DARK: typeof LIGHT = {
-  background: "0 0% 19%",
-  foreground: "240 4% 96%",
-  card: DARK_CARD,
-  cardForeground: "240 4% 96%",
-  popover: DARK_CARD, // var(--card)
-  popoverForeground: "240 4% 96%",
-  primary: "240 5% 98%",
-  primaryForeground: "0 0% 9%",
-  secondary: DARK_CARD, // var(--card)
-  secondaryForeground: "0 0% 98%",
-  muted: DARK_CARD, // var(--card)
-  mutedForeground: "0 0% 65%",
-  accent: "0 0% 25%",
-  accentForeground: "0 0% 98%",
-  destructive: "0 93.5% 81.8%",
-  destructiveForeground: "0 0% 9%",
-  success: "142.1 70.6% 45.3%",
-  border: DARK_BORDER,
-  input: DARK_BORDER, // var(--border)
-  ring: "0 0% 83.1%",
-  overlay: "0 0% 4%",
-  overlayForeground: "0 0% 98%",
+const DARK: Theme["colors"] = {
+  background: "#14163a",
+  foreground: "#ecedff",
+  card: "#1e2150",
+  cardForeground: "#ecedff",
+  popover: "#232764",
+  popoverForeground: "#ecedff",
+  primary: "#f4b63f",
+  primaryForeground: "#1e2150",
+  secondary: "#2a2e6e",
+  secondaryForeground: "#ecedff",
+  muted: "#262a66",
+  mutedForeground: "#a3a7d6",
+  accent: "#2f3478",
+  accentForeground: "#ecedff",
+  destructive: "#ff8a80",
+  destructiveForeground: "#14163a",
+  success: "#5cc98f",
+  border: "#33377a",
+  input: "#33377a",
+  ring: "#f4b63f",
+  overlay: "#08091f",
+  overlayForeground: "#ffffff",
+  brand: "#f4b63f",
+  brandForeground: "#1e2150",
+  brandSoft: "#4a3a12",
+  brandSoftForeground: "#fce7b8",
+  userBubble: "#3a3f8f",
+  userBubbleForeground: "#ffffff",
 };
 
-const build = (scheme: Theme["scheme"], tokens: typeof LIGHT): Theme => ({
+const build = (scheme: Theme["scheme"], colors: Theme["colors"]): Theme => ({
   scheme,
-  colors: Object.fromEntries(
-    Object.entries(tokens).map(([k, v]) => [k, hslToHex(v)]),
-  ) as Theme["colors"],
-  // --radius: 0.4375rem = 7px
-  radius: { sm: 4, md: 7, lg: 12 },
+  colors,
+  radius: { sm: 10, md: 18, lg: 24 },
   spacing: (n) => 4 * n,
-  font: { regular: "System", medium: "System", mono: "monospace" },
+  // Embedded by the expo-font config plugin (app.json): Android family name = file name.
+  font: {
+    regular: "AtkinsonHyperlegible_400Regular",
+    medium: "AtkinsonHyperlegible_700Bold",
+    mono: "monospace",
+    display: "BricolageGrotesque_800ExtraBold",
+    displayBold: "BricolageGrotesque_700Bold",
+  },
 });
 
 export const lightTheme = build("light", LIGHT);

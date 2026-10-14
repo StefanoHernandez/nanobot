@@ -42,7 +42,6 @@
       ],
       "expo-sharing",
       "expo-asset",
-      "expo-font",
       [
         "expo-share-intent",
         {
@@ -68,7 +67,18 @@
           "microphonePermission": "nanobot usa il microfono per i messaggi vocali"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/atkinson-hyperlegible/400Regular/AtkinsonHyperlegible_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/atkinson-hyperlegible/700Bold/AtkinsonHyperlegible_700Bold.ttf",
+            "./node_modules/@expo-google-fonts/bricolage-grotesque/700Bold/BricolageGrotesque_700Bold.ttf",
+            "./node_modules/@expo-google-fonts/bricolage-grotesque/800ExtraBold/BricolageGrotesque_800ExtraBold.ttf"
+          ]
+        }
+      ]
     ],
     "scheme": "nanobot"
   }
