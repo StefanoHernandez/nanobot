@@ -38,7 +38,9 @@
       "fallback": "Using fallback model",
       "stream_error": "This turn failed",
       "retry": "Retrying"
-    }
+    },
+    "changeModel": "Change model",
+    "chooseModel": "Choose model"
   },
   "extras": {
     "channel": "Replies",

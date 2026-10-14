@@ -27,7 +27,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 8, borderBottomWidth: 1, borderBottomColor: th.colors.border }}>
         <IconButton icon="arrow-left" accessibilityLabel={t("thread.back")} onPress={onBack} />
-        <View style={{ flex: 1 }}><ModelBadge preset={preset} model={model} /></View>
+        <View style={{ flex: 1 }}><ModelBadge chatKey={chatKey} preset={preset} model={model} /></View>
         {temporary ? <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{t("temporary.label")}</Text> : null}
         {hasImages ? (
           <IconButton
