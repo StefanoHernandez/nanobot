@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { useStore } from "zustand";
+import { speechStore } from "../../extras/speech";
 import { Switch, View } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useT } from "../../i18n";
@@ -19,6 +21,7 @@ export function AppearanceSection() {
   const [lang, setLang] = useState<Language>(prefs.language());
   const [sound, setSound] = useState(prefs.notificationSound());
   const [voiceAutoRead, setVoiceAutoRead] = useState(prefs.voiceAutoRead?.() ?? false);
+  const audioOn = useStore(speechStore, (s) => s.enabled);
 
   const onLock = async (v: boolean) => {
     if (v) {
@@ -70,12 +73,24 @@ export function AppearanceSection() {
         }
       />
       <ListItem
+        title={t("settings.audioReplies")}
+        subtitle={t("settings.audioRepliesHelp")}
+        right={
+          <Switch
+            accessibilityLabel={t("settings.audioReplies")}
+            value={audioOn}
+            onValueChange={(v) => speechStore.getState().setEnabled(v)}
+          />
+        }
+      />
+      <ListItem
         title={t("settings.voiceAutoRead")}
         subtitle={t("settings.voiceAutoReadHelp")}
         right={
           <Switch
             accessibilityLabel={t("settings.voiceAutoRead")}
-            value={voiceAutoRead}
+            value={audioOn && voiceAutoRead}
+            disabled={!audioOn}
             onValueChange={(v) => {
               prefs.setVoiceAutoRead?.(v);
               setVoiceAutoRead(v);

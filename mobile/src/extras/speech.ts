@@ -33,7 +33,26 @@ export function speechLanguage(): string {
   return lang.startsWith("it") ? "it-IT" : "en-US";
 }
 
+/** Android TTS refuses input longer than maxSpeechInputLength: split at sentence/word boundaries. */
+export function chunkForSpeech(text: string, max: number = Speech.maxSpeechInputLength || 4000): string[] {
+  const limit = Math.max(1, Math.min(max, 4000) - 100);
+  const out: string[] = [];
+  let rest = text.trim();
+  while (rest.length > limit) {
+    const slice = rest.slice(0, limit);
+    const cut = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "), slice.lastIndexOf("\n"));
+    const at = cut > limit / 2 ? cut + 1 : slice.lastIndexOf(" ") > 0 ? slice.lastIndexOf(" ") : limit;
+    out.push(rest.slice(0, at).trim());
+    rest = rest.slice(at).trim();
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
 export type SpeechState = {
+  /** Mirrors prefs.audioReplies() so rows re-render when the setting changes. */
+  enabled: boolean;
+  setEnabled(on: boolean): void;
   speakingId: string | null;
   /** Chat whose next finished turn is auto-read (set by voice dictation), else null. */
   voicePending: string | null;
@@ -44,6 +63,12 @@ export type SpeechState = {
 };
 
 export const speechStore = createStore<SpeechState>((set, get) => ({
+  enabled: prefs.audioReplies(),
+  setEnabled(on: boolean) {
+    prefs.setAudioReplies(on);
+    if (!on) get().stop();
+    set({ enabled: on });
+  },
   speakingId: null,
   voicePending: null,
 
@@ -58,11 +83,16 @@ export const speechStore = createStore<SpeechState>((set, get) => ({
     const clearIfSame = () => {
       if (get().speakingId === id) set({ speakingId: null });
     };
-    Speech.speak(clean, {
-      language: speechLanguage(),
-      onDone: clearIfSame,
-      onStopped: clearIfSame,
-      onError: clearIfSame,
+    // QUEUE_ADD on Android: chunks play in order; only the last one ends the "speaking" state.
+    const chunks = chunkForSpeech(clean);
+    chunks.forEach((chunk, i) => {
+      const last = i === chunks.length - 1;
+      Speech.speak(chunk, {
+        language: speechLanguage(),
+        ...(last ? { onDone: clearIfSame } : {}),
+        onStopped: clearIfSame,
+        onError: clearIfSame,
+      });
     });
   },
 
@@ -80,7 +110,7 @@ export const speechStore = createStore<SpeechState>((set, get) => ({
   },
 
   markVoiceDictated(chatKey: string) {
-    if (prefs.voiceAutoRead()) {
+    if (get().enabled && prefs.voiceAutoRead()) {
       set({ voicePending: chatKey });
     }
   },

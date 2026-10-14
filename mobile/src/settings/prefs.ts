@@ -5,6 +5,7 @@ export type Language = "system" | "it" | "en";
 const LANG = "pref.language";
 const SOUND = "pref.notificationSound";
 const AUTO_READ = "pref.voiceAutoRead";
+const AUDIO = "pref.audioReplies";
 
 const device = () => Intl.DateTimeFormat().resolvedOptions().locale.split("-")[0];
 
@@ -21,6 +22,11 @@ export const prefs = {
   notificationSound: (): boolean => kv.get(SOUND) === "1",
   setNotificationSound(on: boolean): void {
     kv.set(SOUND, on ? "1" : "0");
+  },
+  /** "Audio replies": shows the Listen button (on-device TTS, free). Off by default. */
+  audioReplies: (): boolean => kv.get(AUDIO) === "1",
+  setAudioReplies(on: boolean): void {
+    kv.set(AUDIO, on ? "1" : "0");
   },
   voiceAutoRead: (): boolean => kv.get(AUTO_READ) === "1",
   setVoiceAutoRead(on: boolean): void {

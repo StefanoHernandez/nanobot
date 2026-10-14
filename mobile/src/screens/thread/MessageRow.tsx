@@ -19,6 +19,7 @@ function MessageRowImpl({ unit, live, onLongPress }: Props) {
   const th = useTheme();
   const m = unit.type === "message" ? unit.message : null;
   const isSpeaking = useStore(speechStore, (s) => (m ? s.speakingId === m.id : false));
+  const audioOn = useStore(speechStore, (s) => s.enabled);
 
   const isFinishedAnswer =
     !!m && m.role === "assistant" && !live && !m.isStreaming && m.kind !== "trace" && !!m.content;
@@ -43,7 +44,7 @@ function MessageRowImpl({ unit, live, onLongPress }: Props) {
       {m.reasoning ? <ReasoningBlock text={m.reasoning} streaming={!!m.reasoningStreaming} /> : null}
       {m.content ? <Markdown text={m.content} /> : null}
       {m.media?.length ? <MediaList media={m.media} /> : null}
-      {isFinishedAnswer ? (
+      {isFinishedAnswer && audioOn ? (
         <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 4 }}>
           <IconButton
             icon={isSpeaking ? "stop-circle-outline" : "volume-high"}

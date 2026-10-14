@@ -6,7 +6,7 @@ import { prefs } from "../../src/settings/prefs";
 import { kv } from "../../src/platform/storage";
 import { AppearanceSection } from "../../src/screens/settings/AppearanceSection";
 import { MessageRow } from "../../src/screens/thread/MessageRow";
-import { speechStore, stripMarkdownForSpeech } from "../../src/extras/speech";
+import { chunkForSpeech, speechStore, stripMarkdownForSpeech } from "../../src/extras/speech";
 import type { TurnUnit } from "@/lib/activity-timeline";
 import type { UIMessage } from "@/lib/types";
 
@@ -26,6 +26,7 @@ describe("P5-T1: Read-aloud assistant replies with expo-speech", () => {
     speechStore.getState().stop();
     jest.clearAllMocks();
     kv.del("pref.voiceAutoRead");
+    speechStore.getState().setEnabled(true);
   });
 
   test("1. stripMarkdownForSpeech removes fenced code blocks, inline backticks, and link URLs", () => {
@@ -199,5 +200,24 @@ describe("P5-T1: Read-aloud assistant replies with expo-speech", () => {
 
     expect(Speech.stop).toHaveBeenCalled();
     expect(speechStore.getState().speakingId).toBeNull();
+  });
+
+  test("7. Audio replies off: no Listen button, and setting persists", async () => {
+    speechStore.getState().setEnabled(false);
+    expect(kv.get("pref.audioReplies")).toBe("0");
+    const unit = { type: "message", message: { id: "m1", role: "assistant", content: "hello", createdAt: 1 }, sourceMessageCount: 1 } as unknown as TurnUnit;
+    await render(<ThemeProvider><MessageRow unit={unit} live={false} /></ThemeProvider>);
+    expect(screen.queryByLabelText(/listen|ascolta/i)).toBeNull();
+  });
+
+  test("8. Long text is split under the TTS limit at sentence boundaries and spoken in order", () => {
+    const text = Array.from({ length: 300 }, (_, i) => `Sentence number ${i} here.`).join(" ");
+    const chunks = chunkForSpeech(text, 1000);
+    expect(chunks.length).toBeGreaterThan(5);
+    expect(chunks.every((c) => c.length <= 900)).toBe(true);
+    expect(chunks.every((c) => c.endsWith("."))).toBe(true);
+    expect(chunks.join(" ")).toBe(text);
+    speechStore.getState().speak("x", text);
+    expect((Speech.speak as jest.Mock).mock.calls.length).toBe(chunkForSpeech(text).length);
   });
 });

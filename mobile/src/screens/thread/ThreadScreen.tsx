@@ -9,7 +9,6 @@ import { isWritable } from "../../state/chatsStore";
 import { useThread } from "../../state/threadStore";
 import { CommandDrawerButton } from "../../extras/CommandDrawer";
 import { OutboxBar } from "../../extras/OutboxBar";
-import { speechStore } from "../../extras/speech";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { SubagentsButton } from "./SubagentsSheet";
@@ -21,9 +20,6 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const th = useTheme();
   const t = useT();
   const { messages, running, notices, model, preset, temporary, forkBoundary } = useThread(chatKey);
-
-  // Leaving or switching chat stops read-aloud (and drops a pending auto-read).
-  React.useEffect(() => () => speechStore.getState().stop(), [chatKey]);
 
   const hasImages = React.useMemo(() => collectThreadImages(messages, "").length > 0, [messages]);
 
