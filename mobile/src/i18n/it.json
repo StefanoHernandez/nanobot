@@ -142,6 +142,8 @@
     "language": "Lingua",
     "sound": "Suono notifiche",
     "soundHelp": "Riproduci un suono per le notifiche",
+    "voiceAutoRead": "Leggi risposte ai messaggi vocali",
+    "voiceAutoReadHelp": "Legge automaticamente la risposta quando usi la dettatura vocale",
     "usage30": "Utilizzo, ultimi 30 giorni",
     "usageTotal": "Totale: {{n}} token",
     "usagePeak": "Giorno di picco: {{n}} token",
@@ -736,5 +738,9 @@
     "paused": "In attesa — tocca per inviare",
     "cancel": "Annulla",
     "sendNow": "Invia ora"
+  },
+  "speech": {
+    "listen": "Ascolta",
+    "stop": "Ferma lettura"
   }
 }
