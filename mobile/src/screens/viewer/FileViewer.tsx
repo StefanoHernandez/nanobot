@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { File } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, IconButton, toast } from "../../ui/components";
@@ -25,6 +25,44 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const MAX_PREVIEW_CHARS = 200 * 1024; // 200 KB
 const MAX_CSV_ROWS = 500;
 
+export function isViewerUriAllowed(uri: string): boolean {
+  if (!uri || typeof uri !== "string") return false;
+  if (!uri.startsWith("file://")) return false;
+
+  let decoded = uri;
+  try {
+    for (let i = 0; i < 3; i++) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    }
+  } catch {
+    return false;
+  }
+
+  if (
+    decoded.includes("/../") ||
+    decoded.endsWith("/..") ||
+    decoded.includes("\\..\\") ||
+    decoded.endsWith("\\..") ||
+    decoded.includes("/..\\") ||
+    decoded.includes("\\../")
+  ) {
+    return false;
+  }
+
+  const cacheBase = (Paths.cache?.uri ?? "file:///cache").replace(/\/+$/, "");
+  const mediaPrefix = `${cacheBase}/media/`;
+  const artifactPrefix = `${cacheBase}/artifacts/`;
+  const tempPrefix = `${cacheBase}/temp/`;
+
+  return (
+    decoded.startsWith(mediaPrefix) ||
+    decoded.startsWith(artifactPrefix) ||
+    decoded.startsWith(tempPrefix)
+  );
+}
+
 export type FileViewerProps = {
   uri: string;
   name: string;
@@ -35,6 +73,8 @@ export function FileViewer({ uri, name }: FileViewerProps) {
   const th = useTheme();
   const insets = useSafeAreaInsets();
 
+  // Code-block previews open with uri "" and read from artifactStore.
+  const allowed = useMemo(() => (uri === "" && !!artifactStore.get()) || isViewerUriAllowed(uri), [uri]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tooLarge, setTooLarge] = useState(false);
@@ -74,6 +114,14 @@ export function FileViewer({ uri, name }: FileViewerProps) {
       setError(null);
       setTooLarge(false);
       setArtifactFallback(false);
+
+      if (!allowed) {
+        if (active) {
+          setError(t("viewer.notAvailable", "File not available"));
+          setLoading(false);
+        }
+        return;
+      }
 
       try {
         const file = new File(uri);
@@ -116,15 +164,16 @@ export function FileViewer({ uri, name }: FileViewerProps) {
     return () => {
       active = false;
     };
-  }, [uri, isArtifact, kind, name]);
+  }, [uri, isArtifact, kind, name, allowed]);
 
   const handleCopy = async () => {
-    if (!content) return;
+    if (!allowed || !content) return;
     await Clipboard.setStringAsync(content);
     toast.show(t("viewer.copied"));
   };
 
   const handleShare = async () => {
+    if (!allowed) return;
     try {
       await shareMedia(uri);
     } catch {
@@ -133,6 +182,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
   };
 
   const handleOpenWith = async () => {
+    if (!allowed) return;
     try {
       await openLocal(uri, ext);
     } catch {
@@ -232,6 +282,16 @@ export function FileViewer({ uri, name }: FileViewerProps) {
       return (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={th.colors.primary} />
+        </View>
+      );
+    }
+
+    if (!allowed) {
+      return (
+        <View style={styles.centerContainer}>
+          <Text style={[styles.messageText, { color: th.colors.destructive }]}>
+            {t("viewer.notAvailable", "File not available")}
+          </Text>
         </View>
       );
     }
@@ -567,27 +627,29 @@ export function FileViewer({ uri, name }: FileViewerProps) {
           {name}
         </Text>
 
-        <View style={styles.actions}>
-          <IconButton
-            icon="content-copy"
-            size={22}
-            onPress={handleCopy}
-            accessibilityLabel={t("viewer.copy")}
-            disabled={loading || tooLarge || !!error || !content}
-          />
-          <IconButton
-            icon="share-variant-outline"
-            size={22}
-            onPress={handleShare}
-            accessibilityLabel={t("viewer.share")}
-          />
-          <IconButton
-            icon="open-in-new"
-            size={22}
-            onPress={handleOpenWith}
-            accessibilityLabel={t("viewer.openWith")}
-          />
-        </View>
+        {allowed ? (
+          <View style={styles.actions}>
+            <IconButton
+              icon="content-copy"
+              size={22}
+              onPress={handleCopy}
+              accessibilityLabel={t("viewer.copy")}
+              disabled={loading || tooLarge || !!error || !content}
+            />
+            <IconButton
+              icon="share-variant-outline"
+              size={22}
+              onPress={handleShare}
+              accessibilityLabel={t("viewer.share")}
+            />
+            <IconButton
+              icon="open-in-new"
+              size={22}
+              onPress={handleOpenWith}
+              accessibilityLabel={t("viewer.openWith")}
+            />
+          </View>
+        ) : null}
       </View>
 
       {/* Body */}

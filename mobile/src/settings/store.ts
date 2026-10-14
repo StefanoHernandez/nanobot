@@ -45,9 +45,13 @@ export async function refreshSettings(session: NanobotSession): Promise<void> {
   settingsStore.setState({ loading: true });
   try {
     const d = await session.get<SettingsPayload>("/api/settings");
-    if (sessionStore.getState().session === session) settingsStore.setState({ data: d, loading: false, error: null });
+    const cur = sessionStore.getState().session;
+    if (!cur || cur === session) settingsStore.setState({ data: d, loading: false, error: null });
   } catch (e) {
-    settingsStore.setState({ loading: false, error: e instanceof Error ? e.message : String(e) });
+    const cur = sessionStore.getState().session;
+    if (!cur || cur === session) {
+      settingsStore.setState({ loading: false, error: e instanceof Error ? e.message : String(e) });
+    }
   }
 }
 
@@ -121,6 +125,9 @@ export async function runRestart(session: NanobotSession): Promise<void> {
   if (!(await wait)) return set("timeout");
   await refreshSettings(session); // a failure sets `error` but the restart itself is done
   set("done");
+  setTimeout(() => {
+    if (settingsStore.getState().restartState === "done") set("idle");
+  }, 3_000);
 }
 
 export function useRestart() {

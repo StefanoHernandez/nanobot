@@ -4,5 +4,5 @@ import { GalleryScreen } from "../../src/screens/gallery/GalleryScreen";
 
 export default function GalleryRoute() {
   const { key } = useLocalSearchParams<{ key: string }>();
-  return <GalleryScreen chatKey={key ? decodeURIComponent(key) : ""} />;
+  return <GalleryScreen chatKey={key ?? ""} />;
 }

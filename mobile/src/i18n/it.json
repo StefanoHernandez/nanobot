@@ -129,6 +129,7 @@
     "leaveMessage": "Le modifiche sono salvate ma verranno applicate solo dopo il riavvio. Uscire comunque?",
     "leave": "Esci",
     "stay": "Resta",
+    "loadError": "Impossibile caricare le impostazioni",
     "language": "Lingua",
     "sound": "Suono notifiche",
     "soundHelp": "Riproduci un suono per le notifiche",
@@ -276,6 +277,7 @@
     "openWith": "Apri con…",
     "tooLarge": "File troppo grande per l'anteprima",
     "readError": "Impossibile leggere il file",
+    "notAvailable": "File non disponibile",
     "showingRows": "Mostrate {{shown}} di {{total}} righe",
     "truncatedPreview": "Anteprima troncata — usa Apri con…"
   },
@@ -343,6 +345,9 @@
     "editKey": "Modifica chiave API",
     "defaultApi": "API di richiesta predefinita",
     "cancelEdit": "Mantieni la chiave attuale",
+    "clearKeyTitle": "Cancellare la chiave API salvata?",
+    "clearKeyMessage": "La chiave API salvata sul server verra eliminata. Sei sicuro?",
+    "clearKeyConfirm": "Elimina chiave",
     "show": "Mostra chiave",
     "hide": "Nascondi chiave",
     "apiBase": "URL base API",
@@ -387,7 +392,10 @@
     "full": "Accesso completo",
     "confirmTitle": "Consentire l'accesso completo?",
     "confirmMessage": "L'accesso completo da all'agente una shell senza limiti di progetto. Qualsiasi comando puo leggere e modificare file fuori dal workspace. Attivalo solo se ti fidi del modello e dei tuoi prompt.",
-    "confirm": "Consenti accesso completo"
+    "confirm": "Consenti accesso completo",
+    "confirmLocalTitle": "Consentire l'accesso ai servizi locali?",
+    "confirmLocalMessage": "Consentire l'accesso ai servizi locali permette ai tool in esecuzione su nanobot di connettersi ai servizi su 127.0.0.1 e localhost del computer host.",
+    "confirmLocal": "Consenti accesso"
   },
   "caps": {
     "configureProvider": "Configura il provider",
