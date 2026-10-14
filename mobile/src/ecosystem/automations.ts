@@ -132,24 +132,49 @@ export function useAutomations() {
 
   const run = useCallback(
     async (id: string) => {
+      const clickedAtMs = Date.now();
       const payload = await mutate<AutomationsPayload>("automation.run", { id });
       setData(payload);
 
-      const job = payload.jobs?.find((j) => j.id === id);
-      const runs = job?.state?.run_history;
-      const latestRun = runs && runs.length > 0 ? runs[runs.length - 1] : undefined;
-      const runAtMs = latestRun?.run_at_ms ?? Date.now();
-      const kind = (job?.kind as "cron" | "local_trigger") ?? "cron";
-
+      let currentPayload = payload;
       let res: { response: string | null } | null = null;
+
       if (session) {
-        try {
-          res = await fetchAutomationRunResult(session, id, runAtMs, kind);
-        } catch {
-          // If result fetch fails, continue
+        const maxAttempts = 30;
+        for (let i = 0; i < maxAttempts; i++) {
+          const job = currentPayload.jobs?.find((j) => j.id === id);
+          if (!job) {
+            // job was deleted (e.g. delete_after_run one-shot)
+            break;
+          }
+          const runs = job.state?.run_history;
+          const newestRun = runs && runs.length > 0 ? runs[runs.length - 1] : undefined;
+          if (newestRun && newestRun.run_at_ms >= clickedAtMs) {
+            try {
+              res = await fetchAutomationRunResult(
+                session,
+                id,
+                newestRun.run_at_ms,
+                (job.kind as "cron" | "local_trigger") ?? "cron",
+              );
+            } catch {
+              // continue
+            }
+            break;
+          }
+
+          if (i < maxAttempts - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            try {
+              currentPayload = await session.get<AutomationsPayload>("/api/webui/automations");
+              setData(currentPayload);
+            } catch {
+              // continue
+            }
+          }
         }
       }
-      return { payload, result: res?.response ?? null };
+      return { payload: currentPayload, result: res?.response ?? null };
     },
     [mutate, session],
   );

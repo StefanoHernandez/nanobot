@@ -18,13 +18,23 @@ let mockSettingsData: any = {
   },
 };
 
+const mockRefreshSettings = jest.fn();
+let skillFocusListeners: Array<() => void> = [];
+const mockAddListener = jest.fn((event: string, cb: () => void) => {
+  if (event === "focus") skillFocusListeners.push(cb);
+  return () => {
+    skillFocusListeners = skillFocusListeners.filter((l) => l !== cb);
+  };
+});
+
 jest.mock("../../src/settings/store", () => ({
-  useSettings: () => ({ mutate: mockMutate, data: mockSettingsData, refresh: jest.fn() }),
+  useSettings: () => ({ mutate: mockMutate, data: mockSettingsData, refresh: mockRefreshSettings }),
   useRestart: () => ({ pending: false, sections: [], state: "idle", run: jest.fn() }),
 }));
 
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  useNavigation: () => ({ addListener: mockAddListener }),
 }));
 
 const mockSearch = jest.fn();
@@ -76,6 +86,8 @@ describe("P4-U3 Skills UI", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    skillFocusListeners = [];
+    mockRefreshSettings.mockClear();
     await i18n.changeLanguage("en");
     mockSettingsData = {
       runtime_config: {
@@ -242,5 +254,12 @@ describe("P4-U3 Skills UI", () => {
 
     expect(mockInstall).toHaveBeenCalled();
     expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/Enable remote installs on your computer/i));
+  });
+
+  test("I9: SkillsScreen refreshes settings on focus", async () => {
+    mockRefreshSettings.mockClear();
+    await renderWithTheme(<SkillsScreen />);
+    skillFocusListeners.forEach((fn) => fn());
+    expect(mockRefreshSettings).toHaveBeenCalled();
   });
 });

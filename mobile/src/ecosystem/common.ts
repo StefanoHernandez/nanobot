@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import type { SettingsPayload } from "@/lib/types";
+import { toast } from "../ui/components/Toast";
 
 export const LONG_MUTATION_MS = 150_000;
 const INSTALL_FLAG = "tools.webui_allow_remote_package_install";
@@ -14,6 +15,17 @@ export const installGate = (s: SettingsPayload | null | undefined): { allowed: b
 
 /** Host policy refusal (403): never retried, UI shows the "enable on host" copy. */
 export const isPolicyError = (e: unknown): boolean => (e as { status?: number } | null)?.status === 403;
+
+/** M8: Maps ecosystem error toasts to i18n generic messages, never raw e.message. */
+export function toastEcosystemError(e: unknown, t: (...args: any[]) => any): void {
+  if (isPolicyError(e)) {
+    toast.show(t("apps.gateBanner"));
+  } else if ((e as { timedOut?: boolean; status?: number } | null)?.timedOut || (e as { status?: number } | null)?.status === 504) {
+    toast.show(t("apps.timedOut"));
+  } else {
+    toast.show(t("common.operationFailed", "Operazione non riuscita"));
+  }
+}
 
 /** 150 s mutation. A 504 resolves `{ timedOut: true }` (the op may still have finished): caller re-fetches. */
 export async function longMutation<T = unknown>(

@@ -5,7 +5,7 @@ import { Button, Dialog } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useMcp } from "../../../ecosystem/mcp";
-import { isPolicyError } from "../../../ecosystem/common";
+import { toastEcosystemError } from "../../../ecosystem/common";
 import { McpSheet } from "./McpSheet";
 import { McpOAuthSheet } from "./McpOAuthSheet";
 import type { McpPresetInfo } from "@/lib/types";
@@ -13,7 +13,7 @@ import type { McpPresetInfo } from "@/lib/types";
 export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
   const t = useT();
   const th = useTheme();
-  const { presets, loading, refresh, enable, disable, remove, test: testPreset, reconnect } = useMcp();
+  const { presets, loading, refresh, enable, disable, remove, test: testPreset, reconnect, tools } = useMcp();
 
   const [selectedPreset, setSelectedPreset] = useState<McpPresetInfo | null>(null);
   const [oauthPresetName, setOauthPresetName] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       try {
         await disable(preset.name);
       } catch (e) {
-        toast.show(e instanceof Error ? e.message : String(e));
+        toastEcosystemError(e, t);
       }
     }
   };
@@ -40,11 +40,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
     try {
       await enable(target.name);
     } catch (e) {
-      if (isPolicyError(e)) {
-        toast.show(t("apps.gateBanner"));
-      } else {
-        toast.show(e instanceof Error ? e.message : String(e));
-      }
+      toastEcosystemError(e, t);
     }
   };
 
@@ -53,7 +49,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       await testPreset(preset.name);
       toast.show(t("common.success", "Success"));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     }
   };
 
@@ -62,7 +58,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       await reconnect(preset.name);
       toast.show(t("common.success", "Success"));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     }
   };
 
@@ -74,7 +70,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
     try {
       await remove(target.name);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     }
   };
 
@@ -223,6 +219,8 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
         open={!!selectedPreset}
         preset={selectedPreset}
         gateAllowed={gateAllowed}
+        enable={enable}
+        tools={tools}
         onClose={() => setSelectedPreset(null)}
         onOpenOAuth={(name) => {
           setSelectedPreset(null);
@@ -234,6 +232,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
         open={!!oauthPresetName}
         presetName={oauthPresetName || ""}
         onClose={() => setOauthPresetName(null)}
+        onDone={() => void refresh()}
       />
 
       <Dialog

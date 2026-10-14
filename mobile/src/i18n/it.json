@@ -7,7 +7,16 @@
     "rename": "Rinomina",
     "retry": "Riprova",
     "loading": "Caricamento…",
-    "error": "Errore"
+    "error": "Errore",
+    "back": "Indietro",
+    "success": "Operazione completata",
+    "close": "Chiudi",
+    "saving": "Salvataggio…",
+    "show": "Mostra",
+    "hide": "Nascondi",
+    "edit": "Modifica",
+    "keep": "Mantieni",
+    "operationFailed": "Operazione non riuscita"
   },
   "thread": {
     "reasoning": "Ragionamento",
@@ -525,6 +534,8 @@
     "restartRequired": "Riavvio necessario",
     "restart": "Riavvia",
     "instances": "Istanze",
+    "enableTitle": "Abilita canale?",
+    "enableMessage": "Installa/attiva il canale {{name}} sul computer host",
     "status": {
       "running": "In esecuzione",
       "stopped": "Fermato",
@@ -698,6 +709,9 @@
     "messageRequired": "Il messaggio non può essere vuoto",
     "scheduleRequired": "La pianificazione non può essere vuota",
     "running": "Esecuzione in corso...",
+    "runSuccess": "Esecuzione completata",
+    "saved": "Salvato",
+    "chatChanged": "Chat modificata",
     "confirm": "Conferma",
     "cancel": "Annulla"
   }

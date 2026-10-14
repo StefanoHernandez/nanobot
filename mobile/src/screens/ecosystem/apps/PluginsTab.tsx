@@ -1,12 +1,12 @@
-import React, { useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useT } from "../../../i18n";
 import { Button, Dialog } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useRestart } from "../../../settings/store";
 import { useFeatures } from "../../../ecosystem/apps";
-import { isPolicyError } from "../../../ecosystem/common";
+import { toastEcosystemError } from "../../../ecosystem/common";
 import type { NanobotFeatureInfo } from "@/lib/types";
 
 export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
@@ -16,15 +16,30 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
   const { run: runRestart, state: restartState } = useRestart();
 
   const [confirmFeature, setConfirmFeature] = useState<NanobotFeatureInfo | null>(null);
+  const [inFlight, setInFlight] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (restartState === "done") {
+      void refresh();
+    }
+  }, [restartState, refresh]);
 
   const handleToggle = async (feature: NanobotFeatureInfo, value: boolean) => {
+    if (inFlight.has(feature.name)) return;
     if (value) {
       setConfirmFeature(feature);
     } else {
+      setInFlight((prev) => new Set(prev).add(feature.name));
       try {
         await disable(feature.name);
       } catch (e) {
-        toast.show(e instanceof Error ? e.message : String(e));
+        toastEcosystemError(e, t);
+      } finally {
+        setInFlight((prev) => {
+          const next = new Set(prev);
+          next.delete(feature.name);
+          return next;
+        });
       }
     }
   };
@@ -32,19 +47,22 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
   const handleConfirmEnable = async () => {
     const f = confirmFeature;
     setConfirmFeature(null);
-    if (!f) return;
+    if (!f || inFlight.has(f.name)) return;
 
+    setInFlight((prev) => new Set(prev).add(f.name));
     try {
       const res = await enable(f.name);
       if (res?.timedOut) {
         toast.show(t("apps.timedOut"));
       }
     } catch (e) {
-      if (isPolicyError(e)) {
-        toast.show(t("apps.gateBanner"));
-      } else {
-        toast.show(e instanceof Error ? e.message : String(e));
-      }
+      toastEcosystemError(e, t);
+    } finally {
+      setInFlight((prev) => {
+        const next = new Set(prev);
+        next.delete(f.name);
+        return next;
+      });
     }
   };
 
@@ -78,8 +96,9 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
           </View>
         ) : (
           features.map((feature) => {
+            const isInFlight = inFlight.has(feature.name);
             const canEnable = gateAllowed;
-            const switchDisabled = !feature.enabled && !canEnable;
+            const switchDisabled = (!feature.enabled && !canEnable) || isInFlight;
 
             return (
               <View
@@ -108,6 +127,9 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
                       </Text>
                     ) : null}
                   </View>
+                  {isInFlight ? (
+                    <ActivityIndicator color={th.colors.primary} style={{ marginRight: 8 }} />
+                  ) : null}
                   <Switch
                     value={feature.enabled}
                     disabled={switchDisabled}

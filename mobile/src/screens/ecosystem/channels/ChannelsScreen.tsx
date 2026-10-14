@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { useRestart } from "../../../settings/store";
-import { useChannels } from "../../../ecosystem/channels";
+import { useChannels, usePairing } from "../../../ecosystem/channels";
 import { Button, IconButton } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { ChannelRow } from "./ChannelRow";
@@ -15,12 +15,32 @@ import type { NanobotFeatureInfo } from "@/lib/types";
 export function ChannelsScreen() {
   const t = useT();
   const th = useTheme();
-  const { channels, requiresRestart, loading, refresh } = useChannels();
+  const nav = useNavigation?.();
+  const { channels, requiresRestart, loading, refresh, apply } = useChannels();
+  const pairing = usePairing();
   const { run, state: restartState } = useRestart();
 
   const [selectedChannel, setSelectedChannel] = useState<NanobotFeatureInfo | null>(null);
 
   const isRestarting = restartState === "restarting";
+
+  useEffect(() => {
+    const unsub = nav?.addListener?.("focus", () => {
+      void refresh();
+      void pairing.refresh();
+    });
+    return () => unsub?.();
+  }, [nav, refresh, pairing]);
+
+  useEffect(() => {
+    if (restartState === "done") {
+      void refresh();
+    }
+  }, [restartState, refresh]);
+
+  const handleRefresh = async () => {
+    await Promise.all([refresh(), pairing.refresh()]);
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: th.colors.background }]}>
@@ -46,8 +66,9 @@ export function ChannelsScreen() {
       ) : null}
 
       <ScrollView
+        testID="channels-scroll"
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void handleRefresh()} />}
       >
         <View style={[styles.list, { borderColor: th.colors.border }]}>
           {channels.map((ch) => (
@@ -60,7 +81,7 @@ export function ChannelsScreen() {
           ))}
         </View>
 
-        <PairingSection />
+        <PairingSection pairing={pairing} />
       </ScrollView>
 
       <ChannelSheet
@@ -68,6 +89,7 @@ export function ChannelsScreen() {
         channel={selectedChannel}
         onClose={() => setSelectedChannel(null)}
         onSaved={() => void refresh()}
+        onFeatures={apply}
       />
     </SafeAreaView>
   );

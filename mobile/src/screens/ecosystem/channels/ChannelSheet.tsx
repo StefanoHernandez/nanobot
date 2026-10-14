@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useT } from "../../../i18n";
 import { useSettings } from "../../../settings/store";
@@ -12,11 +12,12 @@ import {
   validationMessageKey,
   type ChannelForm,
 } from "../../../ecosystem/channels";
+import { isPolicyError } from "../../../ecosystem/common";
 import { Button, Dialog, Sheet, TextField, toast } from "../../../ui/components";
 import { Chips, HintSecretField } from "../../settings/common";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { ChannelConnect } from "./ChannelConnect";
-import type { ChannelSetupContractField, NanobotFeatureInfo } from "@/lib/types";
+import type { ChannelSetupContractField, NanobotFeatureInfo, NanobotFeaturesPayload } from "@/lib/types";
 
 export type ChannelSheetProps = {
   open: boolean;
@@ -24,9 +25,10 @@ export type ChannelSheetProps = {
   instanceId?: string;
   onClose: () => void;
   onSaved?: () => void;
+  onFeatures?: (p: NanobotFeaturesPayload) => void;
 };
 
-export function ChannelSheet({ open, channel, instanceId, onClose, onSaved }: ChannelSheetProps) {
+export function ChannelSheet({ open, channel, instanceId, onClose, onSaved, onFeatures }: ChannelSheetProps) {
   const t = useT();
   const th = useTheme();
   const { mutate } = useSettings();
@@ -50,14 +52,24 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved }: Ch
   const [serverError, setServerError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const lastResetRef = useRef<{ open: boolean; channelName?: string; instanceId?: string }>({
+    open: false,
+  });
+
   useEffect(() => {
-    if (contract) {
-      setForm(channelFormFromContract(contract, configValues, configuredFields));
-      setEditingSecrets({});
-      setFieldErrors({});
-      setServerError(null);
+    const wasOpen = lastResetRef.current.open;
+    const sameChannel = lastResetRef.current.channelName === channel?.name;
+    const sameInstance = lastResetRef.current.instanceId === instanceId;
+    if (open && (!wasOpen || !sameChannel || !sameInstance)) {
+      if (contract) {
+        setForm(channelFormFromContract(contract, configValues, configuredFields));
+        setEditingSecrets({});
+        setFieldErrors({});
+        setServerError(null);
+      }
     }
-  }, [contract, configValues, configuredFields, open]);
+    lastResetRef.current = { open, channelName: channel?.name, instanceId };
+  }, [open, channel?.name, instanceId, contract, configValues, configuredFields]);
 
   if (!channel) return null;
 
@@ -83,8 +95,12 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved }: Ch
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       const keySuffix = validationMessageKey(msg);
-      setServerError(keySuffix ? t(`channels.validation.${keySuffix}`) : msg);
-      toast.show(msg);
+      setServerError(keySuffix ? t(`channels.validation.${keySuffix}`) : t("common.operationFailed"));
+      if (isPolicyError(e)) {
+        toast.show(t("apps.gateBanner"));
+      } else {
+        toast.show(keySuffix ? t(`channels.validation.${keySuffix}`) : t("common.operationFailed"));
+      }
     } finally {
       setSaving(false);
     }
@@ -185,7 +201,7 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved }: Ch
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {serverError ? (
             <View style={[styles.serverErrorBox, { backgroundColor: th.colors.destructive, borderRadius: th.radius.sm }]}>
-              <Text style={{ color: "#fff", fontSize: 13 }}>{serverError}</Text>
+              <Text style={{ color: th.colors.destructiveForeground, fontSize: 13 }}>{serverError}</Text>
             </View>
           ) : null}
 
@@ -197,7 +213,7 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved }: Ch
             loading={saving}
           />
 
-          <ChannelConnect channel={channel} instanceId={instanceId} />
+          <ChannelConnect channel={channel} instanceId={instanceId} onFeatures={onFeatures} />
         </ScrollView>
       </KeyboardAvoidingView>
 

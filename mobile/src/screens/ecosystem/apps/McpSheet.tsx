@@ -5,8 +5,7 @@ import { Button, Dialog, Sheet, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { HintSecretField } from "../../settings/common";
-import { useMcp } from "../../../ecosystem/mcp";
-import { isPolicyError } from "../../../ecosystem/common";
+import { toastEcosystemError } from "../../../ecosystem/common";
 import type { McpPresetInfo } from "@/lib/types";
 
 export function McpSheet({
@@ -15,16 +14,19 @@ export function McpSheet({
   gateAllowed = true,
   onClose,
   onOpenOAuth,
+  enable: propEnable,
+  tools: propTools,
 }: {
   open: boolean;
   preset: McpPresetInfo | null;
   gateAllowed?: boolean;
   onClose: () => void;
   onOpenOAuth?: (presetName: string) => void;
+  enable?: (name: string, values?: Record<string, string>) => Promise<any>;
+  tools?: (name: string, enabledTools: string[]) => Promise<any>;
 }) {
   const t = useT();
   const th = useTheme();
-  const { enable, tools } = useMcp();
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [editingSecrets, setEditingSecrets] = useState<Record<string, boolean>>({});
@@ -46,17 +48,15 @@ export function McpSheet({
   const doSave = async () => {
     setSaving(true);
     try {
-      await enable(preset.name, fieldValues);
-      if (preset.tool_names && preset.tool_names.length > 0) {
-        await tools(preset.name, enabledTools);
+      if (propEnable) {
+        await propEnable(preset.name, fieldValues);
+      }
+      if (propTools && preset.tool_names && preset.tool_names.length > 0) {
+        await propTools(preset.name, enabledTools);
       }
       onClose();
     } catch (e) {
-      if (isPolicyError(e)) {
-        toast.show(t("apps.gateBanner"));
-      } else {
-        toast.show(e instanceof Error ? e.message : String(e));
-      }
+      toastEcosystemError(e, t);
     } finally {
       setSaving(false);
     }

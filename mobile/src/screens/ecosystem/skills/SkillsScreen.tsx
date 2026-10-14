@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { Button, Dialog, IconButton, TextField } from "../../../ui/components";
@@ -8,7 +8,7 @@ import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useSettings } from "../../../settings/store";
 import { useSkills } from "../../../ecosystem/skills";
-import { installGate, isPolicyError } from "../../../ecosystem/common";
+import { installGate, toastEcosystemError } from "../../../ecosystem/common";
 import { SkillDetailSheet } from "./SkillDetailSheet";
 import { SkillItem, SkillRow } from "./SkillRow";
 import type { MarketplaceSkillSummary } from "@/lib/types";
@@ -18,7 +18,8 @@ export type SkillsTab = "installed" | "discover" | "trending";
 export function SkillsScreen() {
   const t = useT();
   const th = useTheme();
-  const { data: settings } = useSettings();
+  const nav = useNavigation?.();
+  const { data: settings, refresh: refreshSettings } = useSettings();
   const {
     skills,
     loading: skillsLoading,
@@ -29,6 +30,14 @@ export function SkillsScreen() {
     install,
     update,
   } = useSkills();
+
+  useEffect(() => {
+    if (!settings) void refreshSettings();
+    const unsub = nav?.addListener?.("focus", () => {
+      void refreshSettings();
+    });
+    return () => unsub?.();
+  }, [nav, refreshSettings, settings]);
 
   const gateAllowed = installGate(settings).allowed;
 
@@ -75,7 +84,7 @@ export function SkillsScreen() {
         if (active) setSearchResults(res.skills ?? []);
       })
       .catch((e) => {
-        if (active) toast.show(e instanceof Error ? e.message : String(e));
+        if (active) toastEcosystemError(e, t);
       })
       .finally(() => {
         if (active) setTabLoading(false);
@@ -84,7 +93,7 @@ export function SkillsScreen() {
     return () => {
       active = false;
     };
-  }, [debouncedQuery, search]);
+  }, [debouncedQuery, search, t]);
 
   useEffect(() => {
     if (debouncedQuery) return;
@@ -92,18 +101,19 @@ export function SkillsScreen() {
       setTabLoading(true);
       discover()
         .then((res) => setDiscoverSkills(res.skills ?? []))
-        .catch((e) => toast.show(e instanceof Error ? e.message : String(e)))
+        .catch((e) => toastEcosystemError(e, t))
         .finally(() => setTabLoading(false));
     } else if (tab === "trending" && trendingSkills.length === 0) {
       setTabLoading(true);
       trending()
         .then((res) => setTrendingSkills(res.skills ?? []))
-        .catch((e) => toast.show(e instanceof Error ? e.message : String(e)))
+        .catch((e) => toastEcosystemError(e, t))
         .finally(() => setTabLoading(false));
     }
-  }, [tab, debouncedQuery, discover, trending, discoverSkills.length, trendingSkills.length]);
+  }, [tab, debouncedQuery, discover, trending, discoverSkills.length, trendingSkills.length, t]);
 
   const handleRefresh = async () => {
+    void refreshSettings();
     if (debouncedQuery) {
       const res = await search(debouncedQuery);
       setSearchResults(res.skills ?? []);
@@ -146,11 +156,7 @@ export function SkillsScreen() {
         toast.show(t("common.success", "Success"));
       }
     } catch (e) {
-      if (isPolicyError(e)) {
-        toast.show(t("apps.gateBanner"));
-      } else {
-        toast.show(e instanceof Error ? e.message : String(e));
-      }
+      toastEcosystemError(e, t);
     } finally {
       setOperatingSkill(null);
     }

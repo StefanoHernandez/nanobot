@@ -7,7 +7,16 @@
     "rename": "Rename",
     "retry": "Retry",
     "loading": "Loading…",
-    "error": "Error"
+    "error": "Error",
+    "back": "Back",
+    "success": "Success",
+    "close": "Close",
+    "saving": "Saving…",
+    "show": "Show",
+    "hide": "Hide",
+    "edit": "Edit",
+    "keep": "Keep",
+    "operationFailed": "Operation failed"
   },
   "thread": {
     "reasoning": "Reasoning",
@@ -525,6 +534,8 @@
     "restartRequired": "Restart required",
     "restart": "Restart",
     "instances": "Instances",
+    "enableTitle": "Enable channel?",
+    "enableMessage": "Install/activate channel {{name}} on host computer",
     "status": {
       "running": "Running",
       "stopped": "Stopped",
@@ -698,6 +709,9 @@
     "messageRequired": "Message cannot be empty",
     "scheduleRequired": "Schedule cannot be empty",
     "running": "Running...",
+    "runSuccess": "Execution completed",
+    "saved": "Saved",
+    "chatChanged": "Chat changed",
     "confirm": "Confirm",
     "cancel": "Cancel"
   }
