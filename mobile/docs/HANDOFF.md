@@ -68,6 +68,20 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 - **Reviewer stand-in (OpenCode/agy):** use the message in REVIEWER.md, with the paths from its "Fork layout" override.
 - **Implementer (agy):** *"Leggi mobile/docs/agy/README.md, poi esegui mobile/docs/agy/briefs/<TASK>.md sul branch agy/<TASK> nella cartella <worktree>."*
 
+## Working agreements with the user (Stefano), for any Claude session
+- **Language:** reply in **Italian**, short and direct. Code, commits and docs are in English.
+- **Roles:**
+  - Claude designs, writes briefs (`mobile/docs/agy/briefs/`), **reviews and merges only when the user asks**, and handles everything fork- or server-side.
+  - **Antigravity (agy)** implements, often 2-3 instances in parallel, each in its own git worktree. The user relays the messages.
+  - When Claude is away, OpenCode or agy acts as reviewer, per `mobile/docs/agy/REVIEWER.md`.
+- **Budget:** the user's Claude plan is limited. Prefer cheap subagents (Sonnet; Haiku for trivial work) for reviews and research, keep the main thread lean, and don't dispatch implementers when agy can do it.
+- **Phone tests:** build an APK only at about 90% of a phase, or when the user asks. Never zip it.
+- **The phone is a dashboard only.** Never propose features where the agent drives the phone (camera, SMS, contacts, notifications).
+- **Fork:** new server features go in separate modules (MCP face for agents + HTTP/WS face for the app, one SQLite DB) with thin hooks into upstream files. Track release tags.
+- **Python** (fork/server work): always use a project `.venv`, never global installs, and update `pyproject.toml` when dependencies change.
+- **Before ending a task:** note blockers for the next agent in this file or in the relevant report.
+- **Confirm first:** force pushes, deleting branches, and anything that runs on luffy. The user runs luffy commands themselves.
+
 ## Never
 - Never commit secrets: the nanobot secret, tokens, `~/.nanobot` contents, or the real Tailscale host.
 - Never edit `mobile/vendor/**`.
