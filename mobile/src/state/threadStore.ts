@@ -36,6 +36,8 @@ export type ThreadSlice = {
   sendError: string | null;
   /** True while a file send is in its upload phase; send() is refused meanwhile. */
   uploading: boolean;
+  /** True while a (re)hydrate fetch is in flight; the outbox waits for it before sending. */
+  hydrating?: boolean;
   /** Composer attachment chips, kept here so share and navigation preserve them. Cleared after a successful send. */
   pendingFiles: LocalFile[];
   /** Message count before the fork point (draw the "forked from here" divider after it), else null. */
@@ -72,7 +74,7 @@ type S = {
   cancelLeave(key: string): void;
 };
 
-const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, pendingFiles: [], forkBoundary: null, temporary: false };
+const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false };
 const LEAVE_DELAY_MS = 300;
 const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end"]);
 const threadPath = (key: string) => `/api/sessions/${encodeURIComponent(key)}/webui-thread`;
@@ -235,6 +237,7 @@ export function createThreadStore() {
         }
       };
       const runGen = writable ? client.getRunGeneration(chatId) : 0;
+      patch(key, () => ({ hydrating: true }));
       try {
         const raw = await session.get<unknown>(threadPath(key)).catch((e: { status?: number }) => {
           if (e?.status === 404) return null;
@@ -299,7 +302,10 @@ export function createThreadStore() {
         if (gen === rt.gen) drain(new Set());
         throw e;
       } finally {
-        if (gen === rt.gen) rt.buffer = null;
+        if (gen === rt.gen) {
+          rt.buffer = null;
+          patch(key, () => ({ hydrating: false }));
+        }
       }
     };
 
@@ -344,6 +350,7 @@ export function createThreadStore() {
         if (!rt) return;
         rt.gen++;
         rt.buffer = null;
+        if (get().threads[key]) patch(key, () => ({ hydrating: false }));
         rt.unsubs.forEach((u) => u());
         rt.unsubs = [];
       },

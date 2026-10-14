@@ -235,4 +235,55 @@ describe("P5-O1: Offline outbox per chat", () => {
     expect(f1.client.sendMessage).toHaveBeenCalledWith("c1", "message from p1", undefined, expect.anything());
     expect(outboxStore.getState().queues[KEY] ?? []).toHaveLength(0);
   });
+
+  describe("review fixes", () => {
+    const slice = (over: Record<string, unknown> = {}) =>
+      threadStore.setState({ threads: { [KEY]: { loaded: true, running: false, uploading: false, hydrating: false, ...over } as never } });
+
+    function setup(sendResult: boolean) {
+      const f = makeFake();
+      sessionStore.setState({ session: f.session, state: "open" as never, profile: { id: "p1", name: "U", baseUrl: "https://p1.example.com", hasSecret: true } });
+      outboxStore.getState().syncProfile("p1");
+      const send = jest.fn(() => sendResult);
+      threadStore.setState({ send } as never);
+      return send;
+    }
+
+    test("does not flush while the chat is re-hydrating after a reconnect", () => {
+      const send = setup(true);
+      slice({ hydrating: true });
+      outboxStore.getState().enqueue(KEY, "a");
+      expect(outboxStore.getState().flushNext(KEY)).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+      slice({ hydrating: false });
+      expect(outboxStore.getState().flushNext(KEY)).toBe(true);
+      expect(outboxStore.getState().queues[KEY]).toHaveLength(0);
+    });
+
+    test("a refused send keeps the item queued (paused) instead of losing it", () => {
+      const send = setup(false);
+      slice();
+      outboxStore.getState().enqueue(KEY, "a");
+      expect(outboxStore.getState().flushNext(KEY)).toBe(false);
+      expect(send).toHaveBeenCalledTimes(1);
+      const q = outboxStore.getState().queues[KEY];
+      expect(q).toHaveLength(1);
+      expect(q[0].paused).toBe(true);
+      expect(JSON.parse(kv.get("outbox:v1:p1") ?? "{}")[KEY]).toHaveLength(1);
+    });
+
+    test("send-now on a non-head paused item unpauses the queue so the head flushes", () => {
+      const send = setup(true);
+      slice({ running: true });
+      outboxStore.getState().enqueue(KEY, "a");
+      outboxStore.getState().enqueue(KEY, "b");
+      outboxStore.setState({ queues: { [KEY]: outboxStore.getState().queues[KEY].map((it) => ({ ...it, paused: true })) } });
+      const b = outboxStore.getState().queues[KEY][1];
+      outboxStore.getState().resumeItem(KEY, b.id);
+      expect(outboxStore.getState().queues[KEY].every((it) => !it.paused)).toBe(true);
+      slice();
+      outboxStore.getState().flushNext(KEY);
+      expect(send).toHaveBeenCalledWith(expect.anything(), KEY, "a", undefined);
+    });
+  });
 });
