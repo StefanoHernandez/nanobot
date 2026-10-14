@@ -48,24 +48,24 @@ export function ChannelsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: th.colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: th.colors.border }]}>
+      <View style={styles.header}>
         <IconButton icon="arrow-left" accessibilityLabel={t("common.back", "Back")} onPress={() => goBackOr(router, "/ecosystem")} />
-        <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+        <Text accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.display }]}>
           {t("channels.title")}
         </Text>
       </View>
 
       {!gateAllowed ? (
-        <View style={[styles.gateBanner, { backgroundColor: th.colors.accent }]}>
-          <Text style={[styles.gateBannerText, { color: th.colors.accentForeground }]}>
+        <View style={[styles.gateBanner, { backgroundColor: th.colors.muted, borderRadius: th.radius.md }]}>
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, lineHeight: 18 }}>
             {t("apps.gateBanner")}
           </Text>
         </View>
       ) : null}
 
       {requiresRestart ? (
-        <View style={[styles.restartBanner, { backgroundColor: th.colors.accent }]}>
-          <Text style={[styles.restartText, { color: th.colors.accentForeground }]}>
+        <View style={[styles.restartBanner, { backgroundColor: th.colors.brandSoft, borderRadius: th.radius.md }]}>
+          <Text style={{ color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 15, flex: 1 }}>
             {t("channels.restartRequired")}
           </Text>
           <Button
@@ -82,14 +82,18 @@ export function ChannelsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void handleRefresh()} />}
       >
-        <View style={[styles.list, { borderColor: th.colors.border }]}>
-          {channels.map((ch) => (
-            <ChannelRow
+        <View style={[styles.card, { backgroundColor: th.colors.card, borderRadius: th.radius.md }]}>
+          {channels.map((ch, idx) => (
+            <View
               key={ch.name}
-              channel={ch}
-              onPress={() => setSelectedChannel(ch)}
-              onRefresh={() => void refresh()}
-            />
+              style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}
+            >
+              <ChannelRow
+                channel={ch}
+                onPress={() => setSelectedChannel(ch)}
+                onRefresh={() => void refresh()}
+              />
+            </View>
           ))}
         </View>
 
@@ -112,27 +116,28 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: 1,
+    paddingVertical: 4,
     minHeight: 56,
   },
-  title: { fontSize: 18, marginLeft: 4 },
+  title: { fontSize: 22, lineHeight: 28, marginLeft: 4, flex: 1 },
   restartBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 14,
     gap: 8,
   },
-  restartText: { fontSize: 14, flex: 1 },
   gateBanner: {
+    marginHorizontal: 16,
+    marginVertical: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  gateBannerText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
   scrollContent: { paddingBottom: 32 },
-  list: { borderTopWidth: 1 },
+  card: {
+    marginHorizontal: 16,
+    overflow: "hidden",
+  },
 });

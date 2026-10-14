@@ -82,7 +82,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       >
         {presets.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: th.colors.mutedForeground }]}>
+            <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
               {t("mcp.empty")}
             </Text>
           </View>
@@ -97,7 +97,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                 key={preset.name}
                 style={[
                   styles.card,
-                  { backgroundColor: th.colors.card, borderColor: th.colors.border },
+                  { backgroundColor: th.colors.card, borderColor: th.colors.border, borderRadius: th.radius.md },
                 ]}
                 onPress={() => setSelectedPreset(preset)}
                 accessibilityRole="button"
@@ -107,7 +107,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                     <Text
                       style={[
                         styles.presetName,
-                        { color: th.colors.foreground, fontFamily: th.font.medium },
+                        { color: th.colors.foreground, fontFamily: th.font.displayBold },
                       ]}
                     >
                       {preset.display_name || preset.name}
@@ -117,7 +117,8 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                         style={[
                           styles.badge,
                           {
-                            backgroundColor: preset.enabled ? th.colors.accent : th.colors.muted,
+                            backgroundColor: preset.enabled ? th.colors.brandSoft : th.colors.muted,
+                            borderRadius: th.radius.sm,
                           },
                         ]}
                       >
@@ -126,8 +127,9 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                             styles.badgeText,
                             {
                               color: preset.enabled
-                                ? th.colors.accentForeground
+                                ? th.colors.brandSoftForeground
                                 : th.colors.mutedForeground,
+                              fontFamily: th.font.medium,
                             },
                           ]}
                         >
@@ -139,8 +141,9 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                           styles.badge,
                           {
                             backgroundColor: preset.configured
-                              ? th.colors.accent
+                              ? th.colors.brandSoft
                               : th.colors.muted,
+                            borderRadius: th.radius.sm,
                           },
                         ]}
                       >
@@ -149,15 +152,16 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                             styles.badgeText,
                             {
                               color: preset.configured
-                                ? th.colors.accentForeground
+                                ? th.colors.brandSoftForeground
                                 : th.colors.mutedForeground,
+                              fontFamily: th.font.medium,
                             },
                           ]}
                         >
                           {preset.configured ? t("mcp.configured") : t("mcp.notConfigured")}
                         </Text>
                       </View>
-                      <Text style={[styles.toolCount, { color: th.colors.mutedForeground }]}>
+                      <Text style={[styles.toolCount, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                         {t("mcp.toolsCount", { count: toolCount })}
                       </Text>
                     </View>
@@ -166,13 +170,13 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                     value={!!preset.enabled}
                     disabled={switchDisabled}
                     onValueChange={(val) => void handleToggle(preset, val)}
-                    trackColor={{ false: th.colors.border, true: th.colors.primary }}
+                    trackColor={{ false: th.colors.muted, true: th.colors.primary }}
                   />
                 </View>
 
                 {preset.description ? (
                   <Text
-                    style={[styles.description, { color: th.colors.mutedForeground }]}
+                    style={[styles.description, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}
                     numberOfLines={2}
                   >
                     {preset.description}
@@ -209,7 +213,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
         )}
 
         <View style={styles.noteContainer}>
-          <Text style={[styles.noteText, { color: th.colors.mutedForeground }]}>
+          <Text style={[styles.noteText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
             {t("mcp.note")}
           </Text>
         </View>
@@ -296,7 +300,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   presetName: {
-    fontSize: 16,
+    fontSize: 17,
   },
   badgeRow: {
     flexDirection: "row",
@@ -311,16 +315,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: "500",
+    fontSize: 13,
   },
   toolCount: {
-    fontSize: 12,
+    fontSize: 13,
     marginLeft: 2,
   },
   description: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
   actionsRow: {
     flexDirection: "row",

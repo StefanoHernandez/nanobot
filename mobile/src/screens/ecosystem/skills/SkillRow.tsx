@@ -54,17 +54,17 @@ export function SkillRow({
     >
       <View style={styles.header}>
         <View style={styles.headerTexts}>
-          <Text style={[styles.name, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+          <Text style={[styles.name, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
             {name}
           </Text>
           <View style={styles.metaRow}>
             {source ? (
-              <Text style={[styles.metaText, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.metaText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {t("skills.source", { source })}
               </Text>
             ) : null}
             {version ? (
-              <Text style={[styles.metaText, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.metaText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {t("skills.version", { version })}
               </Text>
             ) : null}
@@ -73,14 +73,14 @@ export function SkillRow({
 
         <View style={styles.badges}>
           {updateAvailable ? (
-            <View style={[styles.badge, { backgroundColor: th.colors.accent }]}>
-              <Text style={[styles.badgeText, { color: th.colors.accentForeground }]}>
+            <View style={[styles.badge, { backgroundColor: th.colors.brandSoft }]}>
+              <Text style={[styles.badgeText, { color: th.colors.brandSoftForeground, fontFamily: th.font.medium }]}>
                 {t("skills.updateAvailable")}
               </Text>
             </View>
           ) : isInstalled ? (
             <View style={[styles.badge, { backgroundColor: th.colors.muted }]}>
-              <Text style={[styles.badgeText, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.badgeText, { color: th.colors.mutedForeground, fontFamily: th.font.medium }]}>
                 {t("skills.installedBadge")}
               </Text>
             </View>
@@ -90,7 +90,7 @@ export function SkillRow({
 
       {description ? (
         <Text
-          style={[styles.description, { color: th.colors.mutedForeground }]}
+          style={[styles.description, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}
           numberOfLines={2}
         >
           {description}
@@ -123,7 +123,7 @@ export function SkillRow({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 16,
     gap: 8,
   },
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   name: {
-    fontSize: 16,
+    fontSize: 17,
   },
   metaRow: {
     flexDirection: "row",
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 13,
   },
   badges: {
     flexDirection: "row",
@@ -154,12 +154,11 @@ const styles = StyleSheet.create({
   },
   badge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: "500",
+    fontSize: 13,
   },
   description: {
     fontSize: 13,

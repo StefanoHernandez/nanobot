@@ -38,12 +38,12 @@ export function ChannelRow({ channel, onPress, onRefresh }: ChannelRowProps) {
     statusFg = th.colors.destructiveForeground;
   } else if (isRunning) {
     statusLabel = t("channels.status.running");
-    statusBg = th.colors.primary;
-    statusFg = th.colors.primaryForeground;
+    statusBg = th.colors.brandSoft;
+    statusFg = th.colors.brandSoftForeground;
   } else if (isStarting) {
     statusLabel = t("channels.status.starting");
-    statusBg = th.colors.accent;
-    statusFg = th.colors.accentForeground;
+    statusBg = th.colors.brandSoft;
+    statusFg = th.colors.brandSoftForeground;
   } else if (isDisabled) {
     statusLabel = t("channels.status.disabled");
     statusBg = th.colors.muted;
@@ -95,9 +95,7 @@ export function ChannelRow({ channel, onPress, onRefresh }: ChannelRowProps) {
         style={({ pressed }) => [
           styles.row,
           {
-            backgroundColor: pressed ? th.colors.accent : th.colors.card,
-            borderColor: th.colors.border,
-            borderBottomWidth: 1,
+            backgroundColor: pressed ? th.colors.accent : "transparent",
           },
         ]}
       >
@@ -107,16 +105,16 @@ export function ChannelRow({ channel, onPress, onRefresh }: ChannelRowProps) {
               {channel.display_name || channel.name}
             </Text>
             <View style={[styles.chip, { backgroundColor: statusBg, borderRadius: th.radius.sm }]}>
-              <Text style={[styles.chipText, { color: statusFg }]}>{statusLabel}</Text>
+              <Text style={[styles.chipText, { color: statusFg, fontFamily: th.font.medium }]}>{statusLabel}</Text>
             </View>
           </View>
           {instancesText ? (
-            <Text style={{ color: th.colors.mutedForeground, fontSize: 13, marginTop: 4 }}>
+            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginTop: 4 }}>
               {instancesText}
             </Text>
           ) : null}
           {!gateAllowed && !channel.enabled ? (
-            <Text style={{ color: th.colors.mutedForeground, fontSize: 12, marginTop: 4 }}>
+            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginTop: 4 }}>
               {t("apps.gateBanner")}
             </Text>
           ) : null}
@@ -127,6 +125,7 @@ export function ChannelRow({ channel, onPress, onRefresh }: ChannelRowProps) {
             disabled={loading || (!channel.enabled && !gateAllowed)}
             accessibilityHint={!gateAllowed && !channel.enabled ? t("apps.gateBanner") : undefined}
             onValueChange={(val) => void handleToggle(val)}
+            trackColor={{ false: th.colors.muted, true: th.colors.primary }}
           />
         </View>
       </Pressable>
@@ -157,6 +156,6 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   name: { fontSize: 16 },
   chip: { paddingHorizontal: 8, paddingVertical: 2 },
-  chipText: { fontSize: 12, fontWeight: "600" },
+  chipText: { fontSize: 13 },
   switchWrapper: { minWidth: 48, minHeight: 48, justifyContent: "center", alignItems: "center" },
 });

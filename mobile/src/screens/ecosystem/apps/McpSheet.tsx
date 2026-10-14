@@ -85,7 +85,7 @@ export function McpSheet({
         <KeyboardAvoidingView behavior="padding">
           <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
             {preset.description ? (
-              <Text style={[styles.description, { color: th.colors.mutedForeground }]}>
+              <Text style={[styles.description, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {preset.description}
               </Text>
             ) : null}
@@ -102,7 +102,7 @@ export function McpSheet({
 
             {preset.required_fields && preset.required_fields.length > 0 ? (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
                   {t("mcp.config")}
                 </Text>
                 {preset.required_fields.map((f) => {
@@ -141,16 +141,16 @@ export function McpSheet({
 
             {preset.tool_names && preset.tool_names.length > 0 ? (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
                   {t("mcp.tools")}
                 </Text>
                 {preset.tool_names.map((toolName) => (
                   <View key={toolName} style={styles.toolRow}>
-                    <Text style={[styles.toolName, { color: th.colors.foreground }]}>{toolName}</Text>
+                    <Text style={[styles.toolName, { color: th.colors.foreground, fontFamily: th.font.regular }]}>{toolName}</Text>
                     <Switch
                       value={enabledTools.includes(toolName)}
                       onValueChange={() => toggleTool(toolName)}
-                      trackColor={{ false: th.colors.border, true: th.colors.primary }}
+                      trackColor={{ false: th.colors.muted, true: th.colors.primary }}
                     />
                   </View>
                 ))}
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 17,
     marginBottom: 4,
   },
   toolRow: {
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   toolName: {
-    fontSize: 14,
+    fontSize: 15,
   },
   actions: {
     marginTop: 12,

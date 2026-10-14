@@ -111,7 +111,7 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
         />
         <Text
           numberOfLines={1}
-          style={[styles.headerTitle, { color: th.colors.foreground, fontFamily: th.font.medium }]}
+          style={[styles.headerTitle, { color: th.colors.foreground, fontFamily: th.font.display }]}
         >
           {t("gallery.title")}
         </Text>
@@ -160,7 +160,7 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
           <View style={[styles.modalBackdrop, { backgroundColor: withAlpha(th.colors.overlay, 0.94) }]}>
             {/* Viewer Top Bar */}
             <View style={[styles.modalHeader, { paddingTop: insets.top + 8 }]}>
-              <Text style={[styles.modalCounter, { color: th.colors.overlayForeground }]}>
+              <Text style={[styles.modalCounter, { color: th.colors.overlayForeground, fontFamily: th.font.medium }]}>
                 {viewerIndex + 1} / {images.length}
               </Text>
               <IconButton
@@ -217,7 +217,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 22,
+    lineHeight: 28,
     marginLeft: 8,
   },
   gridContainer: {
@@ -244,7 +245,6 @@ const styles = StyleSheet.create({
   },
   modalCounter: {
     fontSize: 16,
-    fontWeight: "600",
   },
   fullImageWrapper: {
     flex: 1,

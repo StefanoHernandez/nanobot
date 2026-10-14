@@ -7,6 +7,7 @@ import { useT } from "../i18n";
 import { kv } from "../platform/storage";
 import { Button } from "../ui/components";
 import { useTheme } from "../ui/ThemeProvider";
+import { BotFace } from "../ui/BotFace";
 
 const KEY = "lock.enabled";
 const RELOCK_MS = 300_000;
@@ -89,7 +90,8 @@ export function LockGate({ children }: { children: ReactNode }) {
       </View>
       {show && (
         <View style={[StyleSheet.absoluteFill, s.box, { backgroundColor: th.colors.background }]}>
-          <Text style={[s.title, { color: th.colors.foreground }]}>nanobot</Text>
+          <Text style={[s.title, { color: th.colors.foreground, fontFamily: th.font.display }]}>nanobot</Text>
+          <BotFace state="idle" size={72} />
           <Button title={t("extras.unlock")} onPress={() => void unlock()} />
         </View>
       )}
@@ -100,5 +102,5 @@ export function LockGate({ children }: { children: ReactNode }) {
 const s = StyleSheet.create({
   root: { flex: 1 },
   box: { alignItems: "center", justifyContent: "center", gap: 24 },
-  title: { fontSize: 28, fontWeight: "600" },
+  title: { fontSize: 28, lineHeight: 34 },
 });
