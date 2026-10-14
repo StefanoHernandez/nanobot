@@ -723,5 +723,12 @@
     "confirm": "Conferma",
     "cancel": "Annulla",
     "invalidSchedule": "Formato pianificazione non valido"
+  },
+  "share": {
+    "pickChatTitle": "Condividi in nanobot",
+    "newChat": "Nuova chat",
+    "filesCount": "{{count}} file",
+    "filesCount_one": "{{count}} file",
+    "filesCount_other": "{{count}} file"
   }
 }

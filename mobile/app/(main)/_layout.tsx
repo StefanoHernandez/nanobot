@@ -2,6 +2,7 @@ import { View } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { ChatDrawer } from "../../src/screens/chats/ChatDrawer";
 import { OfflineBanner } from "../../src/extras/OfflineBanner";
+import { SharePickerSheet } from "../../src/extras/SharePickerSheet";
 import { useTheme } from "../../src/ui/ThemeProvider";
 
 export default function MainLayout() {
@@ -10,6 +11,7 @@ export default function MainLayout() {
   return (
     <View style={{ flex: 1 }}>
       <OfflineBanner />
+      <SharePickerSheet />
       <Drawer
         drawerContent={(p) => <ChatDrawer onClose={() => p.navigation.closeDrawer()} />}
         screenOptions={{
