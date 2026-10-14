@@ -723,5 +723,12 @@
     "confirm": "Confirm",
     "cancel": "Cancel",
     "invalidSchedule": "Invalid schedule format"
+  },
+  "share": {
+    "pickChatTitle": "Share to nanobot",
+    "newChat": "New chat",
+    "filesCount": "{{count}} files",
+    "filesCount_one": "{{count}} file",
+    "filesCount_other": "{{count}} files"
   }
 }
