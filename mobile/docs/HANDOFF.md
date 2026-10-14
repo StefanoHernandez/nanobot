@@ -87,3 +87,4 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 
 ## Known flakiness
 Under heavy CPU load, a few UI tests (voice/subagents, ecosystem drawer, artifacts size routing) can fail once and pass on rerun. Re-run them before treating a failure as real.
+- **GitHub `mobile-ci` fails on almost every push since 2026-10-14** (jest step; 8/9 runs), while the same suite passes locally, also with `TZ=UTC --maxWorkers=2`. The failing test is unknown: the job log needs a GitHub login (`gh` is not installed on this PC). Next: read the log, then fix or de-flake. Until then, a red mobile-ci is not proof of a regression.
