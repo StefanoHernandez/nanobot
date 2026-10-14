@@ -135,7 +135,11 @@ export async function createPresetAndOrder(mutate: Mutate, form: PresetForm, ord
 export const DEFERRED_PROVIDERS = ["ollama", "openrouter", "lm_studio"];
 
 const catalogCache = new Map<string, ProviderModelsPayload>();
-export const clearCatalogCache = () => catalogCache.clear();
+let catalogGen = 0; // bumped on profile switch: an in-flight fetch must not repopulate the new profile's cache
+export const clearCatalogCache = () => {
+  catalogCache.clear();
+  catalogGen++;
+};
 
 type Get = <T>(path: string) => Promise<T>;
 
@@ -143,10 +147,11 @@ type Get = <T>(path: string) => Promise<T>;
 export async function loadProviderModels(get: Get, provider: string, refresh = false): Promise<ProviderModelsPayload> {
   const hit = catalogCache.get(provider);
   if (hit && !refresh) return hit;
+  const gen = catalogGen;
   try {
     const q = `provider=${encodeURIComponent(provider)}${refresh ? "&refresh=1" : ""}`;
     const r = await get<ProviderModelsPayload>(`/api/settings/provider-models?${q}`);
-    catalogCache.set(provider, r);
+    if (gen === catalogGen) catalogCache.set(provider, r);
     return r;
   } catch (e) {
     if (hit) return hit;

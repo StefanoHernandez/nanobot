@@ -204,3 +204,15 @@ describe("oauth extras", () => {
     expect(result.current.state).toBe("done");
   });
 });
+
+test("M24: a catalogue fetch in flight across a profile switch does not repopulate the cache", async () => {
+  let resolve!: (v: unknown) => void;
+  const slow = jest.fn(() => new Promise((r) => { resolve = r; }));
+  const p = loadProviderModels(slow as never, "p");
+  clearCatalogCache(); // profile switch
+  resolve({ models: ["from-profile-a"] });
+  await p;
+  const fresh = jest.fn(async () => ({ models: ["from-profile-b"] }));
+  expect(await loadProviderModels(fresh as never, "p")).toEqual({ models: ["from-profile-b"] });
+  expect(fresh).toHaveBeenCalledTimes(1);
+});
