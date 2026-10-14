@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
+import { AnyImage } from "../../../ui/AnyImage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer as ExpoPlayer } from "expo-audio";
 import { useTranslation } from "react-i18next";
@@ -53,11 +54,11 @@ export function MediaImage({ url, name }: { url: string; name: string }) {
   return (
     <>
       <Pressable onPress={() => setOpen(true)} accessibilityRole="imagebutton" accessibilityLabel={name || t("media.image")}>
-        <Image testID="media-image" onLoad={(e) => { const { width: w, height: h } = e.nativeEvent.source; if (w && h) setRatio(w / h); }} source={{ uri: url }} style={{ width: "100%", maxWidth: 320, aspectRatio: ratio, borderRadius: th.radius.md, backgroundColor: th.colors.muted }} resizeMode="cover" />
+        <AnyImage testID="media-image" url={url} name={name} onLoad={(e) => { const { width: w, height: h } = e.nativeEvent.source; if (w && h) setRatio(w / h); }} style={{ width: "100%", maxWidth: 320, aspectRatio: ratio, borderRadius: th.radius.md, backgroundColor: th.colors.muted }} resizeMode="cover" />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable onPress={() => setOpen(false)} accessibilityLabel={t("media.close")} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center" }}>
-          <Image source={{ uri: url }} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
+          <AnyImage url={url} name={name} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
         </Pressable>
       </Modal>
     </>
