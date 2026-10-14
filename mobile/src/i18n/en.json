@@ -723,5 +723,11 @@
     "confirm": "Confirm",
     "cancel": "Cancel",
     "invalidSchedule": "Invalid schedule format"
+  },
+  "outbox": {
+    "pending": "Pending",
+    "paused": "Pending — tap to send",
+    "cancel": "Cancel",
+    "sendNow": "Send now"
   }
 }

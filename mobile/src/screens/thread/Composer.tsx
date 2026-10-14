@@ -9,6 +9,7 @@ import { useT } from "../../i18n";
 import { useSession } from "../../state/sessionStore";
 import { useThreadSlice } from "../../state/threadStore";
 import { useChats } from "../../state/chatsStore";
+import { outboxStore } from "../../extras/outbox";
 import { IconButton } from "../../ui/components/IconButton";
 import { ListItem } from "../../ui/components/ListItem";
 import { Sheet } from "../../ui/components/Sheet";
@@ -46,7 +47,7 @@ import type {
 export function Composer({ chatKey }: { chatKey: string }) {
   const t = useT();
   const th = useTheme();
-  const { session } = useSession();
+  const { session, state: sessionState, profile } = useSession();
   const chats = useChats((s) => s.chats);
   const {
     draft,
@@ -285,6 +286,17 @@ export function Composer({ chatKey }: { chatKey: string }) {
     if (validPresets.length > 0) opts.mcpPresets = validPresets;
 
     const hasOpts = Object.keys(opts).length > 0;
+    if (sessionState !== "open" && profile?.id) {
+      outboxStore.getState().syncProfile(profile.id);
+      outboxStore.getState().enqueue(chatKey, trimmed, hasOpts ? opts : undefined);
+      setDraft("");
+      setPendingFiles([]);
+      setPickedSessions([]);
+      setPickedApps([]);
+      setPickedPresets([]);
+      return;
+    }
+
     const ok = hasOpts ? send(trimmed, opts) : send(trimmed);
     if (ok) {
       if (!opts.files || opts.files.length === 0) {

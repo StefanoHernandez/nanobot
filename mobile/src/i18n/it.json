@@ -723,5 +723,11 @@
     "confirm": "Conferma",
     "cancel": "Annulla",
     "invalidSchedule": "Formato pianificazione non valido"
+  },
+  "outbox": {
+    "pending": "In attesa",
+    "paused": "In attesa — tocca per inviare",
+    "cancel": "Annulla",
+    "sendNow": "Invia ora"
   }
 }
