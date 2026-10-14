@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
@@ -179,20 +179,20 @@ export function SkillsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: th.colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: th.colors.border }]}>
+      <View style={styles.header}>
         <IconButton
           icon="arrow-left"
           accessibilityLabel={t("common.back", "Back")}
           onPress={() => goBackOr(router, "/ecosystem")}
         />
-        <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+        <Text accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.display }]}>
           {t("skills.title")}
         </Text>
       </View>
 
       {!gateAllowed ? (
-        <View style={[styles.gateBanner, { backgroundColor: th.colors.accent }]}>
-          <Text style={[styles.gateBannerText, { color: th.colors.accentForeground }]}>
+        <View style={[styles.gateBanner, { backgroundColor: th.colors.muted, borderRadius: th.radius.md }]}>
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, lineHeight: 18 }}>
             {t("apps.gateBanner")}
           </Text>
         </View>
@@ -210,30 +210,70 @@ export function SkillsScreen() {
       </View>
 
       {!debouncedQuery ? (
-        <View style={[styles.tabBar, { borderBottomColor: th.colors.border }]}>
-          <View style={styles.tabButtonsRow}>
-            <Button
-              title={t("skills.tabs.installed", "Installed")}
-              variant={tab === "installed" ? "primary" : "ghost"}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === "installed" }}
-              onPress={() => setTab("installed")}
-            />
-            <Button
-              title={t("skills.tabs.discover", "Discover")}
-              variant={tab === "discover" ? "primary" : "ghost"}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === "discover" }}
-              onPress={() => setTab("discover")}
-            />
-            <Button
-              title={t("skills.tabs.trending", "Trending")}
-              variant={tab === "trending" ? "primary" : "ghost"}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === "trending" }}
-              onPress={() => setTab("trending")}
-            />
-          </View>
+        <View style={[styles.tabBar, { backgroundColor: th.colors.muted, borderRadius: 999 }]}>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === "installed" }}
+            onPress={() => setTab("installed")}
+            style={[
+              styles.tabSegment,
+              {
+                backgroundColor: tab === "installed" ? th.colors.card : "transparent",
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: tab === "installed" ? th.colors.foreground : th.colors.mutedForeground,
+                fontFamily: tab === "installed" ? th.font.medium : th.font.regular,
+                fontSize: 15,
+              }}
+            >
+              {t("skills.tabs.installed", "Installed")}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === "discover" }}
+            onPress={() => setTab("discover")}
+            style={[
+              styles.tabSegment,
+              {
+                backgroundColor: tab === "discover" ? th.colors.card : "transparent",
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: tab === "discover" ? th.colors.foreground : th.colors.mutedForeground,
+                fontFamily: tab === "discover" ? th.font.medium : th.font.regular,
+                fontSize: 15,
+              }}
+            >
+              {t("skills.tabs.discover", "Discover")}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === "trending" }}
+            onPress={() => setTab("trending")}
+            style={[
+              styles.tabSegment,
+              {
+                backgroundColor: tab === "trending" ? th.colors.card : "transparent",
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: tab === "trending" ? th.colors.foreground : th.colors.mutedForeground,
+                fontFamily: tab === "trending" ? th.font.medium : th.font.regular,
+                fontSize: 15,
+              }}
+            >
+              {t("skills.tabs.trending", "Trending")}
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -243,7 +283,7 @@ export function SkillsScreen() {
       >
         {displayedItems.length === 0 && !isLoading ? (
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: th.colors.mutedForeground }]}>
+            <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
               {debouncedQuery
                 ? t("skills.empty")
                 : tab === "installed"
@@ -268,7 +308,7 @@ export function SkillsScreen() {
 
         {!debouncedQuery && tab === "installed" ? (
           <View style={styles.noteContainer}>
-            <Text style={[styles.noteText, { color: th.colors.mutedForeground }]}>
+            <Text style={[styles.noteText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
               {t("skills.note")}
             </Text>
           </View>
@@ -305,20 +345,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: 1,
+    paddingVertical: 4,
     minHeight: 56,
   },
   title: {
-    fontSize: 18,
+    fontSize: 22,
+    lineHeight: 28,
     marginLeft: 4,
+    flex: 1,
   },
   gateBanner: {
+    marginHorizontal: 16,
+    marginVertical: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  gateBannerText: {
-    fontSize: 14,
-    lineHeight: 20,
+    paddingVertical: 10,
   },
   searchSection: {
     paddingHorizontal: 16,
@@ -326,13 +366,18 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   tabBar: {
-    borderBottomWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  tabButtonsRow: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 4,
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
+  },
+  tabSegment: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
   },
   scrollContent: {
     padding: 16,

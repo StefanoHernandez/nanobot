@@ -148,7 +148,7 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved, onFe
       const isTrue = ["true", "1", "yes", "on"].includes((form.values[f.key] ?? "").toLowerCase());
       return (
         <View key={f.key} style={styles.switchRow}>
-          <Text style={{ color: th.colors.foreground, fontSize: 15, flex: 1 }}>{f.field}</Text>
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 15, flex: 1 }}>{f.field}</Text>
           <Switch
             value={isTrue}
             onValueChange={(val) => setForm((cur) => setChannelValue(cur, f.key, val ? "true" : "false"))}
@@ -162,13 +162,13 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved, onFe
       const options = f.choices.map((c) => ({ value: c, label: c }));
       return (
         <View key={f.key} style={styles.fieldContainer}>
-          <Text style={{ color: th.colors.foreground, fontSize: 13, marginBottom: 4 }}>{f.field}</Text>
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 13, marginBottom: 4 }}>{f.field}</Text>
           <Chips
             options={options}
             value={currentVal}
             onChange={(val) => setForm((cur) => setChannelValue(cur, f.key, val))}
           />
-          {err ? <Text style={{ color: th.colors.destructive, fontSize: 12 }}>{err}</Text> : null}
+          {err ? <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13 }}>{err}</Text> : null}
         </View>
       );
     }
@@ -201,7 +201,7 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved, onFe
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {serverError ? (
             <View style={[styles.serverErrorBox, { backgroundColor: th.colors.destructive, borderRadius: th.radius.sm }]}>
-              <Text style={{ color: th.colors.destructiveForeground, fontSize: 13 }}>{serverError}</Text>
+              <Text style={{ color: th.colors.destructiveForeground, fontFamily: th.font.regular, fontSize: 13 }}>{serverError}</Text>
             </View>
           ) : null}
 

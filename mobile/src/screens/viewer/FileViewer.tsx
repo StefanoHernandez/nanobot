@@ -270,7 +270,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
           },
         ]}
       >
-        <Text style={{ color: th.colors.mutedForeground, fontSize: 13 }}>
+        <Text style={{ color: th.colors.mutedForeground, fontSize: 13, fontFamily: th.font.regular }}>
           {t("viewer.truncatedPreview")}
         </Text>
       </View>
@@ -289,7 +289,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
     if (!allowed) {
       return (
         <View style={styles.centerContainer}>
-          <Text style={[styles.messageText, { color: th.colors.destructive }]}>
+          <Text style={[styles.messageText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
             {t("viewer.notAvailable", "File not available")}
           </Text>
         </View>
@@ -299,7 +299,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
     if (artifactFallback) {
       return (
         <View style={styles.centerContainer}>
-          <Text style={[styles.messageText, { color: th.colors.mutedForeground }]}>
+          <Text style={[styles.messageText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
             {t("artifact.notAvailable")}
           </Text>
           <View style={{ marginTop: 16 }}>
@@ -312,7 +312,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
     if (tooLarge) {
       return (
         <View style={styles.centerContainer}>
-          <Text style={[styles.messageText, { color: th.colors.mutedForeground }]}>
+          <Text style={[styles.messageText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
             {t("viewer.tooLarge")}
           </Text>
           <View style={{ marginTop: 16 }}>
@@ -325,10 +325,10 @@ export function FileViewer({ uri, name }: FileViewerProps) {
     if (error) {
       return (
         <View style={styles.centerContainer}>
-          <Text style={[styles.messageText, { color: th.colors.destructive }]}>
+          <Text style={[styles.messageText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
             {t("viewer.readError")}
           </Text>
-          <Text style={[styles.detailText, { color: th.colors.mutedForeground }]}>
+          <Text style={[styles.detailText, { color: th.colors.mutedForeground, fontFamily: th.font.mono }]}>
             {error}
           </Text>
           <View style={{ marginTop: 16 }}>
@@ -370,7 +370,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
           const sizeMb = Math.round(fileSize / (1024 * 1024));
           return (
             <View style={styles.centerContainer}>
-              <Text style={[styles.messageText, { color: th.colors.foreground }]}>
+              <Text style={[styles.messageText, { color: th.colors.foreground, fontFamily: th.font.regular }]}>
                 {t("artifact.largeFileNotice", { size: sizeMb })}
               </Text>
               <View style={{ flexDirection: "row", gap: 12, marginTop: 20 }}>
@@ -534,7 +534,6 @@ export function FileViewer({ uri, name }: FileViewerProps) {
                               {
                                 color: th.colors.foreground,
                                 fontFamily: isHeader ? th.font.medium : th.font.regular,
-                                fontWeight: isHeader ? "700" : "normal",
                               },
                             ]}
                           >
@@ -561,7 +560,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
                 },
               ]}
             >
-              <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>
+              <Text style={{ color: th.colors.mutedForeground, fontSize: 13, fontFamily: th.font.regular }}>
                 {t("viewer.showingRows", { shown: MAX_CSV_ROWS, total: totalRows })}
               </Text>
             </View>
