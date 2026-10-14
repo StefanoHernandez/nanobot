@@ -713,6 +713,7 @@
     "saved": "Saved",
     "chatChanged": "Chat changed",
     "confirm": "Confirm",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "invalidSchedule": "Invalid schedule format"
   }
 }

@@ -282,12 +282,14 @@ describe("P4-U4 Automations UI", () => {
     });
   });
 
-  test("I8: AutomationJobSheet preserves kind and maps at_ms correctly for at job", async () => {
+  test("I8: AutomationJobSheet preserves kind and maps at_ms correctly for at job with human date-time", async () => {
+    const atTime = 1770000000000;
+    const atIso = new Date(atTime).toISOString();
     const atJob: SessionAutomationJob = {
       id: "j-at",
       name: "One-shot Job",
       enabled: true,
-      schedule: { kind: "at", at_ms: 1770000000000 },
+      schedule: { kind: "at", at_ms: atTime },
       payload: { message: "One-shot message" },
       state: { run_history: [] },
     };
@@ -302,26 +304,38 @@ describe("P4-U4 Automations UI", () => {
       />,
     );
 
-    const schedInput = screen.getByDisplayValue("1770000000000");
-    await fireEvent.changeText(schedInput, "1770000009999");
+    // Initial input shows ISO date-time, not raw milliseconds
+    const schedInput = screen.getByDisplayValue(atIso);
+    expect(schedInput).toBeTruthy();
 
+    // Invalid input shows inline error and does NOT call update
+    await fireEvent.changeText(schedInput, "not-a-valid-date");
     const saveBtn = screen.getByText("Salva");
+    await act(async () => {
+      fireEvent.press(saveBtn);
+    });
+    expect(screen.getByText("Formato pianificazione non valido")).toBeTruthy();
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    // Valid date-time update maps to timestamp
+    const targetDateStr = "2026-02-02T03:00:00.000Z";
+    await fireEvent.changeText(schedInput, targetDateStr);
     await act(async () => {
       fireEvent.press(saveBtn);
     });
 
     expect(onUpdate).toHaveBeenCalledWith("j-at", {
       message: "One-shot message",
-      schedule: { kind: "at", at_ms: 1770000009999 },
+      schedule: { kind: "at", at_ms: Date.parse(targetDateStr) },
     });
   });
 
-  test("I8: AutomationJobSheet preserves kind and maps every_ms correctly for every job", async () => {
+  test("I8: AutomationJobSheet preserves kind and maps every_ms correctly for every job with number and unit", async () => {
     const everyJob: SessionAutomationJob = {
       id: "j-every",
       name: "Interval Job",
       enabled: true,
-      schedule: { kind: "every", every_ms: 60000 },
+      schedule: { kind: "every", every_ms: 3600000 },
       payload: { message: "Interval message" },
       state: { run_history: [] },
     };
@@ -336,18 +350,47 @@ describe("P4-U4 Automations UI", () => {
       />,
     );
 
-    const schedInput = screen.getByDisplayValue("60000");
-    await fireEvent.changeText(schedInput, "120000");
+    // Initial input shows "1 hour", not "3600000"
+    const schedInput = screen.getByDisplayValue("1 hour");
+    expect(schedInput).toBeTruthy();
 
+    // Invalid input without unit or garbage shows inline error
+    await fireEvent.changeText(schedInput, "invalid-unit-123");
     const saveBtn = screen.getByText("Salva");
+    await act(async () => {
+      fireEvent.press(saveBtn);
+    });
+    expect(screen.getByText("Formato pianificazione non valido")).toBeTruthy();
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    // Valid number + unit maps to milliseconds
+    await fireEvent.changeText(schedInput, "2 hours");
     await act(async () => {
       fireEvent.press(saveBtn);
     });
 
     expect(onUpdate).toHaveBeenCalledWith("j-every", {
       message: "Interval message",
-      schedule: { kind: "every", every_ms: 120000 },
+      schedule: { kind: "every", every_ms: 7200000 },
     });
+  });
+
+  test("M8: the chat picker failure shows the generic message, not the raw text", async () => {
+    mockFetchAutomationChats.mockRejectedValueOnce(new Error("Raw database error SQLITE_CORRUPT"));
+
+    await renderWithTheme(<AutomationsScreen now={now} />);
+
+    // Open sheet for Daily Digest
+    await fireEvent.press(screen.getByText("Daily Digest"));
+
+    // Press Cambia chat
+    const changeChatBtn = screen.getByText("Cambia chat");
+    await act(async () => {
+      fireEvent.press(changeChatBtn);
+    });
+
+    expect(toast.show).toHaveBeenCalledWith("Operazione non riuscita");
+    expect(toast.show).not.toHaveBeenCalledWith(expect.stringContaining("SQLITE_CORRUPT"));
   });
 
   test("I7: AutomationJobSheet uses actions passed via props", async () => {

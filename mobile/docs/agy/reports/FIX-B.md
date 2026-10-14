@@ -75,3 +75,83 @@ Snapshots:   0 total
 Time:        9.599 s, estimated 54 s
 Ran all test suites.
 ```
+
+---
+
+# FIX-B-fix1 report — ecosystem gate, error copy and polling cleanup
+
+## Modified Files
+- `mobile/src/screens/ecosystem/channels/ChannelRow.tsx`
+- `mobile/src/screens/ecosystem/channels/ChannelsScreen.tsx`
+- `mobile/src/screens/ecosystem/channels/ChannelConnect.tsx`
+- `mobile/src/screens/ecosystem/automations/AutomationJobSheet.tsx`
+- `mobile/src/screens/ecosystem/automations/AutomationsScreen.tsx`
+- `mobile/src/screens/ecosystem/skills/SkillDetailSheet.tsx`
+- `mobile/src/ecosystem/automations.ts`
+- `mobile/src/ecosystem/mcp.ts`
+- `mobile/src/i18n/en.json`
+- `mobile/src/i18n/it.json`
+- `mobile/test/screens/ecosystem-channels.test.tsx`
+- `mobile/test/screens/ecosystem-automations.test.tsx`
+- `mobile/test/ecosystem/apps-skills-automations.test.ts`
+
+## Items Implemented & File:Line Mapping
+
+1. **I5 gate not enforced**:
+   - `mobile/src/screens/ecosystem/channels/ChannelRow.tsx:121-124`: The enable switch is disabled when the remote package install gate is closed on disabled channels (`disabled={loading || (!channel.enabled && !gateAllowed)}`). Disabling an already-enabled channel remains allowed.
+   - `mobile/src/screens/ecosystem/channels/ChannelRow.tsx:118-122`: Displays a hint banner/text when `!gateAllowed && !channel.enabled` and passes `accessibilityHint`.
+   - `mobile/src/screens/ecosystem/channels/ChannelsScreen.tsx:27, 49-55, 128-135`: Injects `useSettings()`, computes `installGate(settings).allowed`, displays the gate banner when the gate is closed, and re-queries settings on navigation focus and pull-to-refresh.
+   - Verified by test in `mobile/test/screens/ecosystem-channels.test.tsx:467-505`.
+
+2. **M8 raw messages left**:
+   - `mobile/src/screens/ecosystem/automations/AutomationJobSheet.tsx:268`: In `handleOpenChatPicker`, replaced raw `e.message` toast with `toastEcosystemError(e, t)` and closed picker.
+   - `mobile/src/screens/ecosystem/automations/AutomationJobSheet.tsx:286`: In `handleSelectChat`, replaced raw `e.message` toast with `toastEcosystemError(e, t)`.
+   - `mobile/src/screens/ecosystem/automations/AutomationJobSheet.tsx:255`: In `handleSaveEdit`, replaced raw `e.message` in `setEditError` with localized `t("common.operationFailed")`.
+   - `mobile/src/screens/ecosystem/skills/SkillDetailSheet.tsx:36`: Replaced raw `e.message` error state with `isPolicyError(e) ? t("apps.gateBanner") : t("common.operationFailed")`.
+   - `mobile/src/screens/ecosystem/channels/ChannelConnect.tsx:132`: Replaced raw error text with `t("common.operationFailed")`.
+   - `mobile/src/screens/ecosystem/automations/AutomationsScreen.tsx:82`: Replaced raw error text with `t("common.operationFailed")`.
+   - Grepped `src/screens/ecosystem` and `src/ecosystem` to verify no raw `e.message` or `String(e)` reaches the UI.
+   - Verified by test in `mobile/test/screens/ecosystem-automations.test.tsx:369-385`.
+
+3. **M14 run-result polling loop**:
+   - `mobile/src/ecosystem/automations.ts:112-118`: Added `isMounted` ref in `useAutomations` to track component lifecycle.
+   - `mobile/src/ecosystem/automations.ts:144, 163, 166`: Polling loop checks `isMounted.current` before and after sleep and before fetching `/api/webui/automations`, terminating immediately upon unmount without making further `session.get` calls.
+   - `mobile/src/ecosystem/automations.ts:150-155`: Matches runs newer than the click by `run_at_ms >= clickedAtMs` and picks `matchingRuns.reduce(...)` rather than relying on array index or assuming the newest run is the last element.
+   - Verified by tests in `mobile/test/ecosystem/apps-skills-automations.test.ts:330-415`.
+
+4. **I6 MCP OAuth polling and cancel**:
+   - `mobile/src/ecosystem/mcp.ts:130, 162-171, 187, 232`: Added `consecutiveErrors` counter in `useMcpOAuth`. Transient poll errors increment the counter; only when 3 consecutive errors occur does it transition to `"error"`. Any successful poll or action resets the counter to 0.
+   - `mobile/src/ecosystem/mcp.ts:177-183`: On expiry (`onExpire`), sends `settings.mcp.oauth_cancel` with `flow_id` once, then sets state to `"error"` with `"expired"`.
+   - Verified by tests in `mobile/test/ecosystem/apps-skills-automations.test.ts:207-287`.
+
+5. **I8 UX human schedule input**:
+   - `mobile/src/screens/ecosystem/automations/AutomationJobSheet.tsx:36-90`: Added helper functions `formatAtSchedule`, `parseAtSchedule`, `formatEverySchedule`, and `parseEverySchedule`.
+   - `mobile/src/screens/ecosystem/automations/AutomationJobSheet.tsx:141-150`: Loads human-readable representation into the input (`at` formatted as ISO date-time, `every` formatted as number + unit, e.g. `1 hour`, `30 minutes`, `1 day`).
+   - `mobile/src/screens/ecosystem/automations/AutomationJobSheet.tsx:219-241`: Parses input for `at` (date-time) and `every` (number + unit). Invalid input triggers inline error `t("automations.invalidSchedule")` and prevents update submission.
+   - `mobile/src/i18n/en.json:717` & `mobile/src/i18n/it.json:717`: Added i18n key `automations.invalidSchedule`.
+   - Verified by tests in `mobile/test/screens/ecosystem-automations.test.tsx:285-367`.
+
+## What Could Not Be Verified
+- Not run on a physical Android device or emulator; verified via Jest component/hook tests and React Native Testing Library.
+- Live MCP OAuth server backend redirect and polling not tested against an actual live OAuth provider server; mocked in Jest.
+- Live nanobot gateway channel installation process and host reboot not tested against a live daemon; verified through mock contracts and mutate assertions.
+
+## Raw Output
+
+### `npx tsc --noEmit`
+```
+> nanobot-mobile@1.0.0 typecheck
+> tsc --noEmit
+
+(clean - 0 errors)
+```
+
+### `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest`
+```
+Test Suites: 50 passed, 50 total
+Tests:       455 passed, 455 total
+Snapshots:   0 total
+Time:        9.572 s
+Ran all test suites.
+```
+

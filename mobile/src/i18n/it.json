@@ -713,6 +713,7 @@
     "saved": "Salvato",
     "chatChanged": "Chat modificata",
     "confirm": "Conferma",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "invalidSchedule": "Formato pianificazione non valido"
   }
 }

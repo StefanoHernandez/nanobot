@@ -3,10 +3,11 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native
 import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
-import { useRestart } from "../../../settings/store";
+import { useRestart, useSettings } from "../../../settings/store";
 import { useChannels, usePairing } from "../../../ecosystem/channels";
 import { Button, IconButton } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
+import { installGate } from "../../../ecosystem/common";
 import { ChannelRow } from "./ChannelRow";
 import { ChannelSheet } from "./ChannelSheet";
 import { PairingSection } from "./PairingSection";
@@ -19,18 +20,21 @@ export function ChannelsScreen() {
   const { channels, requiresRestart, loading, refresh, apply } = useChannels();
   const pairing = usePairing();
   const { run, state: restartState } = useRestart();
+  const { data: settings, refresh: refreshSettings } = useSettings();
 
   const [selectedChannel, setSelectedChannel] = useState<NanobotFeatureInfo | null>(null);
 
   const isRestarting = restartState === "restarting";
+  const gateAllowed = installGate(settings).allowed;
 
   useEffect(() => {
     const unsub = nav?.addListener?.("focus", () => {
       void refresh();
       void pairing.refresh();
+      void refreshSettings();
     });
     return () => unsub?.();
-  }, [nav, refresh, pairing]);
+  }, [nav, refresh, pairing, refreshSettings]);
 
   useEffect(() => {
     if (restartState === "done") {
@@ -39,7 +43,7 @@ export function ChannelsScreen() {
   }, [restartState, refresh]);
 
   const handleRefresh = async () => {
-    await Promise.all([refresh(), pairing.refresh()]);
+    await Promise.all([refresh(), pairing.refresh(), refreshSettings()]);
   };
 
   return (
@@ -50,6 +54,14 @@ export function ChannelsScreen() {
           {t("channels.title")}
         </Text>
       </View>
+
+      {!gateAllowed ? (
+        <View style={[styles.gateBanner, { backgroundColor: th.colors.accent }]}>
+          <Text style={[styles.gateBannerText, { color: th.colors.accentForeground }]}>
+            {t("apps.gateBanner")}
+          </Text>
+        </View>
+      ) : null}
 
       {requiresRestart ? (
         <View style={[styles.restartBanner, { backgroundColor: th.colors.accent }]}>
@@ -113,6 +125,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   restartText: { fontSize: 14, flex: 1 },
+  gateBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  gateBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   scrollContent: { paddingBottom: 32 },
   list: { borderTopWidth: 1 },
 });
