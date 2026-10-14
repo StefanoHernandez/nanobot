@@ -142,6 +142,8 @@
     "language": "Language",
     "sound": "Notification sound",
     "soundHelp": "Play a sound for notifications",
+    "voiceAutoRead": "Read aloud replies to voice messages",
+    "voiceAutoReadHelp": "Automatically reads the reply after you use voice dictation",
     "usage30": "Usage, last 30 days",
     "usageTotal": "Total: {{n}} tokens",
     "usagePeak": "Peak day: {{n}} tokens",
@@ -736,5 +738,9 @@
     "paused": "Pending — tap to send",
     "cancel": "Cancel",
     "sendNow": "Send now"
+  },
+  "speech": {
+    "listen": "Listen",
+    "stop": "Stop reading"
   }
 }

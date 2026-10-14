@@ -21,7 +21,14 @@ jest.mock("../../src/settings/store", () => {
 let mockPending = false;
 let mockRState = "idle";
 jest.mock("../../src/settings/prefs", () => ({
-  prefs: { language: () => "system", setLanguage: jest.fn(), notificationSound: () => false, setNotificationSound: jest.fn() },
+  prefs: {
+    language: () => "system",
+    setLanguage: jest.fn(),
+    notificationSound: () => false,
+    setNotificationSound: jest.fn(),
+    voiceAutoRead: jest.fn(() => false),
+    setVoiceAutoRead: jest.fn(),
+  },
 }));
 
 const mockSetPref = jest.fn();
@@ -60,6 +67,15 @@ test("theme change calls setPref", async () => {
   await show();
   await fireEvent.press(screen.getByText("Dark"));
   expect(mockSetPref).toHaveBeenCalledWith("dark");
+});
+
+test("voice auto-read switch calls setVoiceAutoRead", async () => {
+  await show();
+  const sw = screen.getByLabelText("Read aloud replies to voice messages");
+  expect(sw.props.value).toBe(false);
+  await fireEvent(sw, "valueChange", true);
+  expect(prefs.setVoiceAutoRead).toHaveBeenCalledWith(true);
+  expect(sw.props.value).toBe(true);
 });
 
 test("enabling lock failing shows toast and switch stays off", async () => {
