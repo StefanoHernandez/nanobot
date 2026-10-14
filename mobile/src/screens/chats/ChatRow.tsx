@@ -21,7 +21,7 @@ export function ChatRow({ chat, active, onPress, onLongPress }: ChatRowProps) {
   const running = !!chat.runStartedAt;
   const readOnly = !isWritable(chat.key);
   return (
-    <View style={{ backgroundColor: active ? th.colors.accent : "transparent" }}>
+    <View style={{ backgroundColor: active ? th.colors.card : "transparent", borderRadius: th.radius.md, marginHorizontal: 8, overflow: "hidden" }}>
       <ListItem
         title={chatTitle(chat, t("chats.untitled"))}
         subtitle={chat.preview}
@@ -30,7 +30,7 @@ export function ChatRow({ chat, active, onPress, onLongPress }: ChatRowProps) {
         right={
           running || readOnly ? (
             <View style={styles.right}>
-              {running ? <ActivityIndicator size="small" color={th.colors.primary} accessibilityLabel={t("chats.running")} /> : null}
+              {running ? <ActivityIndicator size="small" color={th.colors.brand} accessibilityLabel={t("chats.running")} /> : null}
               {readOnly ? (
                 <Text
                   style={{

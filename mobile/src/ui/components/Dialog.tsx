@@ -22,8 +22,8 @@ export function Dialog({ open, title, message, confirmLabel, cancelLabel, onConf
     <Modal visible={open} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
       <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
         <View style={[styles.card, { backgroundColor: th.colors.popover, borderRadius: th.radius.lg }]}>
-          <Text style={{ color: th.colors.popoverForeground, fontFamily: th.font.medium, fontSize: 18 }}>{title}</Text>
-          {message ? <Text style={{ color: th.colors.mutedForeground, fontSize: 14, marginTop: 8 }}>{message}</Text> : null}
+          <Text style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20 }}>{title}</Text>
+          {message ? <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15, lineHeight: 21, marginTop: 8 }}>{message}</Text> : null}
           {children ? <View style={{ marginTop: 12 }}>{children}</View> : null}
           <View style={styles.actions}>
             {cancelLabel ? <Button title={cancelLabel} variant="ghost" onPress={onCancel} /> : null}

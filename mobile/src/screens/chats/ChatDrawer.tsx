@@ -10,6 +10,7 @@ import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
 import { ChatRow, chatTitle } from "./ChatRow";
+import { BotFace } from "../../ui/BotFace";
 
 const chatPath = (key: string) => `/chat/${encodeURIComponent(key)}` as const;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -33,7 +34,7 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   const t = useT();
   const th = useTheme();
   const insets = useSafeAreaInsets();
-  const { profile } = useSession();
+  const { profile, state: conn } = useSession();
   const chats = useChats((s) => s.chats); // subscribes the list; search() reads the same store
   const loading = useChats((s) => s.loading);
   const refresh = useChats((s) => s.refresh);
@@ -84,8 +85,9 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   return (
     <View style={{ flex: 1, backgroundColor: th.colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
       <View style={styles.header}>
-        <Text numberOfLines={1} style={{ flex: 1, color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 18 }}>
-          {profile?.name ?? ""}
+        <BotFace state={conn === "open" ? "idle" : "offline"} size={30} />
+        <Text numberOfLines={1} accessibilityRole="header" style={{ flex: 1, color: th.colors.foreground, fontFamily: th.font.display, fontSize: 20 }}>
+          {profile?.name ?? "nanobot"}
         </Text>
         <StatusDot />
         <IconButton icon="puzzle-outline" accessibilityLabel={t("ecosystem.title")} onPress={() => router.push("/ecosystem")} />
@@ -93,7 +95,7 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
       </View>
       <View style={styles.buttons}>
         <Button title={t("chats.newChat")} onPress={() => void start(false)} />
-        <Button title={t("chats.temporaryChat")} variant="secondary" onPress={() => void start(true)} />
+        <Button title={t("chats.temporaryChat")} variant="ghost" onPress={() => void start(true)} />
       </View>
       <View style={styles.search}>
         <TextField label={t("chats.search")} value={q} onChangeText={setQ} autoCapitalize="none" autoCorrect={false} />
@@ -153,7 +155,7 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", paddingLeft: 16, paddingRight: 4, gap: 8 },
-  buttons: { padding: 16, gap: 8 },
+  header: { flexDirection: "row", alignItems: "center", paddingLeft: 16, paddingRight: 4, paddingTop: 8, gap: 10 },
+  buttons: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, gap: 4 },
   search: { paddingHorizontal: 16 },
 });

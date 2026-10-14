@@ -1,5 +1,6 @@
+import { BotFace } from "../../ui/BotFace";
 import React, { useRef, useState } from "react";
-import { KeyboardAvoidingView, ScrollView, Text } from "react-native";
+import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { normalizeBaseUrl, profiles, testConnection, type Profile } from "../../core/profiles";
@@ -83,15 +84,20 @@ export function ConnectScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}
       >
-        <Text accessibilityRole="header" style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 24, marginBottom: 16 }}>
-          {t("connect.title")}
-        </Text>
+        <View style={{ alignItems: "flex-start", gap: 14, marginBottom: 20, marginTop: 8 }}>
+          <BotFace state={loading ? "thinking" : secretError || urlError ? "error" : "idle"} size={64} />
+          <Text accessibilityRole="header" style={{ color: th.colors.foreground, fontFamily: th.font.display, fontSize: 28, lineHeight: 34 }}>
+            {t("connect.title")}
+          </Text>
+        </View>
         {list.length === 0 ? (
-          <Text style={{ color: th.colors.mutedForeground, marginBottom: 16 }}>{t("connect.empty")}</Text>
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 16, lineHeight: 23, marginBottom: 20 }}>{t("connect.empty")}</Text>
         ) : (
-          list.map((p) => (
-            <ListItem key={p.id} title={p.name} subtitle={p.baseUrl} onPress={() => open(p.id)} onLongPress={() => setToDelete(p)} />
-          ))
+          <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, overflow: "hidden", marginBottom: 24 }}>
+            {list.map((p) => (
+              <ListItem key={p.id} title={p.name} subtitle={p.baseUrl} onPress={() => open(p.id)} onLongPress={() => setToDelete(p)} />
+            ))}
+          </View>
         )}
         <ProfileForm values={values} onChange={setValues} urlError={urlError} secretError={secretError} loading={loading} onSubmit={submit} />
       </ScrollView>

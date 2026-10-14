@@ -21,8 +21,8 @@ export function TextField({ label, value, onChangeText, secureTextEntry, helper,
   const msg = error ?? helper;
   return (
     <View style={styles.wrap}>
-      <Text style={{ color: c.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{label}</Text>
-      <View style={[styles.row, { borderColor: error ? c.destructive : c.input, borderRadius: th.radius.md, backgroundColor: c.background }]}>
+      <Text style={{ color: c.foreground, fontFamily: th.font.medium, fontSize: 14, marginBottom: 6 }}>{label}</Text>
+      <View style={[styles.row, { borderColor: error ? c.destructive : c.input, borderRadius: th.radius.sm, backgroundColor: c.card }]}>
         <TextInput
           accessibilityLabel={label}
           style={[styles.input, { color: c.foreground, fontFamily: th.font.regular }]}
@@ -37,7 +37,7 @@ export function TextField({ label, value, onChangeText, secureTextEntry, helper,
         />
         {right}
       </View>
-      {msg ? <Text style={{ color: error ? c.destructive : c.mutedForeground, fontSize: 12, marginTop: 4 }}>{msg}</Text> : null}
+      {msg ? <Text style={{ color: error ? c.destructive : c.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginTop: 4 }}>{msg}</Text> : null}
     </View>
   );
 }
@@ -45,5 +45,5 @@ export function TextField({ label, value, onChangeText, secureTextEntry, helper,
 const styles = StyleSheet.create({
   wrap: { marginBottom: 12 },
   row: { flexDirection: "row", alignItems: "center", borderWidth: 1, minHeight: 48, paddingHorizontal: 12 },
-  input: { flex: 1, fontSize: 15, minHeight: 48 },
+  input: { flex: 1, fontSize: 16, minHeight: 48 },
 });

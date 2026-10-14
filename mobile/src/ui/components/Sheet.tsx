@@ -1,3 +1,4 @@
+import { withAlpha } from "../theme";
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,7 +17,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable accessibilityLabel="close" style={styles.backdrop} onPress={onClose} />
+      <Pressable accessibilityLabel="close" style={[styles.backdrop, { backgroundColor: withAlpha(th.colors.overlay, 0.45) }]} onPress={onClose} />
       <View
         style={[
           styles.sheet,
@@ -28,7 +29,8 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
           },
         ]}
       >
-        {title ? <Text style={{ color: th.colors.popoverForeground, fontFamily: th.font.medium, fontSize: 17, marginBottom: 12 }}>{title}</Text> : null}
+        <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: th.colors.border, marginTop: -6, marginBottom: 12 }} />
+        {title ? <Text accessibilityRole="header" style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20, marginBottom: 12 }}>{title}</Text> : null}
         {children}
       </View>
       {open ? <ToastHost /> : null}
@@ -37,6 +39,6 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  sheet: { padding: 16 },
+  backdrop: { flex: 1 },
+  sheet: { padding: 20 },
 });
