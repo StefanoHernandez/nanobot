@@ -3,7 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
-import { Button, Dialog, IconButton, TextField } from "../../../ui/components";
+import { Button, Dialog, IconButton, TextField, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useSettings } from "../../../settings/store";
@@ -174,7 +174,7 @@ export function SkillsScreen() {
         <IconButton
           icon="arrow-left"
           accessibilityLabel={t("common.back", "Back")}
-          onPress={() => router.back()}
+          onPress={() => goBackOr(router, "/ecosystem")}
         />
         <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
           {t("skills.title")}

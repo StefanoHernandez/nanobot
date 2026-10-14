@@ -12,6 +12,7 @@ export function NetworkSafetyCard() {
   const t = useT();
   const { data, mutate } = useSettings();
   const [confirming, setConfirming] = useState(false);
+  const [confirmingLocal, setConfirmingLocal] = useState(false);
   if (!data) return null;
   const a = data.advanced;
   const save = async (local: boolean, mode: "default" | "full") => {
@@ -27,7 +28,7 @@ export function NetworkSafetyCard() {
       <Head>{t("netsafe.title")}</Head>
       <ListItem
         title={t("netsafe.local")} subtitle={t("netsafe.localHelp")}
-        right={<Switch accessibilityLabel={t("netsafe.local")} value={a.webui_allow_local_service_access} onValueChange={(v) => void save(v, mode)} />}
+        right={<Switch accessibilityLabel={t("netsafe.local")} value={a.webui_allow_local_service_access} onValueChange={(v) => (v ? setConfirmingLocal(true) : void save(false, mode))} />}
       />
       <Head>{t("netsafe.mode")}</Head>
       <Chips
@@ -38,6 +39,11 @@ export function NetworkSafetyCard() {
         open={confirming} destructive title={t("netsafe.confirmTitle")} message={t("netsafe.confirmMessage")}
         confirmLabel={t("netsafe.confirm")} cancelLabel={t("common.cancel")}
         onCancel={() => setConfirming(false)} onConfirm={() => (setConfirming(false), void save(a.webui_allow_local_service_access, "full"))}
+      />
+      <Dialog
+        open={confirmingLocal} destructive title={t("netsafe.confirmLocalTitle")} message={t("netsafe.confirmLocalMessage")}
+        confirmLabel={t("netsafe.confirmLocal")} cancelLabel={t("common.cancel")}
+        onCancel={() => setConfirmingLocal(false)} onConfirm={() => (setConfirmingLocal(false), void save(true, mode))}
       />
     </>
   );

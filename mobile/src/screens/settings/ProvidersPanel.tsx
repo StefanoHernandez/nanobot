@@ -16,11 +16,12 @@ import { Chips, Head, HintSecretField, SecretField } from "./common";
 
 const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const toCamel = (s: string) => s.replace(/_(\w)/g, (_, c: string) => c.toUpperCase());
+const ADD_CUSTOM = "__new_custom__";
 
 export function ProvidersPanel() {
   const t = useT();
   const { data } = useSettings();
-  const [sel, setSel] = useState<string | null>(null); // provider name, "+" picker, "custom" create form
+  const [sel, setSel] = useState<string | null>(null); // provider name, "+" picker, ADD_CUSTOM create form
   if (!data) return null;
   const configured = data.providers.filter((p) => p.configured);
   const available = data.providers.filter((p) => !p.configured && !p.is_custom);
@@ -39,11 +40,11 @@ export function ProvidersPanel() {
           {available.map((p) => (
             <ListItem key={p.name} title={p.label} subtitle={t("providers.notConfigured")} onPress={() => setSel(p.name)} />
           ))}
-          <ListItem title={t("providers.addCustom")} onPress={() => setSel("custom")} />
+          <ListItem title={t("providers.addCustom")} onPress={() => setSel(ADD_CUSTOM)} />
         </ScrollView>
       </Sheet>
       {row ? <ProviderSheet key={row.name} p={row} onClose={() => setSel(null)} /> : null}
-      {sel === "custom" ? <CustomProviderSheet onClose={() => setSel(null)} /> : null}
+      {sel === ADD_CUSTOM ? <CustomProviderSheet onClose={() => setSel(null)} /> : null}
     </>
   );
 }
@@ -66,6 +67,18 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
   const setApi = (s: ModelRequestAPI[], pref: ModelRequestAPI) =>
     setF((x) => ({ ...x, api: { supported_apis: s, preferred_api: s.includes(pref) ? pref : s[0] } }));
   const oauth = p.auth_type === "oauth";
+
+  const isRendered = (k: string) => {
+    if (k === "apiBase") return true;
+    if (k === "apiKey") return !oauth;
+    if (k === "displayName") return !!p.is_custom;
+    if (k === "proxy") return af.includes("proxy");
+    if (k === "thinkingStyle") return af.includes("thinking_style");
+    if (k === "region") return af.includes("region");
+    if (k === "profile") return af.includes("profile");
+    if (k === "extraHeaders") return af.includes("extra_headers");
+    return false;
+  };
 
   const submit = async () => {
     const v = validateProviderForm(p, f);
@@ -91,8 +104,12 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
       onClose(); // unmounts the sheet: the typed key is dropped with its state
     } catch (e) {
       const field = e instanceof SettingsError ? e.field : undefined;
-      if (field) setErrors({ [toCamel(field.split(".")[0])]: msgOf(e) });
-      else toast.show(msgOf(e));
+      const target = field ? toCamel(field.split(".")[0]) : undefined;
+      if (target && isRendered(target)) {
+        setErrors({ [target]: msgOf(e) });
+      } else {
+        toast.show(t("models.err.invalid"));
+      }
     } finally {
       setSaving(false);
     }

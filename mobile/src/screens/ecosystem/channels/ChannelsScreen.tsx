@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { useRestart } from "../../../settings/store";
 import { useChannels } from "../../../ecosystem/channels";
-import { Button, IconButton } from "../../../ui/components";
+import { Button, IconButton, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { ChannelRow } from "./ChannelRow";
 import { ChannelSheet } from "./ChannelSheet";
@@ -25,7 +25,7 @@ export function ChannelsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: th.colors.background }]}>
       <View style={[styles.header, { borderBottomColor: th.colors.border }]}>
-        <IconButton icon="arrow-left" accessibilityLabel={t("common.back", "Back")} onPress={() => router.back()} />
+        <IconButton icon="arrow-left" accessibilityLabel={t("common.back", "Back")} onPress={() => goBackOr(router, "/ecosystem")} />
         <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
           {t("channels.title")}
         </Text>

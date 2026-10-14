@@ -139,6 +139,7 @@ test("clearing an optional api key sends empty string", async () => {
   await wrap(<SettingsSection section="capabilities" />);
   await fireEvent.press(screen.getByLabelText("Edit API key"));
   await fireEvent.press(screen.getByText("Save web"));
+  await fireEvent.press(screen.getByText("Remove key"));
   await waitFor(() => expect(mutate).toHaveBeenCalledWith("settings.web_search.update", expect.objectContaining({ provider: "x", api_key: "" }), undefined));
 });
 

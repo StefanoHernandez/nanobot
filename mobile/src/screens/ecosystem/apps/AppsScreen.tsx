@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
-import { Button, IconButton } from "../../../ui/components";
+import { Button, IconButton, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { useSettings } from "../../../settings/store";
 import { installGate } from "../../../ecosystem/common";
@@ -27,7 +27,7 @@ export function AppsScreen() {
         <IconButton
           icon="arrow-left"
           accessibilityLabel={t("common.back", "Back")}
-          onPress={() => router.back()}
+          onPress={() => goBackOr(router, "/ecosystem")}
         />
         <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
           {t("apps.title")}

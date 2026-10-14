@@ -1,13 +1,13 @@
 import React from "react";
 import { router } from "expo-router";
 import { useT } from "../../src/i18n";
-import { ListItem } from "../../src/ui/components";
+import { ListItem, goBackOr } from "../../src/ui/components";
 import { SettingsShell } from "../../src/screens/settings/SettingsShell";
 
 export default function EcosystemIndex() {
   const t = useT();
   return (
-    <SettingsShell title={t("ecosystem.title")} onBack={() => router.back()}>
+    <SettingsShell title={t("ecosystem.title")} onBack={() => goBackOr(router, "/")}>
       <ListItem
         title={t("ecosystem.channels")}
         onPress={() => router.push("/ecosystem/channels")}
