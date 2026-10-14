@@ -4,6 +4,8 @@
   "license": "MIT",
   "main": "index.js",
   "dependencies": {
+    "@expo-google-fonts/atkinson-hyperlegible": "^0.4.1",
+    "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
     "@expo/vector-icons": "^15.0.2",
     "@react-navigation/drawer": "^7.14.3",
     "babel-preset-expo": "~57.0.0",
