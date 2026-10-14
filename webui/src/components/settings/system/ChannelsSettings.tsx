@@ -1,10 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { Loader2, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SETTINGS_SEARCH_INPUT_CLASS } from "@/components/settings/shared/SettingsControls";
+import { CatalogSkeleton } from "@/components/settings/shared/CatalogSkeleton";
 import type { ChannelFeatureAction } from "@/channel-plugins/types";
 import { ChannelCatalogRow } from "@/components/settings/channels/ChannelCatalogRow";
 import { localizedChannelDisplayName } from "@/components/settings/channels/ChannelIdentity";
@@ -19,7 +20,7 @@ type ChannelFilter = "all" | "enabled";
 export function ChannelsSettings({
   token, nanobotFeatures, loading, actionKey, chatAppsDocsUrl, showBrandLogos,
   error, requiresRestartPending, onAction, onFeaturesUpdate, onDismissStatus,
-  onRestart, isRestarting,
+  onRestart, isRestarting, onConfigureMcp,
 }: {
   token: string;
   nanobotFeatures: NanobotFeaturesPayload | null;
@@ -32,6 +33,7 @@ export function ChannelsSettings({
   onAction: ChannelFeatureAction;
   onFeaturesUpdate: (payload: NanobotFeaturesPayload) => void;
   onDismissStatus: () => void;
+  onConfigureMcp?: (name: string) => void;
   onRestart?: () => void;
   isRestarting?: boolean;
 }) {
@@ -49,13 +51,14 @@ export function ChannelsSettings({
     .filter((feature) => feature.type === "channel" && feature.settings_visible !== false)
     .sort((left, right) => Number(!left.ready) - Number(!right.ready)
       || localizedChannelDisplayName(left, t).localeCompare(localizedChannelDisplayName(right, t)));
-  const hasEnabledChannels = channels.some((feature) => feature.enabled);
+  const hasEnabledConfigurableChannels = channels.some((feature) =>
+    feature.enabled && !feature.capabilities?.includes("always_enabled"));
   const restartRequired = requiresRestartPending || Boolean(nanobotFeatures?.requires_restart);
   useLayoutEffect(() => {
     if (!nanobotFeatures || filterInitializedRef.current) return;
     filterInitializedRef.current = true;
-    setFilter(hasEnabledChannels ? "enabled" : "all");
-  }, [hasEnabledChannels, nanobotFeatures]);
+    setFilter(hasEnabledConfigurableChannels ? "enabled" : "all");
+  }, [hasEnabledConfigurableChannels, nanobotFeatures]);
   const visibleChannels = channels.filter((feature) =>
     (filter === "all" || feature.enabled)
     && `${feature.name} ${localizedChannelDisplayName(feature, t)}`.toLocaleLowerCase()
@@ -99,7 +102,7 @@ export function ChannelsSettings({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+          <SearchInput type="search" value={query} onChange={(event) => setQuery(event.target.value)}
             aria-label={t("settings.channels.search")}
             placeholder={t("settings.channels.search")}
             className={`h-12 ps-11 text-[15px] ${SETTINGS_SEARCH_INPUT_CLASS}`} />
@@ -118,10 +121,9 @@ export function ChannelsSettings({
           onRestart={onRestart} isRestarting={isRestarting} />
       ) : null}
       {loading && !nanobotFeatures ? (
-        <div className="flex h-36 items-center justify-center text-sm text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-          {t("settings.channels.loading")}
-        </div>
+        <SettingsGroup>
+          <CatalogSkeleton label={t("settings.channels.loading")} layout="channels" />
+        </SettingsGroup>
       ) : visibleChannels.length ? (
         channelGroups.map((group) => (
         <section
@@ -149,11 +151,11 @@ export function ChannelsSettings({
           </SettingsGroup>
         </section>
         ))
-      ) : (
+      ) : !error ? (
         <div className="px-3 py-12 text-center text-sm text-muted-foreground">
           {t(channels.length ? "settings.channels.noResults" : "settings.channels.empty")}
         </div>
-      )}
+      ) : null}
       <Dialog open={Boolean(selectedChannel)} onOpenChange={(open) => { if (!open) requestChannelClose(); }}>
         <DialogContent ref={dialogRef} showCloseButton={false} aria-describedby={undefined} className="max-h-[85dvh] w-[min(calc(100vw-2rem),40rem)] max-w-none overflow-hidden p-0 outline-none"
           onOpenAutoFocus={(event) => {
@@ -166,7 +168,7 @@ export function ChannelsSettings({
             <div className="relative">
               <div className="absolute end-6 top-6 z-10 flex h-10 items-center gap-1">
                 {selectedChannel ? <ChannelHelpMenu feature={selectedChannel} chatAppsDocsUrl={chatAppsDocsUrl} /> : null}
-                <DialogClose className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <DialogClose className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
                   <X className="h-4 w-4" aria-hidden />
                   <span className="sr-only">{t("common.close")}</span>
                 </DialogClose>
@@ -175,6 +177,7 @@ export function ChannelsSettings({
               {selectedChannel ? <ChannelSetupPanel token={token} feature={selectedChannel} actionKey={actionKey}
                 showBrandLogos={showBrandLogos}
                 onAction={onAction} onFeaturesUpdate={onFeaturesUpdate} connectRequestId={connectRequestId}
+                onConfigureMcp={onConfigureMcp}
                 onBeforeCloseChange={setBeforeChannelClose} /> : null}
             </div>
           </div>

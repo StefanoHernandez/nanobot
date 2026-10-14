@@ -369,6 +369,29 @@ describe("Settings channels", () => {
     expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("shows all channels by default when only the always-enabled WebUI is enabled", async () => {
+    const websocket = {
+      ...catalogFeature("websocket", true),
+      display_name: "nanobot WebUI",
+      capabilities: ["always_enabled"],
+    };
+    const disabled = catalogFeature("Disabled channel", false);
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/settings") return jsonResponse(settingsPayload());
+      if (url === "/api/settings/nanobot-features") {
+        return jsonResponse({ features: [websocket, disabled], enabled_count: 1 });
+      }
+      return jsonResponse({});
+    }));
+
+    renderSettingsView({ initialSection: "channels" });
+
+    expect(await screen.findByText("nanobot WebUI")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View Disabled channel settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("requires a restart before enabling newly installed channel support", async () => {
     const whatsappFeature = {
       name: "whatsapp",
@@ -1013,7 +1036,7 @@ describe("Settings channels", () => {
     expect(supportAdvanced).toHaveAttribute("aria-expanded", "true");
     expect(support.getByLabelText("App ID")).toBeVisible();
     expect(support.getByLabelText("App ID")).toHaveValue("cli_default");
-    expect(support.getByRole("group", { name: "Topic isolation" })).toBeVisible();
+    expect(support.getByRole("group", { name: "Topic sessions" })).toBeVisible();
 
     fireEvent.click(productAdvanced);
     expect(supportAdvanced).toHaveAttribute("aria-expanded", "false");
@@ -1340,9 +1363,9 @@ describe("Settings channels", () => {
     advanced.focus();
     await userEvent.setup().keyboard("[Enter]");
     expect(advanced).toHaveAttribute("aria-expanded", "true");
-    const behavior = screen.getByRole("group", { name: "Group behavior" });
+    const behavior = screen.getByRole("group", { name: "Group rules" });
     expect(behavior).toBeVisible();
-    expect(within(behavior).getByRole("radio", { name: "Mention only" })).toBeChecked();
+    expect(within(behavior).getByRole("radio", { name: "Mentions only" })).toBeChecked();
     expect(within(behavior).getByRole("radio", { name: "All messages" })).toBeInTheDocument();
 
     fireEvent.click(within(behavior).getByRole("radio", { name: "All messages" }));
@@ -1500,7 +1523,7 @@ describe("Settings channels", () => {
     fireEvent.change(screen.getByLabelText("Allowed channels"), {
       target: { value: "123, 456" },
     });
-    fireEvent.click(within(screen.getByRole("group", { name: "Group behavior" })).getByRole(
+    fireEvent.click(within(screen.getByRole("group", { name: "Group rules" })).getByRole(
       "radio",
       { name: "All messages" },
     ));
@@ -1616,7 +1639,7 @@ describe("Settings channels", () => {
     fireEvent.change(screen.getByLabelText("SMTP username"), { target: { value: "bot@example.com" } });
     fireEvent.change(screen.getByLabelText("SMTP password"), { target: { value: "smtp-secret" } });
 
-    const consentGroup = screen.getByRole("group", { name: "Allow nanobot to read and send email" });
+    const consentGroup = screen.getByRole("group", { name: "Email access" });
     const notGranted = within(consentGroup).getByRole("radio", { name: "Not granted" });
     const granted = within(consentGroup).getByRole("radio", { name: "Granted" });
     expect(notGranted).toBeChecked();
@@ -1824,7 +1847,7 @@ describe("Settings channels", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     expect(screen.getByLabelText("Allowed channels")).toHaveValue("123, 456");
-    expect(within(screen.getByRole("group", { name: "Group behavior" })).getByRole(
+    expect(within(screen.getByRole("group", { name: "Group rules" })).getByRole(
       "radio",
       { name: "All messages" },
     )).toBeChecked();
@@ -1972,7 +1995,7 @@ describe("Settings channels", () => {
     renderSettingsView({ initialSection: "channels" });
 
     fireEvent.click(await screen.findByRole("button", { name: "View Email settings" }));
-    const consent = screen.getByRole("group", { name: "Allow nanobot to read and send email" });
+    const consent = screen.getByRole("group", { name: "Email access" });
     expect(within(consent).getByRole("radio", { name: "Not granted" })).toBeChecked();
     expect(within(consent).getByRole("radio", { name: "Granted" })).toBeInTheDocument();
 
@@ -1985,9 +2008,9 @@ describe("Settings channels", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close", exact: true }));
     fireEvent.click(screen.getByRole("button", { name: "View Matrix settings" }));
-    expect(screen.getByText("Choose one credential method")).toBeInTheDocument();
+    expect(screen.getByText("Credential method")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
-    const matrixBehavior = screen.getByRole("group", { name: "Group behavior" });
+    const matrixBehavior = screen.getByRole("group", { name: "Group rules" });
     expect(within(matrixBehavior).getByRole("radio", { name: "All messages" })).toBeChecked();
     expect(within(matrixBehavior).getByRole("radio", { name: "Allowlist" })).toBeInTheDocument();
 

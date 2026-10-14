@@ -13,6 +13,7 @@ from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.config.schema import ChannelsConfig
 from nanobot.providers.base import LLMResponse
+from nanobot.runtime_context import public_history_message
 from nanobot.utils.document import reference_non_image_attachments
 
 
@@ -109,7 +110,7 @@ async def test_document_reference_survives_session_reload(tmp_path: Path) -> Non
     persisted = loop.sessions.get_or_create(session_key)
 
     assert [message["role"] for message in persisted.messages] == ["user"]
-    assert persisted.messages[0]["content"] == (
+    assert public_history_message(persisted.messages[0])["content"] == (
         f"review this\n\n[Attachment: {doc_path.resolve()}]"
     )
     assert "media" not in persisted.messages[0]
@@ -158,8 +159,9 @@ async def test_pending_document_attachment_keeps_body_out_of_prompt(
         pending_queue=pending_queue,
     )
 
-    assert result.final_content == "answer-2"
+    assert result.final_content == "answer-1"
     assert result.had_injections is True
+    assert call_count == 1
     injected_user_content = [
         message["content"]
         for message in captured_messages[-1]
