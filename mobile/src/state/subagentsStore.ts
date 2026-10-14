@@ -51,7 +51,9 @@ async function refresh(session: NanobotSession, key: string) {
 }
 
 export async function cancelSubagent(session: NanobotSession, key: string, taskId: string) {
+  const g = gen;
   const snap = await cancelSubagentTask({ requestMutation: (a: string, p: Record<string, unknown>) => session.mutate(a, p) } as never, key, taskId);
+  if (g !== gen) return;
   subagentsStore.getState().ingest(key, [snap]);
 }
 

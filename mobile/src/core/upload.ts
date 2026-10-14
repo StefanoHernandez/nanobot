@@ -50,26 +50,45 @@ export async function prepareImage(file: LocalFile, maxBytes: number): Promise<L
  * POSTs each file sequentially to the upload capability of the latest `ready` frame (read at call time).
  * The Expo File is a Blob, so it is streamed as the raw body. Never logs URLs or tokens.
  */
-export async function uploadFiles(session: NanobotSession, files: LocalFile[]): Promise<AttachmentReference[]> {
+export const UPLOAD_TIMEOUT_MS = 60_000;
+
+export async function uploadFiles(
+  session: NanobotSession,
+  files: LocalFile[],
+  timeoutMs: number = UPLOAD_TIMEOUT_MS,
+): Promise<AttachmentReference[]> {
+  const cap0 = session.uploadCapability;
+  if (!cap0) throw new Error("upload_unavailable");
   const refs: AttachmentReference[] = [];
   for (const f of files) {
-    const cap = session.uploadCapability;
-    if (!cap) throw new Error("upload_unavailable");
-    const res = await fetch(`${session.baseUrl}${cap.path}`, {
-      method: "POST",
-      redirect: "error",
-      credentials: "omit",
-      headers: {
-        Authorization: `Bearer ${cap.token}`,
-        "Content-Type": f.mime,
-        "X-Attachment-Name": encodeURIComponent(f.name),
-      },
-      body: new File(f.uri) as unknown as Blob,
-    });
-    if (!res.ok) throw new Error(`upload_failed_${res.status}`);
-    const j = (await res.json()) as { reference?: unknown };
-    if (typeof j.reference !== "string") throw new Error("upload_bad_response");
-    refs.push({ reference: j.reference, name: f.name });
+    if (session.uploadCapability !== cap0) throw new Error("upload_unavailable");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${session.baseUrl}${cap0.path}`, {
+        method: "POST",
+        redirect: "error",
+        credentials: "omit",
+        headers: {
+          Authorization: `Bearer ${cap0.token}`,
+          "Content-Type": f.mime,
+          "X-Attachment-Name": encodeURIComponent(f.name),
+        },
+        body: new File(f.uri) as unknown as Blob,
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`upload_failed_${res.status}`);
+      const j = (await res.json()) as { reference?: unknown };
+      if (typeof j.reference !== "string") throw new Error("upload_bad_response");
+      refs.push({ reference: j.reference, name: f.name });
+    } catch (e: any) {
+      if (e?.name === "AbortError" || controller.signal.aborted) {
+        throw new Error("upload_timed_out");
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
   }
   return refs;
 }

@@ -53,7 +53,7 @@ export function classify(m: UIMediaAttachment): MediaClass {
 }
 
 export function absoluteMediaUrl(baseUrl: string, url: string): string {
-  if (/^(https?:|data:)/i.test(url)) return url;
+  if (/^(https?:|data:|file:|content:)/i.test(url)) return url;
   return baseUrl.replace(/\/+$/, "") + "/" + url.replace(/^\/+/, "");
 }
 

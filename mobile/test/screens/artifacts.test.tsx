@@ -180,7 +180,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     await wrap(
       <ArtifactWebView
         kind="pdf"
-        uri="file:///cache/doc.pdf"
+        uri="file:///cache/media/doc.pdf"
         fileSize={fileSize}
         onFallback={jest.fn()}
       />
@@ -195,7 +195,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
 
     await waitFor(() => {
       expect(FileSystemLegacy.readAsStringAsync).toHaveBeenCalledWith(
-        "file:///cache/doc.pdf",
+        "file:///cache/media/doc.pdf",
         expect.objectContaining({ position: 0, length: 1048576, encoding: "base64" })
       );
     });
@@ -227,12 +227,12 @@ describe("P5-V1 Artifacts & Document Previews", () => {
 
   test("Size routing: a 60 MB docx shows the 'large file' notice first", async () => {
     mockFileFactory.mockReturnValue({
-      uri: "file:///cache/large.docx",
+      uri: "file:///cache/media/large.docx",
       size: 60 * 1024 * 1024,
       text: jest.fn(),
     });
 
-    await wrap(<FileViewer uri="file:///cache/large.docx" name="large.docx" />);
+    await wrap(<FileViewer uri="file:///cache/media/large.docx" name="large.docx" />);
 
     expect(await screen.findByText(/Large file \(60 MB\)|File grande \(60 MB\)/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /Open preview|Apri anteprima/i })).toBeTruthy();
@@ -241,12 +241,12 @@ describe("P5-V1 Artifacts & Document Previews", () => {
 
   test("Size routing: a 200 MB pptx goes to the light preview", async () => {
     mockFileFactory.mockReturnValue({
-      uri: "file:///cache/huge.pptx",
+      uri: "file:///cache/media/huge.pptx",
       size: 200 * 1024 * 1024,
       text: jest.fn(),
     });
 
-    await wrap(<FileViewer uri="file:///cache/huge.pptx" name="huge.pptx" />);
+    await wrap(<FileViewer uri="file:///cache/media/huge.pptx" name="huge.pptx" />);
 
     // Should render light preview without showing large file notice
     expect(await screen.findByTestId("light-preview")).toBeTruthy();
@@ -254,24 +254,24 @@ describe("P5-V1 Artifacts & Document Previews", () => {
 
   test("Size routing: an 11 MB html opens as code with a 'Preview anyway' button", async () => {
     mockFileFactory.mockReturnValue({
-      uri: "file:///cache/page.html",
+      uri: "file:///cache/media/page.html",
       size: 11 * 1024 * 1024,
       text: jest.fn().mockResolvedValue("<html><body>Large HTML</body></html>"),
     });
 
-    await wrap(<FileViewer uri="file:///cache/page.html" name="page.html" />);
+    await wrap(<FileViewer uri="file:///cache/media/page.html" name="page.html" />);
 
     expect(await screen.findByText(/Preview anyway|Anteprima comunque/i)).toBeTruthy();
   });
 
   test("Size routing: a 500 MB pdf still uses the streamed PDF viewer", async () => {
     mockFileFactory.mockReturnValue({
-      uri: "file:///cache/huge.pdf",
+      uri: "file:///cache/media/huge.pdf",
       size: 500 * 1024 * 1024,
       text: jest.fn(),
     });
 
-    await wrap(<FileViewer uri="file:///cache/huge.pdf" name="huge.pdf" />);
+    await wrap(<FileViewer uri="file:///cache/media/huge.pdf" name="huge.pdf" />);
 
     expect(await screen.findByTestId("webview")).toBeTruthy();
     expect(capturedWebViewProps.source.html).toContain("pdfjs");
@@ -307,7 +307,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     await wrap(
       <ArtifactWebView
         kind="pdf"
-        uri="file:///cache/doc.pdf"
+        uri="file:///cache/media/doc.pdf"
         fileSize={fileSize}
         onFallback={jest.fn()}
       />
@@ -321,7 +321,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
 
     await waitFor(() => {
       expect(FileSystemLegacy.readAsStringAsync).toHaveBeenCalledWith(
-        "file:///cache/doc.pdf",
+        "file:///cache/media/doc.pdf",
         expect.objectContaining({ position: 0, length: 1048576, encoding: "base64" })
       );
     });
@@ -366,7 +366,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
       await wrap(
         <ArtifactWebView
           kind="pdf"
-          uri="file:///cache/doc.pdf"
+          uri="file:///cache/media/doc.pdf"
           fileSize={100 * 1024 * 1024}
           onFallback={onFallback}
         />

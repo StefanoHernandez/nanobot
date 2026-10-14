@@ -58,8 +58,10 @@ export function Composer({ chatKey }: { chatKey: string }) {
     setPendingFiles = () => {},
     sendError = null,
     uploading = false,
+    clearSendError = () => {},
   } = useThreadSlice(chatKey);
 
+  const prevUploading = useRef(uploading);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [commands, setCommands] = useState<Cmd[]>([]);
   const [cliApps, setCliApps] = useState<CliAppInfo[]>([]);
@@ -142,8 +144,18 @@ export function Composer({ chatKey }: { chatKey: string }) {
         msg = t(`attach.error.${sendError}`, { defaultValue: t("attach.error.generic") });
       }
       toast.show(msg);
+      clearSendError();
     }
-  }, [sendError, t]);
+  }, [sendError, t, clearSendError]);
+
+  useEffect(() => {
+    if (prevUploading.current && !uploading && !sendError) {
+      setPickedSessions([]);
+      setPickedApps([]);
+      setPickedPresets([]);
+    }
+    prevUploading.current = uploading;
+  }, [uploading, sendError]);
 
   const handleDraftChange = (newDraft: string) => {
     setDraft(newDraft);
@@ -263,16 +275,23 @@ export function Composer({ chatKey }: { chatKey: string }) {
     if (!canSend) return;
     const opts: Parameters<typeof send>[1] = {};
     if (pendingFiles.length > 0) opts.files = pendingFiles;
-    if (pickedSessions.length > 0) opts.sessionMentions = pickedSessions;
-    if (pickedApps.length > 0) opts.cliApps = pickedApps;
-    if (pickedPresets.length > 0) opts.mcpPresets = pickedPresets;
+
+    const validSessions = pruneMentions(trimmed, pickedSessions);
+    const validApps = pruneMentions(trimmed, pickedApps);
+    const validPresets = pruneMentions(trimmed, pickedPresets);
+
+    if (validSessions.length > 0) opts.sessionMentions = validSessions;
+    if (validApps.length > 0) opts.cliApps = validApps;
+    if (validPresets.length > 0) opts.mcpPresets = validPresets;
 
     const hasOpts = Object.keys(opts).length > 0;
     const ok = hasOpts ? send(trimmed, opts) : send(trimmed);
     if (ok) {
-      setPickedSessions([]);
-      setPickedApps([]);
-      setPickedPresets([]);
+      if (!opts.files || opts.files.length === 0) {
+        setPickedSessions([]);
+        setPickedApps([]);
+        setPickedPresets([]);
+      }
     }
   };
 
