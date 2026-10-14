@@ -160,7 +160,9 @@
     "updateAvailable": "Aggiornamento disponibile: v{{v}}",
     "repo": "Repository",
     "docs": "Documentazione",
-    "license": "Licenza MIT - basato su HKUDS/nanobot"
+    "license": "Licenza MIT - basato su HKUDS/nanobot",
+    "audioReplies": "Audio delle risposte",
+    "audioRepliesHelp": "Mostra il pulsante Ascolta sulle risposte. Usa la voce del telefono: gratis, nessun credito."
   },
   "chats": {
     "empty": "Scegli o crea una chat",
