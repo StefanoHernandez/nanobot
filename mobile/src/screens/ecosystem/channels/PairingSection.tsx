@@ -39,9 +39,13 @@ export function PairingSection({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.title, { color: th.colors.mutedForeground }]}>{t("pairing.title")}</Text>
+      <Text accessibilityRole="header" style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
+        {t("pairing.title")}
+      </Text>
       {requests.length === 0 ? (
-        <Text style={[styles.empty, { color: th.colors.mutedForeground }]}>{t("pairing.empty")}</Text>
+        <Text style={[styles.empty, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+          {t("pairing.empty")}
+        </Text>
       ) : (
         requests.map((req) => (
           <View
@@ -49,10 +53,10 @@ export function PairingSection({
             style={[styles.card, { backgroundColor: th.colors.card, borderColor: th.colors.border, borderRadius: th.radius.md }]}
           >
             <View style={styles.info}>
-              <Text style={[styles.code, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+              <Text style={[styles.code, { color: th.colors.foreground, fontFamily: th.font.mono }]}>
                 {req.code}
               </Text>
-              <Text style={{ color: th.colors.mutedForeground, fontSize: 13 }}>
+              <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
                 {req.sender_id} • {req.channel}
               </Text>
             </View>
@@ -86,8 +90,8 @@ export function PairingSection({
 
 const styles = StyleSheet.create({
   container: { marginTop: 24, paddingHorizontal: 16 },
-  title: { fontSize: 13, textTransform: "uppercase", marginBottom: 8, letterSpacing: 0.5 },
-  empty: { fontSize: 14, fontStyle: "italic", marginVertical: 8 },
+  title: { fontSize: 17, marginBottom: 8 },
+  empty: { fontSize: 14, marginVertical: 8 },
   card: {
     padding: 12,
     borderWidth: 1,

@@ -71,8 +71,8 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
   return (
     <View style={styles.container}>
       {requiresRestart ? (
-        <View style={[styles.restartBanner, { backgroundColor: th.colors.accent }]}>
-          <Text style={[styles.restartText, { color: th.colors.accentForeground }]}>
+        <View style={[styles.restartBanner, { backgroundColor: th.colors.brandSoft, borderRadius: th.radius.md }]}>
+          <Text style={[styles.restartText, { color: th.colors.brandSoftForeground, fontFamily: th.font.medium }]}>
             {t("plugins.restartRequired")}
           </Text>
           <Button
@@ -90,7 +90,7 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
       >
         {features.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: th.colors.mutedForeground }]}>
+            <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
               {t("plugins.empty")}
             </Text>
           </View>
@@ -105,7 +105,7 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
                 key={feature.name}
                 style={[
                   styles.card,
-                  { backgroundColor: th.colors.card, borderColor: th.colors.border },
+                  { backgroundColor: th.colors.card, borderColor: th.colors.border, borderRadius: th.radius.md },
                 ]}
               >
                 <View style={styles.cardHeader}>
@@ -113,14 +113,14 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
                     <Text
                       style={[
                         styles.featureName,
-                        { color: th.colors.foreground, fontFamily: th.font.medium },
+                        { color: th.colors.foreground, fontFamily: th.font.displayBold },
                       ]}
                     >
                       {feature.display_name || feature.name}
                     </Text>
                     {(feature as any).description ? (
                       <Text
-                        style={[styles.featureDesc, { color: th.colors.mutedForeground }]}
+                        style={[styles.featureDesc, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}
                         numberOfLines={2}
                       >
                         {(feature as any).description}
@@ -134,7 +134,7 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
                     value={feature.enabled}
                     disabled={switchDisabled}
                     onValueChange={(val) => void handleToggle(feature, val)}
-                    trackColor={{ false: th.colors.border, true: th.colors.primary }}
+                    trackColor={{ false: th.colors.muted, true: th.colors.primary }}
                   />
                 </View>
               </View>
@@ -166,12 +166,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 14,
     gap: 8,
   },
   restartText: {
-    fontSize: 14,
+    fontSize: 15,
     flex: 1,
   },
   scrollContent: {
@@ -203,7 +204,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   featureName: {
-    fontSize: 16,
+    fontSize: 17,
   },
   featureDesc: {
     fontSize: 13,

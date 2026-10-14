@@ -75,7 +75,7 @@ export function AutomationRow({
 
         <Text
           numberOfLines={1}
-          style={[styles.subtitle, { color: th.colors.mutedForeground }]}
+          style={[styles.subtitle, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}
         >
           {scheduleStr}
         </Text>
@@ -83,7 +83,7 @@ export function AutomationRow({
         {nextRunTime ? (
           <Text
             numberOfLines={1}
-            style={[styles.caption, { color: th.colors.mutedForeground }]}
+            style={[styles.caption, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}
           >
             {t("automations.nextRun", { time: nextRunTime })}
           </Text>
@@ -92,7 +92,7 @@ export function AutomationRow({
         {targetChat ? (
           <Text
             numberOfLines={1}
-            style={[styles.caption, { color: th.colors.primary }]}
+            style={[styles.caption, { color: th.colors.primary, fontFamily: th.font.regular }]}
           >
             {t("automations.targetChat", { title: targetChat })}
           </Text>
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   caption: {
-    fontSize: 12,
+    fontSize: 13,
   },
   switchWrapper: {
     minWidth: 48,

@@ -104,7 +104,7 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
       >
         {apps.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: th.colors.mutedForeground }]}>
+            <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
               {t("apps.empty")}
             </Text>
           </View>
@@ -120,7 +120,7 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
                 key={app.name}
                 style={[
                   styles.card,
-                  { backgroundColor: th.colors.card, borderColor: th.colors.border },
+                  { backgroundColor: th.colors.card, borderColor: th.colors.border, borderRadius: th.radius.md },
                 ]}
               >
                 <View style={styles.cardHeader}>
@@ -128,13 +128,13 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
                     <Text
                       style={[
                         styles.appName,
-                        { color: th.colors.foreground, fontFamily: th.font.medium },
+                        { color: th.colors.foreground, fontFamily: th.font.displayBold },
                       ]}
                     >
                       {app.display_name || app.name}
                     </Text>
                     {version ? (
-                      <Text style={[styles.appVersion, { color: th.colors.mutedForeground }]}>
+                      <Text style={[styles.appVersion, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                         {t("apps.version", { version })}
                       </Text>
                     ) : null}
@@ -145,8 +145,9 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
                       {
                         backgroundColor:
                           app.installed || app.status === "installed"
-                            ? th.colors.accent
+                            ? th.colors.brandSoft
                             : th.colors.muted,
+                        borderRadius: th.radius.sm,
                       },
                     ]}
                   >
@@ -156,8 +157,9 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
                         {
                           color:
                             app.installed || app.status === "installed"
-                              ? th.colors.accentForeground
+                              ? th.colors.brandSoftForeground
                               : th.colors.mutedForeground,
+                          fontFamily: th.font.medium,
                         },
                       ]}
                     >
@@ -168,7 +170,7 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
 
                 {app.description ? (
                   <Text
-                    style={[styles.appDescription, { color: th.colors.mutedForeground }]}
+                    style={[styles.appDescription, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}
                     numberOfLines={2}
                   >
                     {app.description}
@@ -263,10 +265,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   appName: {
-    fontSize: 16,
+    fontSize: 17,
   },
   appVersion: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
   statusBadge: {
@@ -276,12 +278,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: "500",
+    fontSize: 13,
   },
   appDescription: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
   cardActions: {
     flexDirection: "row",
