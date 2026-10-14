@@ -1,0 +1,29 @@
+import { View } from "react-native";
+import { Drawer } from "expo-router/drawer";
+import { ChatDrawer } from "../../src/screens/chats/ChatDrawer";
+import { OfflineBanner } from "../../src/extras/OfflineBanner";
+import { useTheme } from "../../src/ui/ThemeProvider";
+
+export default function MainLayout() {
+  const { colors } = useTheme();
+  // Banner above the drawer: visible on Home and in threads (a thread has its own header; both sit below it).
+  return (
+    <View style={{ flex: 1 }}>
+      <OfflineBanner />
+      <Drawer
+        drawerContent={(p) => <ChatDrawer onClose={() => p.navigation.closeDrawer()} />}
+        screenOptions={{
+          swipeEnabled: true,
+          swipeEdgeWidth: 40,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          drawerStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Drawer.Screen name="index" options={{ title: "nanobot" }} />
+        <Drawer.Screen name="chat/[key]" options={{ headerShown: false }} />
+      </Drawer>
+    </View>
+  );
+}

@@ -1,0 +1,20 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/lib/*": [
+        "./vendor/nanobot/webui/src/lib/*"
+      ]
+    },
+    "types": [
+      "jest"
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "android",
+    "ios",
+    "dist"
+  ]
+}
