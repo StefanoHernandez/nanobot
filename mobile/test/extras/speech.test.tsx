@@ -158,57 +158,35 @@ describe("P5-T1: Read-aloud assistant replies with expo-speech", () => {
     expect(kv.get("pref.voiceAutoRead")).toBe("0");
   });
 
-  test("5. With voiceAutoRead enabled and voicePending true, transitioning from streaming to finished calls Speech.speak automatically", async () => {
+  test("5. Auto-read: the dictated chat's finished turn is read once, all answer segments; other chats don't consume it", () => {
+    const { threadStore } = require("../../src/state/threadStore");
+    const seg = (id: string, role: string, content: string, kind?: string) => ({ id, role, content, kind, createdAt: 1 });
+    const set = (key: string, running: boolean, messages: unknown[]) =>
+      threadStore.setState({ threads: { ...threadStore.getState().threads, [key]: { messages, running, loaded: true } } });
     prefs.setVoiceAutoRead(true);
-    speechStore.getState().markVoiceDictated();
-    expect(speechStore.getState().voicePending).toBe(true);
+    set("chat:a", false, [seg("o1", "assistant", "old answer")]);
+    speechStore.getState().markVoiceDictated("chat:a");
+    expect(speechStore.getState().voicePending).toBe("chat:a");
 
-    const msg: UIMessage = {
-      id: "msg-auto",
-      role: "assistant",
-      content: "Auto read this reply",
-      isStreaming: true,
-      createdAt: 1000,
-    };
-    const unit: TurnUnit = {
-      type: "message",
-      message: msg,
-      sourceMessageCount: 1,
-    };
-
-    const { rerender } = await render(
-      <ThemeProvider>
-        <MessageRow unit={unit} live={false} />
-      </ThemeProvider>
-    );
-
+    set("chat:b", true, []);
+    set("chat:b", false, [seg("b1", "assistant", "other chat")]);
     expect(Speech.speak).not.toHaveBeenCalled();
-    expect(speechStore.getState().voicePending).toBe(true);
+    expect(speechStore.getState().voicePending).toBe("chat:a");
 
-    // Transition to finished
-    const finishedMsg: UIMessage = {
-      ...msg,
-      isStreaming: false,
-    };
-    const finishedUnit: TurnUnit = {
-      type: "message",
-      message: finishedMsg,
-      sourceMessageCount: 1,
-    };
+    const turn = [seg("o1", "assistant", "old answer"), seg("u1", "user", "hi"), seg("a1", "assistant", "First part"), seg("t1", "assistant", "tool", "trace"), seg("a2", "assistant", "second part")];
+    set("chat:a", true, turn);
+    expect(Speech.speak).not.toHaveBeenCalled();
+    set("chat:a", false, turn);
+    expect(Speech.speak).toHaveBeenCalledTimes(1);
+    expect(Speech.speak).toHaveBeenCalledWith("First part second part", expect.anything());
+    expect(speechStore.getState().voicePending).toBeNull();
+    threadStore.setState({ threads: {} });
+  });
 
-    await rerender(
-      <ThemeProvider>
-        <MessageRow unit={finishedUnit} live={false} />
-      </ThemeProvider>
+  test("5b. stripMarkdownForSpeech keeps C#, snake_case, 2*3 and #1", () => {
+    expect(stripMarkdownForSpeech("# Title\nUse C# and snake_case, 2*3 is #1. **bold** and *it* and _u_")).toBe(
+      "Title Use C# and snake_case, 2*3 is #1. bold and it and u",
     );
-
-    expect(Speech.speak).toHaveBeenCalledWith(
-      "Auto read this reply",
-      expect.objectContaining({
-        language: expect.stringMatching(/it-IT|en-US/),
-      })
-    );
-    expect(speechStore.getState().voicePending).toBe(false);
   });
 
   test("6. Profile switch to 'none' stops active speech", () => {

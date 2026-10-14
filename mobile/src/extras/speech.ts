@@ -3,6 +3,7 @@ import { createStore } from "zustand";
 import { i18n } from "../i18n";
 import { prefs } from "../settings/prefs";
 import { sessionStore } from "../state/sessionStore";
+import { threadStore } from "../state/threadStore";
 
 export function stripMarkdownForSpeech(md: string): string {
   if (!md) return "";
@@ -17,10 +18,12 @@ export function stripMarkdownForSpeech(md: string): string {
   s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
   // 5. Remove HTML tags <...>
   s = s.replace(/<[^>]+>/g, "");
-  // 6. Remove headings # Heading -> Heading
-  s = s.replace(/#+/g, "");
-  // 7. Remove bold / italic / strike markers
-  s = s.replace(/[*_~]+/g, "");
+  // 6. Remove heading markers ("# " after whitespace; keeps "C#", "#1"), quotes and bullets
+  s = s.replace(/(^|\s)#{1,6}[ \t]+/g, "$1");
+  s = s.replace(/^[ \t]*(>[ \t]?|[-*+][ \t]+)/gm, "");
+  // 7. Remove paired emphasis only (keeps "snake_case", "2*3")
+  s = s.replace(/(\*\*|__|~~)(?=\S)([\s\S]*?\S)\1/g, "$2");
+  s = s.replace(/(^|[^\w*])[*_](?=\S)([^*_\n]*?\S)[*_](?![\w*])/g, "$1$2");
   // 8. Collapse whitespace and trim
   return s.replace(/\s+/g, " ").trim();
 }
@@ -32,16 +35,17 @@ export function speechLanguage(): string {
 
 export type SpeechState = {
   speakingId: string | null;
-  voicePending: boolean;
+  /** Chat whose next finished turn is auto-read (set by voice dictation), else null. */
+  voicePending: string | null;
   speak(id: string, markdownText: string): void;
   stop(): void;
   toggle(id: string, markdownText: string): void;
-  markVoiceDictated(): void;
+  markVoiceDictated(chatKey: string): void;
 };
 
 export const speechStore = createStore<SpeechState>((set, get) => ({
   speakingId: null,
-  voicePending: false,
+  voicePending: null,
 
   speak(id: string, markdownText: string) {
     void Speech.stop();
@@ -63,7 +67,7 @@ export const speechStore = createStore<SpeechState>((set, get) => ({
   },
 
   stop() {
-    set({ speakingId: null, voicePending: false });
+    set({ speakingId: null, voicePending: null });
     void Speech.stop();
   },
 
@@ -75,9 +79,9 @@ export const speechStore = createStore<SpeechState>((set, get) => ({
     }
   },
 
-  markVoiceDictated() {
+  markVoiceDictated(chatKey: string) {
     if (prefs.voiceAutoRead()) {
-      set({ voicePending: true });
+      set({ voicePending: chatKey });
     }
   },
 }));
@@ -86,4 +90,17 @@ sessionStore.subscribe((state, prev) => {
   if (state.state === "none" && prev?.state !== "none") {
     speechStore.getState().stop();
   }
+});
+
+// Auto-read: when the dictated chat's turn ends, read every answer segment of that turn (after the last
+// user message), once. Bound to the chat key, so scrolling or other chats never consume it.
+threadStore.subscribe((state, prev) => {
+  const key = speechStore.getState().voicePending;
+  if (!key) return;
+  const cur = state.threads[key];
+  if (!cur || cur.running || !prev.threads[key]?.running) return;
+  const lastUser = cur.messages.map((m) => m.role).lastIndexOf("user");
+  const answers = cur.messages.slice(lastUser + 1).filter((m) => m.role === "assistant" && m.kind !== "trace" && m.content);
+  speechStore.setState({ voicePending: null });
+  if (answers.length) speechStore.getState().speak(answers[answers.length - 1].id, answers.map((m) => m.content).join("\n\n"));
 });
