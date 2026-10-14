@@ -41,7 +41,13 @@
     },
     "changeModel": "Cambia modello",
     "chooseModel": "Scegli il modello",
-    "historyError": "Impossibile caricare lo storico di questa chat."
+    "historyError": "Impossibile caricare lo storico di questa chat.",
+    "face": {
+      "thinking": "sta pensando…",
+      "working": "sta lavorando…",
+      "offline": "non raggiungibile",
+      "error": "qualcosa è andato storto"
+    }
   },
   "extras": {
     "channel": "Risposte",

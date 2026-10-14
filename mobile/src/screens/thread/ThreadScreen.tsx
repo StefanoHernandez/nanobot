@@ -8,8 +8,9 @@ import { router } from "expo-router";
 import { isWritable } from "../../state/chatsStore";
 import { threadStore, useThread } from "../../state/threadStore";
 import { useStore } from "zustand";
-import { useSession } from "../../state/sessionStore";
+import { sessionStore, useSession } from "../../state/sessionStore";
 import { Button } from "../../ui/components/Button";
+import { BotFace, faceStateOf } from "../../ui/BotFace";
 import { CommandDrawerButton } from "../../extras/CommandDrawer";
 import { OutboxBar } from "../../extras/OutboxBar";
 import { Composer } from "./Composer";
@@ -25,14 +26,27 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const { messages, running, notices, model, preset, temporary, forkBoundary } = useThread(chatKey);
   const loadError = useStore(threadStore, (s) => !!s.threads[chatKey]?.loadError);
   const { session } = useSession();
+  const conn = useStore(sessionStore, (s) => s.state);
+  const botName = useStore(sessionStore, (s) => s.profile?.name) || "nanobot";
+  const last = messages[messages.length - 1];
+  const face = faceStateOf(conn, running, !!last && last.kind === "trace", !!notices.some((n) => n.kind === "stream_error"));
 
   const hasImages = React.useMemo(() => collectThreadImages(messages, "").length > 0, [messages]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 8, borderBottomWidth: 1, borderBottomColor: th.colors.border }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 4, paddingVertical: 4 }}>
         <IconButton icon="arrow-left" accessibilityLabel={t("thread.back")} onPress={onBack} />
-        <View style={{ flex: 1 }}><ModelBadge chatKey={chatKey} preset={preset} model={model} /></View>
+        <BotFace state={face} />
+        <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
+          <Text numberOfLines={1} accessibilityRole="header" style={{ color: th.colors.foreground, fontFamily: th.font.display, fontSize: 18, lineHeight: 22 }}>{botName}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <ModelBadge chatKey={chatKey} preset={preset} model={model} />
+            {face !== "idle" ? (
+              <Text numberOfLines={1} accessibilityLiveRegion="polite" style={{ flexShrink: 1, color: face === "error" ? th.colors.destructive : th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 12 }}>{t(`thread.face.${face}`)}</Text>
+            ) : null}
+          </View>
+        </View>
         {temporary ? <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{t("temporary.label")}</Text> : null}
         {hasImages ? (
           <IconButton

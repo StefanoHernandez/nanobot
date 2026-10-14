@@ -41,7 +41,13 @@
     },
     "changeModel": "Change model",
     "chooseModel": "Choose model",
-    "historyError": "Couldn't load this chat's history."
+    "historyError": "Couldn't load this chat's history.",
+    "face": {
+      "thinking": "thinking…",
+      "working": "working…",
+      "offline": "unreachable",
+      "error": "something went wrong"
+    }
   },
   "extras": {
     "channel": "Replies",
