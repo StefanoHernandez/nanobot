@@ -730,5 +730,11 @@
     "filesCount": "{{count}} files",
     "filesCount_one": "{{count}} file",
     "filesCount_other": "{{count}} files"
+  },
+  "outbox": {
+    "pending": "Pending",
+    "paused": "Pending — tap to send",
+    "cancel": "Cancel",
+    "sendNow": "Send now"
   }
 }

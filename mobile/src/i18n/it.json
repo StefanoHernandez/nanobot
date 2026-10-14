@@ -730,5 +730,11 @@
     "filesCount": "{{count}} file",
     "filesCount_one": "{{count}} file",
     "filesCount_other": "{{count}} file"
+  },
+  "outbox": {
+    "pending": "In attesa",
+    "paused": "In attesa — tocca per inviare",
+    "cancel": "Annulla",
+    "sendNow": "Invia ora"
   }
 }
