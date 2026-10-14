@@ -25,6 +25,8 @@ jest.mock("../../src/settings/prefs", () => ({
     language: () => "system",
     setLanguage: jest.fn(),
     notificationSound: () => false,
+    audioReplies: () => false,
+    setAudioReplies: jest.fn(),
     setNotificationSound: jest.fn(),
     voiceAutoRead: jest.fn(() => false),
     setVoiceAutoRead: jest.fn(),
@@ -69,7 +71,16 @@ test("theme change calls setPref", async () => {
   expect(mockSetPref).toHaveBeenCalledWith("dark");
 });
 
+test("voice auto-read switch is disabled until Audio replies is on", async () => {
+  const { speechStore } = require("../../src/extras/speech");
+  speechStore.setState({ enabled: false });
+  await show();
+  expect(screen.getByLabelText("Read aloud replies to voice messages").props.disabled).toBe(true);
+});
+
 test("voice auto-read switch calls setVoiceAutoRead", async () => {
+  const { speechStore } = require("../../src/extras/speech");
+  speechStore.setState({ enabled: true });
   await show();
   const sw = screen.getByLabelText("Read aloud replies to voice messages");
   expect(sw.props.value).toBe(false);

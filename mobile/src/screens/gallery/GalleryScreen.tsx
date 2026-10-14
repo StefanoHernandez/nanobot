@@ -1,8 +1,8 @@
+import { AnyImage } from "../../ui/AnyImage";
 import React, { useMemo, useState } from "react";
 import {
   Dimensions,
   FlatList,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -139,8 +139,9 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
               },
             ]}
           >
-            <Image
-              source={{ uri: item.url }}
+            <AnyImage
+              url={item.url}
+              name={item.name}
               style={styles.thumbnailImage}
               resizeMode="cover"
             />
@@ -189,8 +190,9 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
               }}
               renderItem={({ item }) => (
                 <View style={[styles.fullImageWrapper, { width: screenWidth }]}>
-                  <Image
-                    source={{ uri: item.url }}
+                  <AnyImage
+                    url={item.url}
+                    name={item.name}
                     style={styles.fullImage}
                     resizeMode="contain"
                   />
