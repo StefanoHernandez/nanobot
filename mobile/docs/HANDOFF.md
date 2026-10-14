@@ -33,14 +33,14 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 
 ## Status (2026-10-14, evening)
 - **App:** Phases 1-5 app work done on `main`: FIX-A/B, P5-V1, P5-S1 share, P5-O1 outbox, P5-T1 read-aloud, P5-W1 widget/tile. 501 tests.
-- **Branch `claude/fix-p5`** (507 tests): Claude's fixes after reviewing the OpenCode/Argon session. See `mobile/docs/agy/reviews/claude-review-2026-10-14.md`. **Merge it into `main` before the APK.**
+- **Merged `claude/fix-p5`** (507 tests): Claude's fixes after reviewing the OpenCode/Argon session. See `mobile/docs/agy/reviews/claude-review-2026-10-14.md`.
 - **Briefs P5b-*, P6-*, P7-*** (written by Argon) are **frozen**. Phase 5b needs a design pass with Claude first; see the review.
 - **Fork base:** `main` = upstream release **v0.3.5** + our commits.
 - **luffy** still runs **official nanobot v0.3.5** (uv tool from PyPI). The fork is not installed there yet; that starts in Phase 5b.
 - **This Linux PC:** worktrees `../nanobot-agy` and `../nanobot-agy3`. Run jest with `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8` (2 tests assume en-US number format).
 
 ## Next steps, in order
-1. Merge `claude/fix-p5` into `main` (user OK).
+1. ~~Merge `claude/fix-p5`~~ done (`764a772b`).
 2. Build the **phone-test APK** (REVIEWER.md §7), once the Android toolchain is set up on this PC. The user tests on the phone, and device bugs become fix briefs.
 3. Parked minors from the review (I8 picker, I15 toast race) as one agy brief.
 4. **Claude only:** design Phase 5b (QR shown in the fork WebUI, device-token powers), the `build-luffy` workflow, then Phases 6 and 7, starting from Argon's frozen plan.
