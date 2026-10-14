@@ -1,0 +1,40 @@
+# Fork-only: nanobot mobile (React Native) checks.
+name: mobile-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    if: github.repository == 'StefanoHernandez/nanobot'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx jest --ci
+      # The app uses a frozen copy of the WebUI protocol code (mobile/vendor).
+      # Report drift against the server's current WebUI so upstream protocol
+      # changes are visible in the upstream-sync PR (informational, never fails).
+      - name: Vendor drift report
+        working-directory: .
+        run: |
+          for f in lib/types.ts lib/nanobot-client.ts lib/api.ts; do
+            v="mobile/vendor/nanobot/webui/src/$f"; u="webui/src/$f"
+            [ -f "$v" ] && [ -f "$u" ] || continue
+            if ! diff -q "$v" "$u" >/dev/null; then
+              echo "::warning file=$v::differs from $u ($(diff "$v" "$u" | grep -c '^[<>]') changed lines) - check protocol compatibility"
+            fi
+          done

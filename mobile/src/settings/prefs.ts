@@ -1,0 +1,24 @@
+import { i18n } from "../i18n";
+import { kv } from "../platform/storage";
+
+export type Language = "system" | "it" | "en";
+const LANG = "pref.language";
+const SOUND = "pref.notificationSound";
+
+const device = () => Intl.DateTimeFormat().resolvedOptions().locale.split("-")[0];
+
+export const prefs = {
+  language: (): Language => {
+    const v = kv.get(LANG);
+    return v === "it" || v === "en" ? v : "system";
+  },
+  setLanguage(l: Language): void {
+    if (l === "system") kv.del(LANG);
+    else kv.set(LANG, l);
+    void i18n.changeLanguage(l === "system" ? device() : l);
+  },
+  notificationSound: (): boolean => kv.get(SOUND) === "1",
+  setNotificationSound(on: boolean): void {
+    kv.set(SOUND, on ? "1" : "0");
+  },
+};
