@@ -745,8 +745,6 @@
   },
   "widget": {
     "openingNewChat": "Opening new chat…",
-    "connected": "Connected",
-    "disconnected": "Not connected",
     "newChat": "New chat"
   }
 }

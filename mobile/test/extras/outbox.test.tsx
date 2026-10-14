@@ -238,7 +238,7 @@ describe("P5-O1: Offline outbox per chat", () => {
 
   describe("review fixes", () => {
     const slice = (over: Record<string, unknown> = {}) =>
-      threadStore.setState({ threads: { [KEY]: { ...({} as never), loaded: true, running: false, uploading: false, hydrating: false, ...over } as never } });
+      threadStore.setState({ threads: { [KEY]: { loaded: true, running: false, uploading: false, hydrating: false, ...over } as never } });
 
     function setup(sendResult: boolean) {
       const f = makeFake();

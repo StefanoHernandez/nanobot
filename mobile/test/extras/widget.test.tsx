@@ -8,7 +8,6 @@ import { sessionStore } from "../../src/state/sessionStore";
 import { chatsStore } from "../../src/state/chatsStore";
 import { profiles } from "../../src/core/profiles";
 import { router } from "expo-router";
-import { startWidgetStatusSync } from "../../src/extras/widget";
 import NewChatScreen from "../../app/new-chat";
 const { modifyAndroidManifest } = require("../../plugins/withNanobotWidget");
 
@@ -36,37 +35,12 @@ afterEach(() => {
 });
 
 describe("P5-W1: Android home widget and quick-settings tile", () => {
-  test("1. Status sync (no secrets leaked): startWidgetStatusSync writes profileName and state, never baseUrl or secrets", async () => {
-    const unsub = startWidgetStatusSync();
-
-    // Trigger session update with full profile details
-    await act(async () => {
-      sessionStore.setState({
-        profile: {
-          id: "p1",
-          name: "Home",
-          baseUrl: "https://secret-host.ts.net:8765",
-          hasSecret: true,
-        },
-        state: "open",
-      });
-    });
-
-    const raw = kv.get("widget.status");
-    expect(raw).toBeTruthy();
-    const parsed = JSON.parse(raw!);
-    expect(parsed.profileName).toBe("Home");
-    expect(parsed.state).toBe("open");
-    expect(typeof parsed.updatedAt).toBe("number");
-
-    // Strictly ensure no secrets, token, or baseUrl leaked
-    expect(parsed.baseUrl).toBeUndefined();
-    expect(parsed.secret).toBeUndefined();
-    expect(parsed.hasSecret).toBeUndefined();
-    expect(raw).not.toContain("secret-host");
-    expect(raw).not.toContain("https://");
-
-    unsub();
+  test("1. Tile service declares an icon and a localized label (no hard-coded text)", () => {
+    const m = modifyAndroidManifest({ manifest: { application: [{ $: {} }] } });
+    const tile = m.manifest.application[0].service.find((x: { $: Record<string, string> }) => x.$["android:name"] === ".NanobotTileService");
+    expect(tile.$["android:icon"]).toBe("@drawable/ic_nanobot_tile");
+    expect(tile.$["android:label"]).toBe("@string/nanobot_tile_label");
+    expect(tile.$["android:permission"]).toBe("android.permission.BIND_QUICK_SETTINGS_TILE");
   });
 
   test("2. /new-chat route with open session: calls chatsStore.newChat() once and redirects to chat", async () => {

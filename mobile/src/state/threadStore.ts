@@ -37,7 +37,7 @@ export type ThreadSlice = {
   /** True while a file send is in its upload phase; send() is refused meanwhile. */
   uploading: boolean;
   /** True while a (re)hydrate fetch is in flight; the outbox waits for it before sending. */
-  hydrating: boolean;
+  hydrating?: boolean;
   /** Composer attachment chips, kept here so share and navigation preserve them. Cleared after a successful send. */
   pendingFiles: LocalFile[];
   /** Message count before the fork point (draw the "forked from here" divider after it), else null. */
