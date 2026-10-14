@@ -12,7 +12,6 @@ from nanobot.bus.events import InboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMResponse
 from nanobot.session.manager import Session
-from nanobot.session.summary import SUMMARY_CONTINUATION_TEXT
 
 
 def _make_loop(tmp_path: Path, context_window_tokens: int = 200_000) -> AgentLoop:
@@ -87,6 +86,9 @@ async def test_process_message_hands_complete_replay_to_runner(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_runner_checkpoint_keeps_current_user_as_replay_boundary(tmp_path: Path) -> None:
     loop = _make_loop(tmp_path, context_window_tokens=8_000)
+    loop.provider.estimate_prompt_tokens.side_effect = (
+        lambda messages, tools, model: (100 * len(messages), "test")
+    )
     loop.provider.chat_stream_with_retry = AsyncMock(
         return_value=LLMResponse(content="ok", tool_calls=[], usage=None)
     )
@@ -113,6 +115,7 @@ async def test_runner_checkpoint_keeps_current_user_as_replay_boundary(tmp_path:
     sent_messages = loop.provider.chat_stream_with_retry.await_args.kwargs["messages"]
     sent_text = "\n".join(str(message.get("content")) for message in sent_messages)
     assert "new question" in sent_text
-    assert [message["role"] for message in sent_messages] == ["system", "user", "user"]
-    assert sent_messages[1]["content"] == SUMMARY_CONTINUATION_TEXT
+    assert [message["role"] for message in sent_messages] == ["system", "user"]
+    assert sent_messages[1]["content"].startswith("new question\n\n")
+    assert "File access:" in sent_messages[1]["content"]
     assert any(message.get("content") == "long older turn" for message in session.messages)

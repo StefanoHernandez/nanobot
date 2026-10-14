@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { imageGenerationFormFromPayload } from "@/components/settings/capabilities/ImageGenerationSettings";
@@ -20,6 +20,8 @@ import type {
   SettingsSectionKey,
 } from "@/components/settings/contracts";
 import { agentDraftFromPayload } from "@/components/settings/models/ModelsSettings";
+import { modelAPISelection } from "@/components/settings/models/modelAPI";
+import { providerJsonValue } from "@/components/settings/models/providerForm";
 import { useModelSettingsActions } from "@/components/settings/models/useModelSettingsActions";
 import {
   useProviderFormsSync,
@@ -33,7 +35,7 @@ import { useSystemSettingsEffects } from "@/components/settings/system/useSystem
 import { useSystemSettingsState } from "@/components/settings/system/useSystemSettingsState";
 import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { useAutoSave } from "@/components/settings/shared/useAutoSave";
-import { fetchSettings, fetchSettingsUsage } from "@/lib/api";
+import { cancelProviderOAuth, fetchSettings, fetchSettingsUsage } from "@/lib/api";
 import {
   readLocalPreferences,
   writeLocalPreferences,
@@ -90,15 +92,19 @@ export function useSettingsController({
   const [pendingRestartSections, setPendingRestartSections] = useState<PendingRestartSections>(
     EMPTY_PENDING_RESTART_SECTIONS,
   );
+  const previousInitialSettingsRef = useRef(initialSettings);
+  const latestInitialSettingsRef = useRef(initialSettings);
+  latestInitialSettingsRef.current = initialSettings;
+  const restartRefreshRef = useRef<SettingsPayload | null>(null);
   const [localPrefs, setLocalPrefs] = useState<LocalPreferences>(() => readLocalPreferences());
   const modelState = useModelSettingsState(initialSettings);
   const {
-    editingProviderKeys, expandedProvider, form, modelCallOrder, modelCallOrderSaving,
+    editingProviderKeys, form, modelCallOrder, modelCallOrderSaving,
     modelConfigurationSaving, modelMigrationSaving, modelPresetBeforeCreateRef,
     modelPresetCreating, modelPresetEditingName, modelPresetNameError, modelPresetPendingDelete,
     providerForms, providerOAuthCompleting,
     providerOAuthDialogError, providerOAuthFlow, providerOAuthFlowRef, providerOAuthResponse,
-    providerSaving, saving, setForm,
+    providerSaving, providerOperation, saving, setForm,
     setModelCallOrder, setModelPresetCreating, setModelPresetEditingName, setModelPresetNameError,
     setModelPresetPendingDelete,
     setProviderForms, setProviderOAuthCompleting, setProviderOAuthDialogError,
@@ -174,13 +180,17 @@ export function useSettingsController({
 
   const runtimeConfigState = useRuntimeConfigSettings(settings, client, applyPayload);
 
-  const closeProviderOAuthFlow = useCallback(() => {
+  const closeProviderOAuthFlow = useCallback((cancelPending = true) => {
+    const flow = providerOAuthFlowRef.current;
     providerOAuthFlowRef.current = null;
+    if (cancelPending && flow?.completion_input === "device_code") {
+      void cancelProviderOAuth(client, flow.provider, flow.flow_id).catch(() => {});
+    }
     setProviderOAuthFlow(null);
     setProviderOAuthResponse("");
     setProviderOAuthCompleting(false);
     setProviderOAuthDialogError(null);
-  }, []);
+  }, [client]);
   useProviderOAuthPolling({
     state: modelState,
     client,
@@ -196,12 +206,29 @@ export function useSettingsController({
   }, [applyPayload, initialSettings, settings]);
 
   useEffect(() => {
+    const previous = previousInitialSettingsRef.current;
+    previousInitialSettingsRef.current = initialSettings;
+    if (previous?.requires_restart && !initialSettings?.requires_restart) {
+      restartRefreshRef.current = initialSettings;
+    } else if (restartRefreshRef.current !== initialSettings) {
+      restartRefreshRef.current = null;
+    }
+    const shouldApplyRestartedSettings =
+      restartRefreshRef.current === initialSettings && settings?.requires_restart === true;
+    if (!shouldApplyRestartedSettings || !initialSettings) {
+      return;
+    }
+    applyPayload(initialSettings);
+  }, [applyPayload, initialSettings, settings]);
+
+  useEffect(() => {
     let cancelled = false;
     const showLoading = settings === null;
+    const requestInitialSettings = latestInitialSettingsRef.current;
     if (showLoading) setLoading(true);
     fetchSettings(getToken())
       .then((payload) => {
-        if (!cancelled) {
+        if (!cancelled && latestInitialSettingsRef.current === requestInitialSettings) {
           applyPayload(payload);
           setError(null);
         }
@@ -273,7 +300,11 @@ export function useSettingsController({
       form.maxTokens !== selectedPreset.max_tokens ||
       form.contextWindowTokens !== normalizeContextWindowTokens(selectedPreset.context_window_tokens) ||
       form.temperature !== selectedPreset.temperature ||
-      form.reasoningEffort !== (selectedPreset.reasoning_effort ?? "")
+      form.reasoningEffort !== (selectedPreset.reasoning_effort ?? "") ||
+      modelAPISelection(form.api) !== modelAPISelection(selectedPreset.api) ||
+      form.extraHeaders !== providerJsonValue(selectedPreset.extra_headers) ||
+      form.extraQuery !== providerJsonValue(selectedPreset.extra_query) ||
+      form.extraBody !== providerJsonValue(selectedPreset.extra_body)
     );
   }, [form, modelPresetEditingName, settings]);
 
@@ -285,7 +316,11 @@ export function useSettingsController({
       imageGenerationForm.model !== settings.image_generation.model ||
       imageGenerationForm.defaultAspectRatio !== settings.image_generation.default_aspect_ratio ||
       imageGenerationForm.defaultImageSize !== settings.image_generation.default_image_size ||
-      imageGenerationForm.maxImagesPerTurn !== settings.image_generation.max_images_per_turn
+      imageGenerationForm.maxImagesPerTurn !== settings.image_generation.max_images_per_turn ||
+      (settings.image_generation.request_overrides_supported && (
+        imageGenerationForm.extraHeaders !== providerJsonValue(settings.image_generation.extra_headers) ||
+        imageGenerationForm.extraBody !== providerJsonValue(settings.image_generation.extra_body)
+      )) === true
     );
   }, [imageGenerationForm, settings]);
 
@@ -423,7 +458,7 @@ export function useSettingsController({
     createCustomProvider,
     handleDeleteModelConfiguration,
     handleMigrateModelConfigurations,
-    handleToggleProvider,
+    resetProviderDraft,
     runProviderOAuth,
     saveModelSettings,
     saveProvider,
@@ -451,6 +486,7 @@ export function useSettingsController({
     handleApiServiceAction,
     handleAutomationAction,
     handleAutomationEdit,
+    handleAutomationChat,
     handleCliAppAction,
     handleImportMcpConfig,
     handleMcpOAuthCancel,
@@ -495,12 +531,12 @@ export function useSettingsController({
     customMcpForm,
     editingProviderKeys,
     error,
-    expandedProvider,
     featureCatalog,
     form,
     handleApiServiceAction,
     handleAutomationAction,
     handleAutomationEdit,
+    handleAutomationChat,
     handleCliAppAction,
     handleDeleteModelConfiguration,
     handleImportMcpConfig,
@@ -513,7 +549,7 @@ export function useSettingsController({
     handleMigrateModelConfigurations,
     handleNanobotFeatureAction,
     handleSaveCustomMcp,
-    handleToggleProvider,
+    resetProviderDraft,
     handleWebSearchProviderChange,
     hostEngineApplying,
     imageGenerationDirty,
@@ -559,13 +595,16 @@ export function useSettingsController({
     providerOAuthFlow,
     providerOAuthResponse,
     providerSaving,
+    providerOperation,
     remoteBrowserAccess,
     resetWebSearchDraft,
     restartViaSettingsSurface,
     runProviderOAuth,
     saveImageGenerationSettings,
     saveModelSettings,
+    saveImageRequestSettings: capabilityActions.saveImageRequestSettings,
     saveNetworkSafetySettings,
+    saveModelRequestSettings: modelActions.saveModelRequestSettings,
     saveProvider,
     saveTranscriptionSettings,
     saveWebSearch,
