@@ -145,6 +145,65 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
     expect(expResult.current.error).toBe("expired");
   });
 
+  test("I6: useMcpOAuth gateway-redirect flow polls immediately without callback_url, and unmount cancels live flow", async () => {
+    mockMutate.mockReset();
+    jest.useFakeTimers();
+    mockSession.get.mockReset();
+    const onDone = jest.fn();
+
+    // Gateway-redirect payload: completion_input is undefined/absent
+    mockMutate.mockResolvedValueOnce({
+      flow_id: "flow-gateway",
+      status: "authorization_required",
+      expires_in: 300,
+      authorization_url: "https://auth.example.com",
+    });
+
+    mockSession.get
+      .mockResolvedValueOnce({ flow_id: "flow-gateway", status: "connecting" })
+      .mockResolvedValueOnce({ flow_id: "flow-gateway", status: "connected" });
+
+    const { result, unmount } = await renderHook(() => useMcpOAuth("linear", onDone));
+
+    await act(async () => {
+      await result.current.start();
+    });
+
+    // When completion_input is absent, it goes straight to polling
+    expect(result.current.state).toBe("polling");
+    expect(result.current.authUrl).toBe("https://auth.example.com");
+
+    // Advance timer to trigger poll
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1500);
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(result.current.state).toBe("done");
+    expect(onDone).toHaveBeenCalled();
+    await unmount();
+
+    // Unmount cancel test: start a new flow and unmount
+    mockMutate.mockResolvedValueOnce({
+      flow_id: "flow-to-cancel",
+      status: "authorization_required",
+      expires_in: 300,
+    });
+    mockSession.get.mockResolvedValue({ flow_id: "flow-to-cancel", status: "connecting" });
+
+    const { result: cancelHook, unmount: cancelUnmount } = await renderHook(() => useMcpOAuth("linear"));
+    await act(async () => {
+      await cancelHook.current.start();
+    });
+
+    // Unmount while pending
+    await cancelUnmount();
+    expect(mockMutate).toHaveBeenCalledWith("settings.mcp.oauth_cancel", { flow_id: "flow-to-cancel" });
+    jest.useRealTimers();
+  });
+
   test("the useSkills() result has no delete", async () => {
     mockSession.get.mockResolvedValue({ skills: [] });
 
@@ -167,7 +226,7 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
           id: "job-1",
           name: "Job 1",
           kind: "cron",
-          state: { run_history: [{ run_at_ms: 1700000000000, status: "ok" }] },
+          state: { run_history: [{ run_at_ms: Date.now() + 500, status: "ok" }] },
         },
       ],
     });
@@ -273,5 +332,57 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
     expect(calledValues).not.toHaveProperty("atMs");
     expect(calledValues).not.toHaveProperty("everyMs");
     expect(calledValues.schedule).toHaveProperty("at_ms");
+  });
+
+  test("M14: run(id) polls /api/webui/automations until run_history >= clicked_at", async () => {
+    jest.useFakeTimers();
+    const clickedAt = Date.now();
+
+    mockSession.get.mockResolvedValueOnce({
+      jobs: [{ id: "job-sync", name: "Job Sync", kind: "cron", state: { run_history: [] } }],
+    });
+
+    const { result } = await renderHook(() => useAutomations());
+
+    mockMutate.mockResolvedValueOnce({
+      jobs: [
+        {
+          id: "job-sync",
+          name: "Job Sync",
+          kind: "cron",
+          state: { run_history: [{ run_at_ms: clickedAt - 1000, status: "ok" }] },
+        },
+      ],
+    });
+
+    mockSession.get.mockResolvedValueOnce({
+      jobs: [
+        {
+          id: "job-sync",
+          name: "Job Sync",
+          kind: "cron",
+          state: { run_history: [{ run_at_ms: clickedAt + 200, status: "ok" }] },
+        },
+      ],
+    });
+
+    mockSession.get.mockResolvedValueOnce({ response: "Execution done!" });
+
+    let runPromise: Promise<any>;
+    act(() => {
+      runPromise = result.current.run("job-sync");
+    });
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2500);
+    });
+
+    const runResult = await runPromise!;
+    expect(runResult.result).toBe("Execution done!");
+    expect(mockSession.get).toHaveBeenCalledWith("/api/webui/automations");
+    expect(mockSession.get).toHaveBeenCalledWith(
+      expect.stringContaining("/api/webui/automations/result?id=job-sync"),
+    );
+    jest.useRealTimers();
   });
 });

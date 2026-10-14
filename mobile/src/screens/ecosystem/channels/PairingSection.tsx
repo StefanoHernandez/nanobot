@@ -2,21 +2,39 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useT } from "../../../i18n";
 import { usePairing } from "../../../ecosystem/channels";
+import { toastEcosystemError } from "../../../ecosystem/common";
 import { Button, Dialog } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import type { PairingRequestInfo } from "@/lib/types";
 
-export function PairingSection() {
+export function PairingSection({
+  pairing,
+}: {
+  pairing?: ReturnType<typeof usePairing>;
+} = {}) {
   const t = useT();
   const th = useTheme();
-  const { requests, approve, deny } = usePairing();
+  const internalPairing = usePairing();
+  const { requests, approve, deny } = pairing ?? internalPairing;
   const [approving, setApproving] = useState<PairingRequestInfo | null>(null);
 
   const handleConfirmApprove = async () => {
     if (!approving) return;
     const code = approving.code;
     setApproving(null);
-    await approve(code);
+    try {
+      await approve(code);
+    } catch (e) {
+      toastEcosystemError(e, t);
+    }
+  };
+
+  const handleDeny = async (code: string) => {
+    try {
+      await deny(code);
+    } catch (e) {
+      toastEcosystemError(e, t);
+    }
   };
 
   return (
@@ -42,7 +60,7 @@ export function PairingSection() {
               <Button
                 title={t("pairing.deny")}
                 variant="ghost"
-                onPress={() => void deny(req.code)}
+                onPress={() => void handleDeny(req.code)}
               />
               <Button
                 title={t("pairing.approve")}

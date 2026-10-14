@@ -5,6 +5,7 @@ import { i18n } from "../../src/i18n";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
 import { toast } from "../../src/ui/components/Toast";
 import { AutomationsScreen } from "../../src/screens/ecosystem/automations/AutomationsScreen";
+import { AutomationJobSheet } from "../../src/screens/ecosystem/automations/AutomationJobSheet";
 import type { AutomationChatsPayload, SessionAutomationJob } from "@/lib/types";
 
 jest.mock("../../src/ui/components/Toast", () => ({
@@ -245,5 +246,142 @@ describe("P4-U4 Automations UI", () => {
         revision: "rev-1",
       }),
     );
+  });
+
+  test("I8: AutomationJobSheet preserves kind and tz on message-only edit", async () => {
+    const jobWithTz: SessionAutomationJob = {
+      id: "j-cron",
+      name: "Tz Job",
+      enabled: true,
+      schedule: { kind: "cron", expr: "0 9 * * *", tz: "Europe/Rome" },
+      payload: { message: "Original message" },
+      state: { run_history: [] },
+    };
+    const onUpdate = jest.fn().mockResolvedValue(true);
+
+    await renderWithTheme(
+      <AutomationJobSheet
+        open={true}
+        job={jobWithTz}
+        onClose={jest.fn()}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    const messageInput = screen.getByDisplayValue("Original message");
+    await fireEvent.changeText(messageInput, "Updated message");
+
+    const saveBtn = screen.getByText("Salva");
+    await act(async () => {
+      fireEvent.press(saveBtn);
+    });
+
+    expect(onUpdate).toHaveBeenCalledWith("j-cron", {
+      message: "Updated message",
+      schedule: { kind: "cron", expr: "0 9 * * *", tz: "Europe/Rome" },
+    });
+  });
+
+  test("I8: AutomationJobSheet preserves kind and maps at_ms correctly for at job", async () => {
+    const atJob: SessionAutomationJob = {
+      id: "j-at",
+      name: "One-shot Job",
+      enabled: true,
+      schedule: { kind: "at", at_ms: 1770000000000 },
+      payload: { message: "One-shot message" },
+      state: { run_history: [] },
+    };
+    const onUpdate = jest.fn().mockResolvedValue(true);
+
+    await renderWithTheme(
+      <AutomationJobSheet
+        open={true}
+        job={atJob}
+        onClose={jest.fn()}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    const schedInput = screen.getByDisplayValue("1770000000000");
+    await fireEvent.changeText(schedInput, "1770000009999");
+
+    const saveBtn = screen.getByText("Salva");
+    await act(async () => {
+      fireEvent.press(saveBtn);
+    });
+
+    expect(onUpdate).toHaveBeenCalledWith("j-at", {
+      message: "One-shot message",
+      schedule: { kind: "at", at_ms: 1770000009999 },
+    });
+  });
+
+  test("I8: AutomationJobSheet preserves kind and maps every_ms correctly for every job", async () => {
+    const everyJob: SessionAutomationJob = {
+      id: "j-every",
+      name: "Interval Job",
+      enabled: true,
+      schedule: { kind: "every", every_ms: 60000 },
+      payload: { message: "Interval message" },
+      state: { run_history: [] },
+    };
+    const onUpdate = jest.fn().mockResolvedValue(true);
+
+    await renderWithTheme(
+      <AutomationJobSheet
+        open={true}
+        job={everyJob}
+        onClose={jest.fn()}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    const schedInput = screen.getByDisplayValue("60000");
+    await fireEvent.changeText(schedInput, "120000");
+
+    const saveBtn = screen.getByText("Salva");
+    await act(async () => {
+      fireEvent.press(saveBtn);
+    });
+
+    expect(onUpdate).toHaveBeenCalledWith("j-every", {
+      message: "Interval message",
+      schedule: { kind: "every", every_ms: 120000 },
+    });
+  });
+
+  test("I7: AutomationJobSheet uses actions passed via props", async () => {
+    const onRun = jest.fn().mockResolvedValue({ result: "Done" });
+    const onDelete = jest.fn().mockResolvedValue(true);
+    const onClose = jest.fn();
+
+    await renderWithTheme(
+      <AutomationJobSheet
+        open={true}
+        job={jobToday}
+        onClose={onClose}
+        onRun={onRun}
+        onDelete={onDelete}
+      />,
+    );
+
+    // Run now
+    const runBtn = screen.getByText("Esegui ora");
+    await fireEvent.press(runBtn);
+    const confirmRunBtn = screen.getAllByText("Esegui ora")[1];
+    await act(async () => {
+      fireEvent.press(confirmRunBtn);
+    });
+    expect(onRun).toHaveBeenCalledWith("j1");
+
+    // Delete
+    const deleteBtn = screen.getByText("Elimina");
+    await fireEvent.press(deleteBtn);
+    const confirmDeleteBtn = screen.getAllByText("Elimina")[1];
+    await act(async () => {
+      fireEvent.press(confirmDeleteBtn);
+    });
+    expect(onDelete).toHaveBeenCalledWith("j1");
+    expect(onClose).toHaveBeenCalled();
   });
 });
