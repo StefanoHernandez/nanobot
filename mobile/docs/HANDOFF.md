@@ -39,6 +39,7 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 - **Fork base:** `main` = upstream **`main` @ `cd2a8637`** (same commit as `mobile/vendor/`) + our commits. Changed from v0.3.5 on 2026-10-14: on v0.3.5, old chats opened empty (protocol mismatch).
 - **Server "arduino"** (nickname luffy): runs official v0.3.5 until the user installs branch `arduino` (command in roadmap "Fork operations").
 - **Device test 2026-10-14 bugs: fixed** in `3c7f90ea` (APK #2): model picker on the header badge (`/model`), SVG via react-native-svg, "Audio replies" toggle (off by default), speech stops on blur and reads long answers in chunks, history load error + Retry. Old chats empty = server on v0.3.5: fixed by installing branch `arduino` (user does it).
+- **UI redesign "Compagno" in progress** on branch `claude/redesign-companion` (pushed): spec `mobile/docs/design/companion.md`; done: tokens + fonts (whole app recoloured), chat screen (BotFace header, bubbles, activity chip, composer). Next: user feedback on APK #3, then drawer/chat list, connect screen, settings and ecosystem (agy can do these from the spec), app icon/splash.
 - **Next:** block B minors (I8 picker, I15 toast race, outbox other chats, offline new-chat, share overwrite) as one agy brief; red `mobile-ci` on GitHub (need the log); then the **UI redesign** with frontend-design (user finds the UI flat).
 - **This Linux PC:** worktrees `../nanobot-agy` and `../nanobot-agy3`. Run jest with `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8` (2 tests assume en-US number format).
 
