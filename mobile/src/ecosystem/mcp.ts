@@ -167,6 +167,7 @@ export function useMcpOAuth(name: string, onDone?: () => void) {
       consecutiveErrors.current++;
       if (consecutiveErrors.current >= 3) {
         flowRef.current = null;
+        Promise.resolve(mutateRef.current("settings.mcp.oauth_cancel", { flow_id: f.flow_id })).catch(() => {});
         setError(e instanceof Error ? e.message : String(e));
         setState("error");
       }

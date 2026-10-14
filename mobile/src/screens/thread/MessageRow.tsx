@@ -1,11 +1,10 @@
-import React, { memo, useEffect } from "react";
+import React, { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useStore } from "zustand";
 import type { UIMessage } from "@/lib/types";
 import type { TurnUnit } from "@/lib/activity-timeline";
 import { speechStore } from "../../extras/speech";
 import { useT } from "../../i18n";
-import { prefs } from "../../settings/prefs";
 import { IconButton } from "../../ui/components";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { useTheme } from "../../ui/ThemeProvider";
@@ -24,12 +23,6 @@ function MessageRowImpl({ unit, live, onLongPress }: Props) {
   const isFinishedAnswer =
     !!m && m.role === "assistant" && !live && !m.isStreaming && m.kind !== "trace" && !!m.content;
 
-  useEffect(() => {
-    if (isFinishedAnswer && speechStore.getState().voicePending && prefs.voiceAutoRead()) {
-      speechStore.setState({ voicePending: false });
-      speechStore.getState().speak(m.id, m.content);
-    }
-  }, [isFinishedAnswer, m?.id, m?.content]);
 
   if (unit.type === "activity") return <ActivityRow messages={unit.messages} live={live} startedAtMs={unit.startedAtMs} />;
   if (!m) return null;

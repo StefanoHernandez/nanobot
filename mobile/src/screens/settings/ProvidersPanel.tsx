@@ -108,7 +108,8 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
       if (target && isRendered(target)) {
         setErrors({ [target]: msgOf(e) });
       } else {
-        toast.show(t("models.err.invalid"));
+        // Unrendered field -> generic copy; non-field failure (network, 5xx) -> server message, per spec.
+        toast.show(field ? t("models.err.invalid") : msgOf(e));
       }
     } finally {
       setSaving(false);
