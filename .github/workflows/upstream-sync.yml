@@ -1,5 +1,6 @@
-# Fork-only: weekly check for a new HKUDS/nanobot RELEASE (vX.Y.Z tag) and
-# open a PR merging it into our main. We track releases, not upstream main.
+# Fork-only: weekly merge of HKUDS/nanobot `main` into a PR against our main.
+# We track upstream main (decided 2026-10-14): the app's mobile/vendor/ copy of the WebUI client
+# must come from the SAME upstream commit as the server, so the sync re-copies it in the same PR.
 name: upstream-sync
 
 on:
@@ -19,28 +20,33 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Merge newest upstream release into sync branch
+      - name: Merge upstream main into sync branch
         id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/HKUDS/nanobot.git
-          git fetch --tags upstream
-          tag=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -vE -- '-(rc|alpha|beta|dev)' | sort -V | tail -1)
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          if [ -z "$tag" ] || git merge-base --is-ancestor "$tag" HEAD; then
+          git fetch upstream main
+          sha=$(git rev-parse upstream/main)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$sha" HEAD; then
             echo "changes=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changes=true" >> "$GITHUB_OUTPUT"
-          branch="upstream-sync/$tag"
+          branch="upstream-sync/main"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           git checkout -B "$branch"
-          if git merge --no-edit "$tag"; then
+          if git merge --no-edit "$sha"; then
             echo "conflict=false" >> "$GITHUB_OUTPUT"
+            # keep the app's vendored WebUI client on the same upstream commit
+            bash mobile/scripts/sync-nanobot.sh .
+            printf 'commit: %s\ndate: %s\n' "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > mobile/vendor/nanobot/VERSION
+            git add mobile/vendor
+            git commit -q -m "chore(mobile): re-sync vendor to upstream ${sha:0:8}" || true
           else
             # keep the conflict visible in the PR instead of failing silently
             git merge --abort
-            git reset --hard "$tag"
+            git reset --hard "$sha"
             echo "conflict=true" >> "$GITHUB_OUTPUT"
           fi
           git push -f origin "$branch"
@@ -61,14 +67,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ steps.merge.outputs.tag }}"; branch="${{ steps.merge.outputs.branch }}"
+          sha="${{ steps.merge.outputs.sha }}"; tag="main@${sha:0:8}"; branch="${{ steps.merge.outputs.branch }}"
           app="${{ steps.app.outcome }}"
           if [ "${{ steps.merge.outputs.conflict }}" = "true" ]; then
-            title="Upstream release $tag (CONFLICTS: merge locally)"
-            body="Automatic merge failed. Locally: git fetch --tags upstream && git merge $tag, resolve, push. Check the mobile-ci result and vendor drift warnings."
+            title="Upstream $tag (CONFLICTS: merge locally)"
+            body="Automatic merge failed. Locally: git fetch upstream && git merge $sha, resolve, then bash mobile/scripts/sync-nanobot.sh . (VERSION = $sha), run the app tests, push."
           else
-            title="Upstream release $tag (app checks: $app)"
-            body="Automatic merge of HKUDS/nanobot $tag. App typecheck+tests on the merged tree: **$app** (see the run log). Also run mobile-ci manually for the vendor drift report before merging, then reinstall on luffy."
+            title="Upstream $tag (app checks: $app)"
+            body="Automatic merge of HKUDS/nanobot main $sha, with mobile/vendor re-synced to the same commit. App typecheck+tests on the merged tree: **$app** (see the run log). A vendor change can break the app: fix it in src/platform or src/state before merging. After merge, build-arduino republishes branch arduino: reinstall on arduino."
           fi
           gh pr view "$branch" >/dev/null 2>&1 \
             && gh pr edit "$branch" --title "$title" --body "$body" \

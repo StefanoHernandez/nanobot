@@ -23,7 +23,8 @@ The server runs on **luffy**, an Arduino UNO Q, and is reached from the phone ov
 | `mobile/docs/` | all app docs: spec, plans, roadmap, wiki, agy briefs, reports and reviews |
 | `mobile/vendor/` | a frozen copy of the nanobot WebUI protocol code. **Never edit it.** |
 | `.github/workflows/mobile-ci.yml` | app tests on every PR and push touching `mobile/`, plus a vendor drift report |
-| `.github/workflows/upstream-sync.yml` | weekly: if HKUDS/nanobot published a new **release tag**, open a PR `upstream-sync/<tag>` merging it, with the app checks run on the merged tree |
+| `.github/workflows/upstream-sync.yml` | weekly: merge HKUDS/nanobot **`main`** into PR `upstream-sync/main`, re-sync `mobile/vendor/` to the same commit, run the app checks |
+| `.github/workflows/build-arduino.yml` | on every push to `main`: build the WebUI and force-publish branch `arduino` (prebuilt, what the server installs) |
 | branch `main` | **the integration branch**. It replaces the old `dev` from the previous repo. |
 | branch `agy/FIX-A`, `agy/FIX-B` | open fix work (see below) |
 
@@ -35,15 +36,16 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 - **App:** Phases 1-5 app work done on `main`: FIX-A/B, P5-V1, P5-S1 share, P5-O1 outbox, P5-T1 read-aloud, P5-W1 widget/tile. 501 tests.
 - **Merged `claude/fix-p5`** (507 tests): Claude's fixes after reviewing the OpenCode/Argon session. See `mobile/docs/agy/reviews/claude-review-2026-10-14.md`.
 - **Briefs P5b-*, P6-*, P7-*** (written by Argon) are **frozen**. Phase 5b needs a design pass with Claude first; see the review.
-- **Fork base:** `main` = upstream release **v0.3.5** + our commits.
-- **luffy** still runs **official nanobot v0.3.5** (uv tool from PyPI). The fork is not installed there yet; that starts in Phase 5b.
+- **Fork base:** `main` = upstream **`main` @ `cd2a8637`** (same commit as `mobile/vendor/`) + our commits. Changed from v0.3.5 on 2026-10-14: on v0.3.5, old chats opened empty (protocol mismatch).
+- **Server "arduino"** (nickname luffy): runs official v0.3.5 until the user installs branch `arduino` (command in roadmap "Fork operations").
+- **Device test 2026-10-14 (APK from 86b514a4) bugs, to fix next:** old chats empty (fixed by tracking main), no model picker in chat, SVG blank in chat and gallery (RN Image can't draw SVG), read-aloud not stopped on leaving chat (Drawer keeps ThreadScreen mounted: use focus), long answers over ~4000 chars not read. New: "Audio replies" toggle (on-device TTS) that shows/hides Listen. Then the UI redesign with frontend-design (user finds it flat).
 - **This Linux PC:** worktrees `../nanobot-agy` and `../nanobot-agy3`. Run jest with `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8` (2 tests assume en-US number format).
 
 ## Next steps, in order
 1. ~~Merge `claude/fix-p5`~~ done (`764a772b`).
 2. Build the **phone-test APK** (REVIEWER.md §7), once the Android toolchain is set up on this PC. The user tests on the phone, and device bugs become fix briefs.
 3. Parked minors from the review (I8 picker, I15 toast race) as one agy brief.
-4. **Claude only:** design Phase 5b (QR shown in the fork WebUI, device-token powers), the `build-luffy` workflow, then Phases 6 and 7, starting from Argon's frozen plan.
+4. **Claude only:** design Phase 5b (QR shown in the fork WebUI, device-token powers), then Phases 6 and 7, starting from Argon's frozen plan.
 
 ## Resuming on a new PC
 1. `git clone https://github.com/StefanoHernandez/nanobot.git && cd nanobot`
@@ -72,7 +74,7 @@ The previous standalone repo (`~/Documents/Progetti_personali/nanobot_androidapp
 - **Budget:** the user's Claude plan is limited. Prefer cheap subagents (Sonnet; Haiku for trivial work) for reviews and research, keep the main thread lean, and don't dispatch implementers when agy can do it.
 - **Phone tests:** build an APK only at about 90% of a phase, or when the user asks. Never zip it.
 - **The phone is a dashboard only.** Never propose features where the agent drives the phone (camera, SMS, contacts, notifications).
-- **Fork:** new server features go in separate modules (MCP face for agents + HTTP/WS face for the app, one SQLite DB) with thin hooks into upstream files. Track release tags.
+- **Fork:** new server features go in separate modules (MCP face for agents + HTTP/WS face for the app, one SQLite DB) with thin hooks into upstream files. Track upstream `main`; `mobile/vendor/` = same upstream commit (CI enforces it).
 - **Python** (fork/server work): always use a project `.venv`, never global installs, and update `pyproject.toml` when dependencies change.
 - **Before ending a task:** note blockers for the next agent in this file or in the relevant report.
 - **Confirm first:** force pushes, deleting branches, and anything that runs on luffy. The user runs luffy commands themselves.

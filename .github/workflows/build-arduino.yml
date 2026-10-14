@@ -1,0 +1,38 @@
+# Fork-only: publish branch `arduino` = main + prebuilt WebUI (nanobot/web/dist).
+# The arduino server (Arduino UNO Q) never compiles the WebUI; it installs this branch with
+#   NANOBOT_SKIP_WEBUI_BUILD=1 uv tool install --force "nanobot-ai @ git+https://github.com/StefanoHernandez/nanobot@arduino"
+name: build-arduino
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-arduino
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.repository == 'StefanoHernandez/nanobot'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+      - name: Build WebUI
+        working-directory: webui
+        run: bun install --frozen-lockfile && bun run build
+      - name: Publish branch arduino
+        run: |
+          test -f nanobot/web/dist/index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --detach
+          git add -f nanobot/web/dist
+          git commit -q -m "chore(build): prebuilt WebUI for arduino ($(git rev-parse --short HEAD~0))"
+          git push -f origin HEAD:refs/heads/arduino
