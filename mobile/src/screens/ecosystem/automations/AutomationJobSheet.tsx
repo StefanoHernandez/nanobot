@@ -17,24 +17,96 @@ import { useSession } from "../../../state/sessionStore";
 import {
   fetchAutomationChats,
   fetchAutomationRunResult,
-  useAutomations,
 } from "../../../ecosystem/automations";
+import { toastEcosystemError } from "../../../ecosystem/common";
 import { formatSchedule } from "./AutomationRow";
 import type { AutomationChat, AutomationChatsPayload, SessionAutomationJob } from "@/lib/types";
+
+export type AutomationJobSheetProps = {
+  open: boolean;
+  job: SessionAutomationJob | null;
+  onClose: () => void;
+  onRun?: (id: string) => Promise<{ payload: any; result: string | null }>;
+  onDelete?: (id: string) => Promise<any>;
+  onUpdate?: (id: string, values: any) => Promise<any>;
+  onChangeChat?: (id: string, values: any) => Promise<any>;
+  onFetchResult?: (id: string, runAtMs: number, kind: "cron" | "local_trigger") => Promise<{ response: string | null }>;
+  onRefresh?: () => Promise<void>;
+};
+export function formatAtSchedule(atMs?: number | null): string {
+  if (typeof atMs !== "number" || isNaN(atMs) || atMs <= 0) return "";
+  const d = new Date(atMs);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString();
+}
+
+export function parseAtSchedule(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (/^\d{11,15}$/.test(trimmed)) {
+    const n = Number(trimmed);
+    if (!isNaN(n) && n > 0) return n;
+  }
+  const timestamp = Date.parse(trimmed);
+  if (!isNaN(timestamp)) {
+    return timestamp;
+  }
+  return null;
+}
+
+export function formatEverySchedule(everyMs?: number | null): string {
+  if (typeof everyMs !== "number" || isNaN(everyMs) || everyMs <= 0) return "";
+  const days = everyMs / 86_400_000;
+  if (days >= 1 && Number.isInteger(days)) {
+    return days === 1 ? "1 day" : `${days} days`;
+  }
+  const hours = everyMs / 3_600_000;
+  if (hours >= 1 && Number.isInteger(hours)) {
+    return hours === 1 ? "1 hour" : `${hours} hours`;
+  }
+  const mins = Math.round(everyMs / 60_000);
+  return mins === 1 ? "1 minute" : `${mins} minutes`;
+}
+
+export function parseEverySchedule(input: string): number | null {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)$/);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  if (isNaN(num) || num <= 0) return null;
+  const unit = match[2];
+  if (["d", "day", "days"].includes(unit)) {
+    return Math.round(num * 86_400_000);
+  }
+  if (["h", "hr", "hrs", "hour", "hours"].includes(unit)) {
+    return Math.round(num * 3_600_000);
+  }
+  if (["m", "min", "mins", "minute", "minutes"].includes(unit)) {
+    return Math.round(num * 60_000);
+  }
+  return null;
+}
 
 export function AutomationJobSheet({
   open,
   job,
   onClose,
-}: {
-  open: boolean;
-  job: SessionAutomationJob | null;
-  onClose: () => void;
-}) {
+  onRun,
+  onDelete,
+  onUpdate,
+  onChangeChat,
+  onFetchResult,
+}: AutomationJobSheetProps) {
   const t = useT();
   const th = useTheme();
   const { session } = useSession();
-  const { run, delete: deleteJob, update, changeChat, result: fetchResult } = useAutomations();
+
+  const run = onRun ?? (async () => ({ payload: null, result: null }));
+  const deleteJob = onDelete ?? (async () => {});
+  const update = onUpdate ?? (async () => {});
+  const changeChat = onChangeChat ?? (async () => {});
+  const fetchResult = onFetchResult ?? (async (id, ms, k) => session ? fetchAutomationRunResult(session, id, ms, k) : { response: null });
 
   const [confirmRun, setConfirmRun] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -47,6 +119,7 @@ export function AutomationJobSheet({
   // Edit fields
   const [messageText, setMessageText] = useState("");
   const [scheduleExpr, setScheduleExpr] = useState("");
+  const initialScheduleRef = useRef("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -63,7 +136,18 @@ export function AutomationJobSheet({
   useEffect(() => {
     if (job) {
       setMessageText(job.payload?.message || "");
-      setScheduleExpr(job.schedule?.expr || (job.schedule?.at_ms ? String(job.schedule.at_ms) : ""));
+      let initSchedule = "";
+      if (job.schedule) {
+        if (job.schedule.kind === "at" || job.schedule.at_ms !== undefined) {
+          initSchedule = job.schedule.at_ms !== undefined ? formatAtSchedule(job.schedule.at_ms) : "";
+        } else if (job.schedule.kind === "every" || job.schedule.every_ms !== undefined) {
+          initSchedule = job.schedule.every_ms !== undefined ? formatEverySchedule(job.schedule.every_ms) : "";
+        } else {
+          initSchedule = job.schedule.expr || "";
+        }
+      }
+      setScheduleExpr(initSchedule);
+      initialScheduleRef.current = initSchedule;
       setEditError(null);
       setRunResult(null);
       setShowChatPicker(false);
@@ -93,7 +177,7 @@ export function AutomationJobSheet({
         setRunResult(t("automations.runSuccess", "Execution completed"));
       }
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     } finally {
       runningRef.current = false;
       setRunning(false);
@@ -107,7 +191,7 @@ export function AutomationJobSheet({
       await deleteJob(job.id);
       onClose();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     }
   };
 
@@ -117,24 +201,67 @@ export function AutomationJobSheet({
       setEditError(t("automations.messageRequired"));
       return;
     }
-    if (!scheduleExpr.trim()) {
+    if (job.schedule && !scheduleExpr.trim()) {
       setEditError(t("automations.scheduleRequired"));
       return;
     }
 
     setSavingEdit(true);
     try {
-      const kind = (job.schedule?.kind as "cron" | "at" | "every") || "cron";
+      let scheduleToSend: any = undefined;
+      if (job.schedule) {
+        const kind = job.schedule.kind || "cron";
+        const tz = job.schedule.tz;
+        const edited = scheduleExpr.trim() !== initialScheduleRef.current.trim();
+        if (edited) {
+          if (kind === "at") {
+            const parsed = parseAtSchedule(scheduleExpr);
+            if (parsed === null) {
+              setEditError(t("automations.invalidSchedule", "Invalid schedule format"));
+              return;
+            }
+            scheduleToSend = {
+              kind: "at",
+              at_ms: parsed,
+              ...(tz ? { tz } : {}),
+            };
+          } else if (kind === "every") {
+            const parsed = parseEverySchedule(scheduleExpr);
+            if (parsed === null) {
+              setEditError(t("automations.invalidSchedule", "Invalid schedule format"));
+              return;
+            }
+            scheduleToSend = {
+              kind: "every",
+              every_ms: parsed,
+              ...(tz ? { tz } : {}),
+            };
+          } else {
+            scheduleToSend = {
+              kind: "cron",
+              expr: scheduleExpr.trim(),
+              ...(tz ? { tz } : {}),
+            };
+          }
+        } else {
+          scheduleToSend = {
+            kind,
+            ...(job.schedule.at_ms !== undefined ? { at_ms: job.schedule.at_ms } : {}),
+            ...(job.schedule.every_ms !== undefined ? { every_ms: job.schedule.every_ms } : {}),
+            ...(job.schedule.expr !== undefined ? { expr: job.schedule.expr } : {}),
+            ...(tz ? { tz } : {}),
+          };
+        }
+      }
+
       await update(job.id, {
         message: messageText.trim(),
-        schedule: {
-          kind,
-          expr: scheduleExpr.trim(),
-        },
+        ...(scheduleToSend ? { schedule: scheduleToSend } : {}),
       });
+      initialScheduleRef.current = scheduleExpr.trim();
       toast.show(t("automations.saved", "Saved"));
     } catch (e) {
-      setEditError(e instanceof Error ? e.message : String(e));
+      setEditError(t("common.operationFailed", "Operazione non riuscita"));
     } finally {
       setSavingEdit(false);
     }
@@ -148,7 +275,7 @@ export function AutomationJobSheet({
       const payload = await fetchAutomationChats(session, job.id);
       setChatsPayload(payload);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
       setShowChatPicker(false);
     } finally {
       setLoadingChats(false);
@@ -167,7 +294,7 @@ export function AutomationJobSheet({
       setShowChatPicker(false);
       toast.show(t("automations.chatChanged", "Chat changed"));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     } finally {
       setChangingChat(false);
     }
@@ -181,7 +308,7 @@ export function AutomationJobSheet({
       const res = await fetchResult(job.id, runItem.run_at_ms, kind);
       setPastRunResult(res.response || "No output recorded");
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     } finally {
       setLoadingPastRun(false);
     }

@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { IconButton } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
-import { toast } from "../../../ui/components/Toast";
+import { toastEcosystemError } from "../../../ecosystem/common";
 import { groupByDay, useAutomations } from "../../../ecosystem/automations";
 import { AutomationRow } from "./AutomationRow";
 import { AutomationJobSheet } from "./AutomationJobSheet";
@@ -21,10 +21,24 @@ import type { SessionAutomationJob } from "@/lib/types";
 export function AutomationsScreen({ now }: { now?: number }) {
   const t = useT();
   const th = useTheme();
-  const { jobs, loading, error, refresh, enable, disable } = useAutomations();
+  const {
+    jobs,
+    loading,
+    error,
+    refresh,
+    enable,
+    disable,
+    run,
+    delete: deleteJob,
+    update,
+    changeChat,
+    result: fetchResult,
+  } = useAutomations();
 
   const [selectedJob, setSelectedJob] = useState<SessionAutomationJob | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const activeJob = selectedJob ? (jobs.find((j) => j.id === selectedJob.id) ?? selectedJob) : null;
 
   const grouped = groupByDay(jobs, now ?? Date.now());
   const sections = [
@@ -42,7 +56,7 @@ export function AutomationsScreen({ now }: { now?: number }) {
         await disable(job.id);
       }
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     } finally {
       setTogglingId(null);
     }
@@ -65,7 +79,7 @@ export function AutomationsScreen({ now }: { now?: number }) {
       {error ? (
         <View style={styles.errorBox}>
           <Text style={[styles.errorText, { color: th.colors.destructive }]}>
-            {error}
+            {t("common.operationFailed", "Operazione non riuscita")}
           </Text>
         </View>
       ) : null}
@@ -119,9 +133,15 @@ export function AutomationsScreen({ now }: { now?: number }) {
 
       {/* Detail & Action Sheet */}
       <AutomationJobSheet
-        open={!!selectedJob}
-        job={selectedJob}
+        open={!!activeJob}
+        job={activeJob}
         onClose={() => setSelectedJob(null)}
+        onRun={run}
+        onDelete={deleteJob}
+        onUpdate={update}
+        onChangeChat={changeChat}
+        onFetchResult={fetchResult}
+        onRefresh={refresh}
       />
     </SafeAreaView>
   );

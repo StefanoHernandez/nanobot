@@ -147,6 +147,7 @@ const DEFAULT_POLL_MS = 5000;
 
 /** qr_url and the link are live login credentials: kept in memory only while pending, never logged. */
 export function useChannelConnect(channel: string, instanceId?: string, onFeatures?: (p: NanobotFeaturesPayload) => void) {
+  const { session } = useSession();
   const { mutate } = useSettings();
   const [state, setState] = useState<ConnectState>("idle");
   const [info, setInfo] = useState<ChannelConnectPayload | null>(null);
@@ -154,11 +155,25 @@ export function useChannelConnect(channel: string, instanceId?: string, onFeatur
   const [verificationFailed, setVerificationFailed] = useState(false);
   const sid = useRef<string | null>(null);
   const gen = useRef(0);
+  const consecutiveErrors = useRef(0);
+  const prevSession = useRef(session);
   const verify = useRef<string | undefined>(undefined);
   const mutateRef = useRef(mutate);
   mutateRef.current = mutate;
   const featuresRef = useRef(onFeatures);
   featuresRef.current = onFeatures;
+
+  useEffect(() => {
+    if (prevSession.current !== session) {
+      prevSession.current = session;
+      sid.current = null;
+      gen.current++;
+      consecutiveErrors.current = 0;
+      setState("idle");
+      setInfo(null);
+      setError(null);
+    }
+  }, [session]);
 
   const apply = useCallback((p: ChannelConnectPayload) => {
     setInfo((cur) => ({ ...(cur ?? p), ...p, qr_url: p.qr_url ?? cur?.qr_url }));
@@ -173,6 +188,7 @@ export function useChannelConnect(channel: string, instanceId?: string, onFeatur
   const start = useCallback(async (params: Record<string, string | boolean> = {}) => {
     const my = ++gen.current;
     setError(null);
+    consecutiveErrors.current = 0;
     verify.current = undefined;
     try {
       const p = await mutateRef.current<ChannelConnectPayload>(
@@ -208,11 +224,23 @@ export function useChannelConnect(channel: string, instanceId?: string, onFeatur
         { channel, session_id: id, ...(code ? { verify_code: code } : {}) },
         { timeoutMs: 150_000 },
       );
-      if (gen.current === my) apply(p);
+      if (gen.current === my) {
+        consecutiveErrors.current = 0;
+        apply(p);
+      }
     } catch (e) {
       if (gen.current !== my) return;
       setError(e instanceof Error ? e.message : String(e));
-      if (isPolicyError(e)) (sid.current = null), setState("error"); // permanent; other errors are transient: keep polling
+      if (isPolicyError(e)) {
+        sid.current = null;
+        setState("error"); // permanent;
+      } else {
+        consecutiveErrors.current++;
+        if (consecutiveErrors.current >= 5) {
+          sid.current = null;
+          setState("error");
+        }
+      }
     }
   }, [channel, apply]);
 

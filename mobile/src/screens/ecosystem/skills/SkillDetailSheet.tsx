@@ -5,6 +5,7 @@ import { Button, Sheet } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { Markdown } from "../../../ui/markdown/Markdown";
 import { useSkills } from "../../../ecosystem/skills";
+import { isPolicyError } from "../../../ecosystem/common";
 import type { SkillDetail } from "@/lib/types";
 
 export function SkillDetailSheet({
@@ -34,7 +35,7 @@ export function SkillDetailSheet({
           if (active) setSkillDetail(res);
         })
         .catch((e) => {
-          if (active) setError(e instanceof Error ? e.message : String(e));
+          if (active) setError(isPolicyError(e) ? t("apps.gateBanner") : t("common.operationFailed"));
         })
         .finally(() => {
           if (active) setLoading(false);

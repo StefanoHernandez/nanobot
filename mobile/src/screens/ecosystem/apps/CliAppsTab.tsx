@@ -5,7 +5,7 @@ import { Button, Dialog } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useCliApps } from "../../../ecosystem/apps";
-import { isPolicyError } from "../../../ecosystem/common";
+import { toastEcosystemError } from "../../../ecosystem/common";
 import type { CliAppInfo } from "@/lib/types";
 
 export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
@@ -13,7 +13,7 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
   const th = useTheme();
   const { apps, loading, refresh, install, update, uninstall, test: testApp } = useCliApps();
 
-  const [loadingApp, setLoadingApp] = useState<string | null>(null);
+  const [inFlightApps, setInFlightApps] = useState<Set<string>>(new Set());
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     type: "install" | "update" | "uninstall";
@@ -33,7 +33,7 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
     setConfirmDialog({ open: false, type: "install", app: null });
     if (!app) return;
 
-    setLoadingApp(app.name);
+    setInFlightApps((prev) => new Set(prev).add(app.name));
     try {
       let res: { timedOut: boolean; result?: any } | undefined;
       if (type === "install") {
@@ -48,25 +48,29 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
         toast.show(t("apps.timedOut"));
       }
     } catch (e) {
-      if (isPolicyError(e)) {
-        toast.show(t("apps.gateBanner"));
-      } else {
-        toast.show(e instanceof Error ? e.message : String(e));
-      }
+      toastEcosystemError(e, t);
     } finally {
-      setLoadingApp(null);
+      setInFlightApps((prev) => {
+        const next = new Set(prev);
+        next.delete(app.name);
+        return next;
+      });
     }
   };
 
   const handleTest = async (app: CliAppInfo) => {
-    setLoadingApp(app.name);
+    setInFlightApps((prev) => new Set(prev).add(app.name));
     try {
       await testApp(app.name);
       toast.show(t("common.success", "Success"));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e));
+      toastEcosystemError(e, t);
     } finally {
-      setLoadingApp(null);
+      setInFlightApps((prev) => {
+        const next = new Set(prev);
+        next.delete(app.name);
+        return next;
+      });
     }
   };
 
@@ -106,7 +110,7 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
           </View>
         ) : (
           apps.map((app) => {
-            const isOperating = loadingApp === app.name;
+            const isOperating = inFlightApps.has(app.name);
             const version = app.manifest?.version || (app as any).version;
             const statusKey = `apps.status.${app.status}`;
             const statusLabel = t(statusKey, app.status);

@@ -108,10 +108,12 @@ export function useMcp() {
   };
 }
 
+import { usePolling } from "./common";
+
 export type McpOAuthState = "idle" | "awaiting_user" | "polling" | "done" | "error";
 export const MCP_OAUTH_POLL_MS = 1000;
 
-export function useMcpOAuth(name: string) {
+export function useMcpOAuth(name: string, onDone?: () => void) {
   const { session } = useSession();
   const { mutate } = useSettings();
   const [state, setState] = useState<McpOAuthState>("idle");
@@ -122,65 +124,75 @@ export function useMcpOAuth(name: string) {
   const flowRef = useRef<McpOAuthFlowPayload | null>(null);
   const mutateRef = useRef(mutate);
   mutateRef.current = mutate;
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  const consecutiveErrors = useRef(0);
 
   useEffect(
     () => () => {
       gen.current++;
       const f = flowRef.current;
-      if (f && (f.completion_input as unknown as string) === "device_code") {
-        void mutateRef.current("settings.mcp.oauth_cancel", { flow_id: f.flow_id }).catch(() => {});
+      if (f?.flow_id) {
+        Promise.resolve(mutateRef.current("settings.mcp.oauth_cancel", { flow_id: f.flow_id })).catch(() => {});
       }
     },
     [],
   );
 
-  const pollStatus = useCallback(
-    async (flowId: string) => {
-      const my = gen.current;
-      setState("polling");
-      try {
-        for (;;) {
-          if (Date.now() >= expiresAt.current) {
-            setError("expired");
-            setState("error");
-            return;
-          }
-          await new Promise((res) => setTimeout(res, MCP_OAUTH_POLL_MS));
-          if (gen.current !== my) return;
-          if (Date.now() >= expiresAt.current) {
-            setError("expired");
-            setState("error");
-            return;
-          }
-          if (!session) return;
-          const st = await session.get<McpOAuthFlowPayload>(
-            `/api/settings/mcp-oauth/status?flow_id=${encodeURIComponent(flowId)}`,
-          );
-          if (gen.current !== my) return;
-          if (st.status === "connected") {
-            flowRef.current = null;
-            setState("done");
-            return;
-          }
-          if (st.status === "failed" || st.status === "cancelled") {
-            flowRef.current = null;
-            setError(st.status);
-            setState("error");
-            return;
-          }
-        }
-      } catch (e) {
-        if (gen.current !== my) return;
+  const pollTick = useCallback(async () => {
+    const my = gen.current;
+    const f = flowRef.current;
+    if (!f?.flow_id || !session) return;
+    try {
+      const st = await session.get<McpOAuthFlowPayload>(
+        `/api/settings/mcp-oauth/status?flow_id=${encodeURIComponent(f.flow_id)}`,
+      );
+      if (gen.current !== my) return;
+      consecutiveErrors.current = 0;
+      if (st.status === "connected") {
+        flowRef.current = null;
+        setState("done");
+        onDoneRef.current?.();
+        return;
+      }
+      if (st.status === "failed" || st.status === "cancelled") {
+        flowRef.current = null;
+        setError(st.status);
+        setState("error");
+        return;
+      }
+    } catch (e) {
+      if (gen.current !== my) return;
+      consecutiveErrors.current++;
+      if (consecutiveErrors.current >= 3) {
+        flowRef.current = null;
         setError(e instanceof Error ? e.message : String(e));
         setState("error");
       }
+    }
+  }, [session]);
+
+  usePolling({
+    enabled: state === "polling",
+    intervalMs: MCP_OAUTH_POLL_MS,
+    expiresAtMs: flow ? expiresAt.current : undefined,
+    tick: pollTick,
+    onExpire: () => {
+      const f = flowRef.current;
+      flowRef.current = null;
+      if (f?.flow_id) {
+        Promise.resolve(mutateRef.current("settings.mcp.oauth_cancel", { flow_id: f.flow_id })).catch(() => {});
+      }
+      setError("expired");
+      setState("error");
     },
-    [session],
-  );
+  });
 
   const start = useCallback(
     async (reset: boolean = false) => {
       const my = ++gen.current;
+      consecutiveErrors.current = 0;
       setError(null);
       try {
         const r = await mutate<McpOAuthFlowPayload>(
@@ -192,14 +204,16 @@ export function useMcpOAuth(name: string) {
         if (r.status === "connected") {
           flowRef.current = null;
           setState("done");
+          onDoneRef.current?.();
           return;
         }
         flowRef.current = r;
         expiresAt.current = Date.now() + ((r.expires_in && r.expires_in > 0 ? r.expires_in : 15 * 60) * 1000);
         setFlow(r);
-        setState("awaiting_user");
-        if ((r.completion_input as unknown as string) === "device_code") {
-          void pollStatus(r.flow_id);
+        if (r.completion_input === "callback_url") {
+          setState("awaiting_user");
+        } else {
+          setState("polling");
         }
       } catch (e) {
         if (gen.current !== my) return;
@@ -207,7 +221,7 @@ export function useMcpOAuth(name: string) {
         setState("error");
       }
     },
-    [mutate, name, pollStatus],
+    [mutate, name],
   );
 
   const submit = useCallback(
@@ -215,6 +229,7 @@ export function useMcpOAuth(name: string) {
       const f = flowRef.current;
       if (!f) return;
       const my = ++gen.current;
+      consecutiveErrors.current = 0;
       setState("polling");
       try {
         const r = await mutate<McpOAuthFlowPayload>("settings.mcp.oauth_complete", {
@@ -225,16 +240,16 @@ export function useMcpOAuth(name: string) {
         if (r?.status === "connected") {
           flowRef.current = null;
           setState("done");
+          onDoneRef.current?.();
           return;
         }
-        void pollStatus(f.flow_id);
       } catch (e) {
         if (gen.current !== my) return;
         setError(e instanceof Error ? e.message : String(e));
         setState("error");
       }
     },
-    [mutate, pollStatus],
+    [mutate],
   );
 
   const cancel = useCallback(async () => {

@@ -10,6 +10,7 @@ import { toast } from "../../src/ui/components";
 import { SettingsScreen } from "../../src/screens/settings/SettingsScreen";
 import { SettingsSection } from "../../src/screens/settings/SettingsSection";
 import { prefs } from "../../src/settings/prefs";
+import * as settingsStoreModule from "../../src/settings/store";
 import { settingsStore } from "../../src/settings/store";
 
 const mockRun = jest.fn();
@@ -205,5 +206,16 @@ describe("exit guard", () => {
     await fireEvent.press(screen.getByText("Stay"));
     expect(mockNav.dispatch).not.toHaveBeenCalled();
     expect(screen.queryByText("Restart pending")).toBeNull();
+  });
+
+  test("M17: SettingsShell refreshes settings on focus", async () => {
+    await render(<SettingsScreen />);
+    mockGet.mockClear();
+    const focusHandler = (mockNav.addListener.mock.calls as unknown as [string, () => void][]).find((c) => c[0] === "focus")?.[1];
+    expect(focusHandler).toBeTruthy();
+    await act(async () => {
+      focusHandler!();
+    });
+    expect(mockGet).toHaveBeenCalledWith("/api/settings");
   });
 });

@@ -19,7 +19,11 @@ export function SettingsShell({ title, onBack, guard, children }: { title: strin
 
   useEffect(() => {
     if (!data) void refresh();
-  }, [data, refresh]);
+    const unsub = nav?.addListener?.("focus", () => {
+      void refresh();
+    });
+    return () => unsub?.();
+  }, [data, refresh, nav]);
 
   useEffect(() => {
     if (!guard || !pending) return;
