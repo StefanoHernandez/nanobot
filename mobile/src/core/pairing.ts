@@ -68,3 +68,46 @@ export async function mintPairingCode(session: NanobotSession): Promise<{ code: 
   if (!data.code || !data.qr) throw new Error("mint failed");
   return { code: data.code, qr: data.qr };
 }
+
+export type PairedDevice = {
+  id: string;
+  name: string;
+  created: number;
+  last_seen: number | null;
+  revoked: boolean;
+};
+
+export async function listDevices(session: NanobotSession): Promise<PairedDevice[]> {
+  const data = await session.get<{ devices?: unknown }>("/api/ext/devices");
+  if (!data || !Array.isArray(data.devices)) throw new Error("devices failed");
+  const devices: PairedDevice[] = [];
+  for (const row of data.devices) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as Record<string, unknown>;
+    if (typeof rec.id !== "string" || !rec.id || typeof rec.name !== "string" || !rec.name) continue;
+    const last = rec.last_seen;
+    devices.push({
+      id: rec.id,
+      name: rec.name,
+      created: typeof rec.created === "number" ? rec.created : 0,
+      last_seen: typeof last === "number" && Number.isFinite(last) ? last : null,
+      revoked: rec.revoked === true,
+    });
+  }
+  return devices;
+}
+
+export async function revokeDevice(session: NanobotSession, id: string): Promise<void> {
+  if (!id) throw new Error("revoke failed");
+  const res = await fetch(`${session.baseUrl}/api/ext/devices/revoke`, {
+    method: "POST",
+    redirect: "error",
+    credentials: "omit",
+    headers: {
+      Authorization: `Bearer ${session.apiToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id }),
+  });
+  if (!res.ok) throw new Error("revoke failed");
+}
