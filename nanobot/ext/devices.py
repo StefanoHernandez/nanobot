@@ -28,6 +28,7 @@ from nanobot.webui.http_utils import (
 )
 
 PREFIX = "/api/ext/devices"
+LAST_SEEN_RESOLUTION_S = 60
 CODE_TTL_S = 300
 MAX_UNUSED_CODES = 5
 MAX_DEVICES = 20
@@ -280,18 +281,23 @@ def live_device_id(headers: Any, path: Path | None = None) -> str | None:
     digest = token_hash(raw)
     target = path or devices_file_path()
 
-    def mutate(state: dict[str, Any]) -> str | None:
+    def mutate(state: dict[str, Any]) -> tuple[str | None, bool]:
         for device in state["devices"]:
             stored = str(device.get("hash") or "")
             if not hmac.compare_digest(stored, digest):
                 continue
             if device.get("revoked"):
-                return None
-            device["last_seen"] = int(time.time())
-            return str(device.get("id") or "") or None
-        return None
+                return None, False
+            now = int(time.time())
+            # Rewrite (and fsync) the file at most once a minute per device, not on every bootstrap.
+            stale = now - int(device.get("last_seen") or 0) >= LAST_SEEN_RESOLUTION_S
+            if stale:
+                device["last_seen"] = now
+            return str(device.get("id") or "") or None, stale
+        return None, False
 
-    return cast("str | None", _with_state(target, mutate, persist=bool))
+    result = cast("tuple[str | None, bool]", _with_state(target, mutate, persist=lambda r: r[1]))
+    return result[0]
 
 
 def header_is_live_device(headers: Any, path: Path | None = None) -> bool:
