@@ -15,7 +15,7 @@ import tempfile
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -23,7 +23,7 @@ from aiohttp import web
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
-from nanobot.ext.devices import DeviceError, _read_json, _router_admin_authorized, admin_authorized
+from nanobot.ext.devices import DeviceError, admin_authorized, read_json, router_admin_authorized
 from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/costs"
@@ -49,17 +49,17 @@ def _clean_prices(raw: Any) -> dict[str, dict[str, float]]:
     if not isinstance(raw, dict):
         return {}
     out: dict[str, dict[str, float]] = {}
-    for key, entry in list(raw.items())[:MAX_PRICES]:
+    for key, entry in list(cast(dict[Any, Any], raw).items())[:MAX_PRICES]:
         if not isinstance(key, str) or not key.strip() or len(key) > 300 or not isinstance(entry, dict):
             continue
-        price = {f: v for f in PRICE_FIELDS if (v := _num(entry.get(f))) is not None}
+        price = {f: v for f in PRICE_FIELDS if (v := _num(cast(dict[str, Any], entry).get(f))) is not None}
         if "input" in price and "output" in price:
             out[key.strip()] = price
     return out
 
 
 def _clean(data: Any) -> dict[str, Any]:
-    data = data if isinstance(data, dict) else {}
+    data = cast(dict[str, Any], data if isinstance(data, dict) else {})
     cap = _num(data.get("daily_cap_usd"))
     alert = _num(data.get("alert_pct"))
     return {
@@ -206,7 +206,7 @@ def dispatch_costs_get(router: Any, request: WsRequest, got: str) -> Response | 
     if got != PREFIX:
         return None
     secret = router.config.token_issue_secret.strip() or router.config.token.strip()
-    if not _router_admin_authorized(secret, router, request):
+    if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
     raw = parse_qs(urlsplit(request.path).query).get("days", ["30"])[0]
     days = int(raw) if raw.isdigit() else 30
@@ -222,7 +222,7 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
     if request.path != PREFIX + "/settings":
         return web.json_response({"error": "not_found"}, status=404)
     try:
-        body = await _read_json(request)
+        body = await read_json(request)
     except DeviceError as exc:
         return web.json_response({"error": exc.code}, status=exc.status)
     with _lock:

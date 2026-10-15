@@ -27,7 +27,7 @@ from loguru import logger
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
-from nanobot.ext.devices import DeviceError, _read_json, _router_admin_authorized, admin_authorized
+from nanobot.ext.devices import DeviceError, admin_authorized, read_json, router_admin_authorized
 from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/backup"
@@ -164,8 +164,10 @@ def restore_backup(name: Any) -> dict[str, Any]:
                 members = _safe_members(tar)
                 if not any(m.name == "config.json" for m in members):
                     raise BackupError(400, "not_a_nanobot_backup")
-                kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
-                tar.extractall(staging, members=members, **kwargs)
+                if hasattr(tarfile, "data_filter"):
+                    tar.extractall(staging, members=members, filter="data")
+                else:
+                    tar.extractall(staging, members=members)
             os.chmod(staging, 0o700)
             home.rename(aside)
             staging.rename(home)
@@ -201,7 +203,7 @@ def dispatch_backup_get(router: Any, request: WsRequest, got: str) -> Response |
     if got != PREFIX:
         return None
     secret = router.config.token_issue_secret.strip() or router.config.token.strip()
-    if not _router_admin_authorized(secret, router, request):
+    if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
     return http_json_response(_payload(), extra_headers=[("Cache-Control", "no-store")])
 
@@ -212,7 +214,7 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
     if not admin_authorized(secret, tokens, request):
         return web.json_response({"error": "unauthorized"}, status=401)
     try:
-        body = await _read_json(request)
+        body = await read_json(request)
         if request.path == PREFIX + "/create":
             return web.json_response({"backup": await asyncio.to_thread(create_backup)})
         if request.path == PREFIX + "/delete":

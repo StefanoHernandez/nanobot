@@ -75,7 +75,7 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-def _validate_no_control(text: str, *, max_len: int, code: str = "invalid_text") -> str:
+def _validate_no_control(text: object, *, max_len: int, code: str = "invalid_text") -> str:
     if not isinstance(text, str):
         raise KanbanError(400, code)
     if len(text) > max_len:
@@ -85,7 +85,7 @@ def _validate_no_control(text: str, *, max_len: int, code: str = "invalid_text")
     return text
 
 
-def _validate_prose(text: str, *, max_len: int, code: str) -> str:
+def _validate_prose(text: object, *, max_len: int, code: str) -> str:
     """Like titles, but descriptions and chat may contain newlines and tabs."""
     if not isinstance(text, str) or len(text) > max_len:
         raise KanbanError(400, code)
@@ -164,7 +164,7 @@ def _parse_artifacts(raw: Any) -> list[str]:
     if not isinstance(raw, list):
         raise KanbanError(400, "invalid_artifacts")
     out: list[str] = []
-    for item in raw:
+    for item in cast(list[Any], raw):
         if not isinstance(item, str) or "\x00" in item:
             raise KanbanError(400, "invalid_artifacts")
         if len(item) > MAX_ARTIFACT_LEN:
@@ -188,7 +188,7 @@ def _loads_artifacts(raw: str | None) -> list[str]:
         return []
     if not isinstance(data, list):
         return []
-    return [str(x) for x in data if isinstance(x, str)]
+    return [str(x) for x in cast(list[Any], data) if isinstance(x, str)]
 
 
 def _row_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -553,9 +553,10 @@ class KanbanStore:
         workspace_mode = str(body.get("workspace_mode") or "scratch")
         if workspace_mode not in WORKSPACE_MODES:
             raise KanbanError(400, "invalid_workspace_mode")
-        parent_ids = body.get("parent_ids") or []
-        if not isinstance(parent_ids, list):
+        parent_ids_raw: Any = body.get("parent_ids") or []
+        if not isinstance(parent_ids_raw, list):
             raise KanbanError(400, "invalid_parent_ids")
+        parent_ids = cast(list[Any], parent_ids_raw)
         with self._lock, self._connect() as conn:
             self._board_or_404(conn, board_id)
             count = conn.execute(
@@ -656,7 +657,7 @@ class KanbanStore:
                     "DELETE FROM task_links WHERE child_id = ?",
                     (task_id,),
                 )
-                for parent in body["parent_ids"]:
+                for parent in cast(list[Any], body["parent_ids"]):
                     if not isinstance(parent, str):
                         raise KanbanError(400, "invalid_parent_ids")
                     self._add_dependency_locked(conn, parent, task_id)
@@ -1112,7 +1113,7 @@ class KanbanStore:
         author_id: str = "user",
         author_name: str = "User",
         task_id: str | None = None,
-        parent_hop_count: int = 0,
+        parent_hop_count: object = 0,
     ) -> dict[str, Any]:
         content = _validate_prose(content, max_len=MAX_MESSAGE, code="invalid_content")
         author_name = _validate_no_control(author_name, max_len=MAX_NAME, code="invalid_name")

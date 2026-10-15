@@ -19,7 +19,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import web
 from loguru import logger
@@ -28,7 +28,7 @@ from websockets.http11 import Response
 
 from nanobot.agent.tools.base import ToolResult
 from nanobot.agent.tools.context import current_request_session_key
-from nanobot.ext.devices import DeviceError, _read_json, _router_admin_authorized, admin_authorized
+from nanobot.ext.devices import DeviceError, admin_authorized, read_json, router_admin_authorized
 from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/approvals"
@@ -49,8 +49,9 @@ def _load(path: Path) -> dict[str, Any]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {"enabled": False, "allow": {}}
-    allow = data.get("allow") if isinstance(data.get("allow"), dict) else {}
-    return {"enabled": data.get("enabled") is True, "allow": {str(k): list(v) for k, v in allow.items() if isinstance(v, list)}}
+    data = cast(dict[str, Any], data)
+    allow = cast(dict[str, Any], data.get("allow") if isinstance(data.get("allow"), dict) else {})
+    return {"enabled": data.get("enabled") is True, "allow": {str(k): list(cast(list[Any], v)) for k, v in allow.items() if isinstance(v, list)}}
 
 
 def _save(path: Path, state: dict[str, Any]) -> None:
@@ -164,9 +165,9 @@ GATE = ApprovalGate()
 
 
 def _summary(params: dict[str, Any]) -> str:
-    command = params.get("command") or params.get("cmd") or ""
+    command: Any = params.get("command") or params.get("cmd") or ""
     if isinstance(command, list):
-        command = " ".join(str(c) for c in command)
+        command = " ".join(str(c) for c in cast(list[Any], command))
     cwd = params.get("working_dir") or params.get("workdir") or ""
     return f"{command}\n(cwd: {cwd})" if cwd else str(command)
 
@@ -196,7 +197,7 @@ def dispatch_approvals_get(router: Any, request: WsRequest, got: str) -> Respons
     if got != PREFIX:
         return None
     secret = router.config.token_issue_secret.strip() or router.config.token.strip()
-    if not _router_admin_authorized(secret, router, request):
+    if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
     state = GATE.state()
     payload = {"enabled": state["enabled"], "pending": GATE.pending(), "allow": state["allow"]}
@@ -209,7 +210,7 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
     if not admin_authorized(secret, tokens, request):
         return web.json_response({"error": "unauthorized"}, status=401)
     try:
-        body = await _read_json(request)
+        body = await read_json(request)
         if request.path == PREFIX + "/decide":
             request_id, allow, always = body.get("id"), body.get("allow"), body.get("always", False)
             if not isinstance(request_id, str) or not isinstance(allow, bool) or not isinstance(always, bool):

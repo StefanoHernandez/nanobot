@@ -14,14 +14,14 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from aiohttp import web
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
-from nanobot.ext.devices import DeviceError, _read_json, _router_admin_authorized, admin_authorized
+from nanobot.ext.devices import DeviceError, admin_authorized, read_json, router_admin_authorized
 from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/prompts"
@@ -55,8 +55,10 @@ def _load() -> list[dict[str, Any]]:
         data = json.loads(prompts_file_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
-    items = data.get("prompts") if isinstance(data, dict) else None
-    return [p for p in items if isinstance(p, dict) and isinstance(p.get("id"), str)] if isinstance(items, list) else []
+    items = cast(dict[str, Any], data).get("prompts") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return []
+    return [p for p in cast(list[Any], items) if isinstance(p, dict) and isinstance(cast(dict[str, Any], p).get("id"), str)]
 
 
 def _save(items: list[dict[str, Any]]) -> None:
@@ -146,7 +148,7 @@ def dispatch_prompts_get(router: Any, request: WsRequest, got: str) -> Response 
     if got != PREFIX:
         return None
     secret = router.config.token_issue_secret.strip() or router.config.token.strip()
-    if not _router_admin_authorized(secret, router, request):
+    if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
     project = parse_qs(urlsplit(request.path).query).get("project", [None])[0]
     return http_json_response({"prompts": list_prompts(project)}, extra_headers=[("Cache-Control", "no-store")])
@@ -158,7 +160,7 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
     if not admin_authorized(secret, tokens, request):
         return web.json_response({"error": "unauthorized"}, status=401)
     try:
-        body = await _read_json(request)
+        body = await read_json(request)
         if request.path == PREFIX + "/save":
             return web.json_response({"prompt": save_prompt(body)})
         if request.path == PREFIX + "/delete":
