@@ -149,6 +149,8 @@ export function Composer({ chatKey }: { chatKey: string }) {
     }
   }, [sendError, t, clearSendError]);
 
+  useEffect(() => () => toast.setLift(0), []);
+
   useEffect(() => {
     if (prevUploading.current && !uploading && !sendError) {
       setPickedSessions([]);
@@ -310,6 +312,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
   const isRunningEmpty = running && !hasContent;
 
   return (
+    <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
     <View style={[styles.container, { backgroundColor: th.colors.card, borderRadius: th.radius.lg }]}>
       {isSlash ? (
         <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
@@ -409,6 +412,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
           />
         </Sheet>
       ) : null}
+    </View>
     </View>
   );
 }
