@@ -32,18 +32,36 @@ function getTopHost() {
   return topHostId;
 }
 
+let currentToast: { message: string; expiresAt: number } | null = null;
+
 export const toast = {
   show(message: string) {
+    if (!message) {
+      currentToast = null;
+      clearTimeout(timer);
+      listeners.forEach((l) => l(null));
+      return;
+    }
+    const expiresAt = Date.now() + 3000;
+    currentToast = { message, expiresAt };
     listeners.forEach((l) => l(message));
     clearTimeout(timer);
-    timer = setTimeout(() => listeners.forEach((l) => l(null)), 3000);
+    timer = setTimeout(() => {
+      currentToast = null;
+      listeners.forEach((l) => l(null));
+    }, 3000);
   },
 };
 
 export function ToastHost() {
   const th = useTheme();
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0, left: 0, right: 0 };
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(() => {
+    if (currentToast && currentToast.expiresAt > Date.now()) {
+      return currentToast.message;
+    }
+    return null;
+  });
   const [id] = useState(() => ++nextHostId);
   const currentTop = useSyncExternalStore(subscribeHost, getTopHost, () => null);
 
@@ -58,9 +76,15 @@ export function ToastHost() {
 
   useEffect(() => {
     listeners.add(setMsg);
+    if (currentToast && currentToast.expiresAt > Date.now()) {
+      setMsg(currentToast.message);
+    }
     return () => {
       listeners.delete(setMsg);
-      if (!listeners.size) clearTimeout(timer);
+      if (!listeners.size) {
+        clearTimeout(timer);
+        currentToast = null;
+      }
     };
   }, []);
 
@@ -70,7 +94,7 @@ export function ToastHost() {
   return (
     <View pointerEvents="none" style={[styles.host, { bottom: insets.bottom + 24 }]}>
       <View style={{ backgroundColor: th.colors.foreground, borderRadius: th.radius.md, paddingHorizontal: 16, paddingVertical: 12 }}>
-        <Text accessibilityLiveRegion="polite" style={{ color: th.colors.background, fontSize: 14 }}>{msg}</Text>
+        <Text accessibilityLiveRegion="polite" style={{ color: th.colors.background, fontFamily: th.font.regular, fontSize: 14 }}>{msg}</Text>
       </View>
     </View>
   );
