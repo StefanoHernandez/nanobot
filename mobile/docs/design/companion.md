@@ -5,18 +5,18 @@ The subject: a pocket dashboard for **your own** bot, which lives on a small Ard
 ## Tokens (source of truth: `src/ui/theme.ts`)
 | Role | Light | Dark | Use |
 |---|---|---|---|
-| background | `#EEF0FF` periwinkle mist | `#14163A` deep indigo | screen canvas |
-| card | `#FFFFFF` | `#1E2150` | assistant bubble, composer, sheets |
-| foreground / ink | `#1E2150` | `#ECEDFF` | text |
-| mutedForeground | `#5A5E9A` | `#A3A7D6` | secondary text |
-| muted / secondary | `#E1E4FB` | `#262A66` | quiet fills, chips |
-| primary | `#1E2150` ink | `#F4B63F` sunflower | primary buttons (text = primaryForeground) |
-| brand | `#F4B63F` sunflower | same | the bot's colour: eyes, send button, "alive" accents. Never for errors. |
-| brandSoft / brandSoftForeground | `#FCE7B8` / `#6B4A07` | `#4A3A12` / `#FCE7B8` | tool-activity chips |
-| userBubble | `#1E2150` | `#3A3F8F` | your messages (white text) |
-| destructive | `#C2413B` | `#FF8A80` | errors, delete |
-| success | `#2E8A5B` | `#5CC98F` | connected |
-| border | `#D3D7F3` | `#33377A` | hairlines |
+| background | `#F7F4FB` violet paper | `#0C0B10` black | screen canvas |
+| card | `#FFFFFF` | `#16141E` | cards, composer, sheets |
+| foreground / ink | `#1C1428` | `#F4F0F8` | text |
+| mutedForeground | `#5C4E70` | `#C4B4D4` | secondary text |
+| muted / secondary | `#EFE6F6` | `#2A2436` | quiet fills, chips |
+| primary | `#4A2C72` | `#C9A6E8` | primary buttons (text = primaryForeground) |
+| brand | `#E0A01A` | `#F0B429` | the bot's gold: eyes, send, "alive" accents. Never for errors. |
+| brandSoft / brandSoftForeground | `#F8E7C0` / `#5C3D06` | `#3A3218` / `#F8E2A8` | tool-activity chips |
+| userBubble | `#4A2C72` | `#6B4589` | your messages (white text) |
+| destructive | `#B42318` | `#FF9A94` | errors, delete |
+| success | `#176B42` | `#7DCCA0` | connected |
+| border | `#E0D6EC` | `#3A3348` | hairlines |
 
 ## Type
 - **Bricolage Grotesque** (700, 800): display only — the bot's name, screen titles, Markdown h1-h3.
@@ -48,28 +48,28 @@ It lives in the thread header next to the bot name, with a one-line status under
 - At most one primary button per screen; the others are secondary or ghost.
 - Touch targets ≥ 48dp. Keep every function: this is a visual redesign only.
 
-## Dark scheme (2026-10-15, from the user's palette)
-The palette is Evergreen `#16302b`, Vintage Grape `#694873` and Dusty Mauve `#8b728e`. Surfaces step up in lightness, as in Material tonal elevation.
+## Dark scheme (2026-10-15)
+Black, purple, and gold. Surfaces step up in lightness (background, then card, then popover).
 
 | Role | Hex |
 |---|---|
-| background | `#0e221e` |
-| card | `#16302b` |
-| popover | `#1c3a34` |
-| text | `#e8f0ed` |
-| secondary text | `#b9a8bd` (lightened mauve: the original reaches only 3.2:1) |
-| primary button | `#c9a7d2` with `#2a1a30` text |
-| user bubble | `#694873` (Vintage Grape) |
-| bot | sunflower `#f4b63f` (unchanged) |
+| background | `#0c0b10` |
+| card | `#16141e` |
+| popover | `#221e2c` |
+| text | `#f4f0f8` |
+| secondary text | `#c4b4d4` |
+| primary button | `#c9a6e8` with `#1a1022` text |
+| user bubble | `#6b4589` |
+| bot | gold `#f0b429` |
 
-You are grape; the bot stays sunflower.
+You are purple; the bot stays gold.
 
 **Chart series** (context panel):
 
 | Scheme | input | output | cached | warn |
 |---|---|---|---|---|
-| light | `#2f3389` | `#b8780a` | `#7f84cf` | `#c2413b` |
-| dark | `#e4d4ec` | `#f4b63f` | `#9d7fa3` | `#ff9a94` |
+| light | `#4a2c72` | `#8a5608` | `#8b74a6` | `#b42318` |
+| dark | `#e4d0f5` | `#f0b429` | `#9b86b0` | `#ff9b94` |
 
 The series differ in lightness as well as hue (colour-blind safe), and each reaches at least 3:1 on the panel. Both rules are enforced in `test/ui/theme.test.ts`.
 

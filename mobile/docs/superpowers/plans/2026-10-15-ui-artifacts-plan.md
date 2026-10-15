@@ -1,6 +1,6 @@
 # Plan: "Notte Compagno" dark theme, UI refinements, better artifacts
 
-Date: 2026-10-15. Status: **approved**. Wave 1 (U-C1, U-C2), **A-3**, **A-4**, **U-C3**, **U-D1**, **A-1**, **A-2**, **A-6**, **U-S1**, **A-7** and the **A-5 chart** slice are on `claude/projects`. Markdown documents, maps and React are still open. T-N1 still waits for a side-by-side screenshot.
+Date: 2026-10-15. Status: **approved**. Wave 1 (U-C1, U-C2), **A-3**, **A-4**, **U-C3**, **U-D1**, **A-1**, **A-2**, **A-6**, **U-S1**, **A-7** and the **A-5 chart** slice are on `claude/projects`. Markdown documents, maps and React are still open. T-N1 was replaced on 2026-10-15: dark is black, purple and gold, not the indigo "Notte Compagno" tokens.
 Owner of this plan: Claude. Implementers: agy (briefs in `mobile/docs/agy/briefs/`), Claude for the design-critical and security parts.
 Design references: `mobile/docs/design/companion.md` (identity) and the impeccable/frontend-design guidance (product register, Android).
 
@@ -12,7 +12,7 @@ Design references: `mobile/docs/design/companion.md` (identity) and the impeccab
 ## Tasks
 | ID | What | Owner | Depends on | Touches (main files) |
 |---|---|---|---|---|
-| **T-N1** | "Notte Compagno" dark theme | Claude | none | `src/ui/theme.ts`, `docs/design/companion.md`, `test/ui/theme.test.ts` |
+| **T-N1** | Replaced: black, purple, gold (not the indigo Notte tokens) | **done** in `theme.ts` | none | `src/ui/theme.ts`, `docs/design/companion.md`, `test/ui/theme.test.ts` |
 | **U-C1** | Bot replies without a bubble; Markdown headings in Atkinson bold | agy | none | `src/screens/thread/MessageRow.tsx`, `src/ui/markdown/Markdown.tsx` |
 | **U-C2** | Composer on two rows | agy | none | `src/screens/thread/Composer.tsx` |
 | **U-C3** | Thread header: overflow "⋮" menu | **done** on `claude/projects` | **F-A merged** | `src/screens/thread/ThreadScreen.tsx` |
