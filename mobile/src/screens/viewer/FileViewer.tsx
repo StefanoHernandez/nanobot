@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from "react-native";
@@ -16,7 +17,7 @@ import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
-import { Button, IconButton, TextField, toast } from "../../ui/components";
+import { Button, Dialog, IconButton, TextField, toast } from "../../ui/components";
 import { artifactFixText, freshArtifactId } from "../../artifacts/fix";
 import { printDocument, writePng, writePreview } from "./exportArtifact";
 import { lockViewer } from "./orientation";
@@ -110,6 +111,8 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const [pngTicket, setPngTicket] = useState(0);
   const [pngBusy, setPngBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [network, setNetwork] = useState(false);
+  const [askNetwork, setAskNetwork] = useState(false);
 
   const ext = useMemo(() => langOf(name), [name]);
   const kind = useMemo(() => viewerKind(name), [name]);
@@ -117,6 +120,12 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const canFit = toolKind === "html";
   const canPng = toolKind === "svg" || toolKind === "mermaid";
   const canPdf = toolKind === "html" || toolKind === "svg";
+  const canNetwork = toolKind === "html" || toolKind === "svg" || toolKind === "mermaid";
+
+  useEffect(() => {
+    setNetwork(false);
+    setAskNetwork(false);
+  }, [name, opened?.id]);
 
   useEffect(() => {
     return () => {
@@ -591,6 +600,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                     html={versions[otherIndex].code}
                     name={name}
                     fit={fit}
+                    network={network}
                     onError={canAsk ? setFixError : undefined}
                     onFallback={() => setArtifactFallback(true)}
                   />
@@ -603,6 +613,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                     html={viewHtml}
                     name={name}
                     fit={fit}
+                    network={network}
                     pngTicket={pngTicket}
                     onPng={acceptPng}
                     onError={canAsk ? setFixError : undefined}
@@ -618,6 +629,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                 name={name}
                 fileSize={activeVersion ? (viewHtml?.length ?? 0) : fileSize}
                 fit={fit}
+                network={canNetwork ? network : false}
                 pngTicket={pngTicket}
                 onPng={acceptPng}
                 onError={canAsk ? setFixError : undefined}
@@ -778,7 +790,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     );
   };
 
-  const showTools = allowed && !artifactFallback && !loading && !error && !tooLarge && (canFit || canPng || canPdf);
+  const showTools = allowed && !artifactFallback && !loading && !error && !tooLarge && (canFit || canPng || canPdf || canNetwork);
   const toolRow = showTools ? (
     <View style={{ flexDirection: "row", alignItems: "center", minHeight: 48, paddingHorizontal: 8, gap: 4, borderBottomWidth: 1, borderBottomColor: th.colors.border }}>
       <IconButton
@@ -793,6 +805,21 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
       ) : null}
       {canPdf ? (
         <IconButton icon="file-pdf-box" size={22} onPress={savePdf} disabled={pdfBusy} accessibilityLabel={t("artifact.exportPdf")} />
+      ) : null}
+      {canNetwork ? (
+        <View style={{ minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center" }}>
+          <Switch
+            accessibilityLabel={network ? t("artifact.networkOn") : t("artifact.network")}
+            value={network || askNetwork}
+            onValueChange={(on) => {
+              if (on) setAskNetwork(true);
+              else {
+                setAskNetwork(false);
+                setNetwork(false);
+              }
+            }}
+          />
+        </View>
       ) : null}
     </View>
   ) : null;
@@ -877,6 +904,18 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
       {toolRow}
       {/* Body */}
       <View style={{ flex: 1 }}>{renderBody()}</View>
+      <Dialog
+        open={askNetwork}
+        title={t("artifact.networkTitle")}
+        message={t("artifact.networkBody")}
+        confirmLabel={t("artifact.networkAllow")}
+        cancelLabel={t("artifact.cancel")}
+        onConfirm={() => {
+          setNetwork(true);
+          setAskNetwork(false);
+        }}
+        onCancel={() => setAskNetwork(false)}
+      />
       {fixBar}
       </KeyboardAvoidingView>
     </View>
