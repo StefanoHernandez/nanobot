@@ -1,4 +1,5 @@
 import type { NanobotSession } from "./session";
+import { kv } from "../platform/storage";
 import { normalizeBaseUrl } from "./profiles";
 
 export function parsePairingQr(raw: string): { url: string; code: string } | null {
@@ -39,7 +40,16 @@ export function pairingDeviceName(input: string): string {
   return name;
 }
 
-export async function claimDevice(baseUrl: string, code: string, name: string): Promise<{ device_token: string }> {
+const pairedKey = (profileId: string) => `pairing.device.${profileId}`;
+
+/** The server's id for this phone, saved at pairing (not a secret: lets Settings warn before revoking itself). */
+export const pairedDevice = {
+  get: (profileId: string): string | null => kv.get(pairedKey(profileId)) ?? null,
+  set: (profileId: string, deviceId: string): void => kv.set(pairedKey(profileId), deviceId),
+  clear: (profileId: string): void => kv.del(pairedKey(profileId)),
+};
+
+export async function claimDevice(baseUrl: string, code: string, name: string): Promise<{ device_token: string; id: string | null }> {
   const root = baseUrl.replace(/\/+$/, "");
   const res = await fetch(`${root}/api/ext/devices/claim`, {
     method: "POST",
@@ -49,9 +59,9 @@ export async function claimDevice(baseUrl: string, code: string, name: string): 
     body: JSON.stringify({ code, name }),
   });
   if (!res.ok) throw new Error("claim failed");
-  const data = (await res.json()) as { device_token?: string };
+  const data = (await res.json()) as { device_token?: string; id?: string };
   if (!data.device_token) throw new Error("claim failed");
-  return { device_token: data.device_token };
+  return { device_token: data.device_token, id: typeof data.id === "string" ? data.id : null };
 }
 
 type MintResponse = { code: string; qr: string; expires_in?: number };
