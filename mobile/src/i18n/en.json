@@ -358,6 +358,16 @@
       "required": "Required",
       "duplicate": "Already exists",
       "invalid": "Invalid value"
+    },
+    "tasks": {
+      "title": "Models for tasks",
+      "subagent": "Subagents",
+      "subagentHelp": "helpers the bot starts for parallel work",
+      "dream": "Dream (memory)",
+      "dreamHelp": "periodic memory consolidation",
+      "sameAsChat": "Same as the chat",
+      "selected": "Selected",
+      "saveFailed": "Couldn't save the model choice"
     }
   },
   "providers": {

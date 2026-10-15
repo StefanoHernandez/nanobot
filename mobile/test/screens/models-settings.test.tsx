@@ -165,3 +165,35 @@ test("provider request API selector saves api", async () => {
   await fireEvent.press(screen.getByText("Save"));
   await waitFor(() => expect(mutate.mock.calls[0][1]).toMatchObject({ api: { supported_apis: ["chat_completions", "responses"], preferred_api: "responses" } }));
 });
+
+describe("models for tasks (fork: subagent and Dream presets)", () => {
+  const withTasks = (rc: Record<string, unknown>) =>
+    base({ runtime_config: { "agents.defaults.subagent_model_preset": null, "agents.defaults.dream.model_override": null, ...rc } });
+
+  test("hidden when the server doesn't expose the fields", async () => {
+    await show();
+    expect(screen.queryByText("Models for tasks")).toBeNull();
+  });
+
+  test("choosing a preset for subagents sends the runtime config patch", async () => {
+    settingsStore.getState().setData(withTasks({}) as never);
+    await show();
+    expect(screen.getAllByText(/Same as the chat/).length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getByText("Subagents"));
+    await fireEvent.press(screen.getAllByText("c").at(-1)!); // the sheet renders last
+    await waitFor(() =>
+      expect(mutate).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.subagent_model_preset": "c" } }, undefined),
+    );
+  });
+
+  test("Dream can go back to the chat model (null)", async () => {
+    settingsStore.getState().setData(withTasks({ "agents.defaults.dream.model_override": "b" }) as never);
+    await show();
+    await fireEvent.press(screen.getByText("Dream (memory)"));
+    expect(screen.getByLabelText("Selected")).toBeTruthy();
+    await fireEvent.press(screen.getAllByText("Same as the chat").at(-1)!);
+    await waitFor(() =>
+      expect(mutate).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.dream.model_override": null } }, undefined),
+    );
+  });
+});
