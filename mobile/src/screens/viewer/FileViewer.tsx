@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,11 +10,16 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useStore } from "zustand";
 import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
-import { Button, IconButton, toast } from "../../ui/components";
+import { Button, IconButton, TextField, toast } from "../../ui/components";
+import { artifactFixText } from "../../artifacts/fix";
+import { isWritable } from "../../state/chatsStore";
+import { useSession } from "../../state/sessionStore";
+import { threadStore } from "../../state/threadStore";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { CodeBlock } from "../../ui/markdown/CodeBlock";
 import { openLocal, shareMedia } from "../thread/media/media";
@@ -66,9 +72,11 @@ export function isViewerUriAllowed(uri: string): boolean {
 export type FileViewerProps = {
   uri: string;
   name: string;
+  /** Source chat. The route carries the key only, never the artifact body. */
+  chatKey?: string;
 };
 
-export function FileViewer({ uri, name }: FileViewerProps) {
+export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const t = useT();
   const th = useTheme();
   const insets = useSafeAreaInsets();
@@ -88,6 +96,12 @@ export function FileViewer({ uri, name }: FileViewerProps) {
   const [versionIndex, setVersionIndex] = useState(opened?.index ?? 0);
   const [compare, setCompare] = useState(false);
   const activeVersion = versions?.[versionIndex];
+  const { session } = useSession();
+  const threadLoaded = useStore(threadStore, (s) => !!chatKey && !!s.threads[chatKey]);
+  const canAsk = !uri && !!chatKey && threadLoaded && isWritable(chatKey) && !!session;
+  const [fixError, setFixError] = useState<{ message: string; line?: number } | null>(null);
+  const [ask, setAsk] = useState("");
+  const sending = useRef(false);
 
   const ext = useMemo(() => langOf(name), [name]);
   const kind = useMemo(() => viewerKind(name), [name]);
@@ -202,6 +216,29 @@ export function FileViewer({ uri, name }: FileViewerProps) {
     } else {
       router.replace("/");
     }
+  };
+
+  const sendToChat = (request?: string) => {
+    if (!canAsk || !session || sending.current) return;
+    const text = artifactFixText({
+      id: opened?.id,
+      kind: activeVersion?.kind ?? (kind === "svg" || kind === "mermaid" || kind === "html" ? kind : "html"),
+      index: versions ? versionIndex : undefined,
+      total: versions?.length,
+      error: request ? undefined : fixError?.message,
+      line: request ? undefined : fixError?.line,
+      request,
+    });
+    sending.current = true;
+    const ok = threadStore.getState().send(session, chatKey, text);
+    sending.current = false;
+    if (!ok) {
+      toast.show(t("artifact.sendFailed"));
+      return;
+    }
+    setAsk("");
+    toast.show(t("artifact.sent"));
+    handleBack();
   };
 
   // Truncation check for code, json, text
@@ -481,6 +518,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
                     kind={versions[otherIndex].kind}
                     html={versions[otherIndex].code}
                     name={name}
+                    onError={canAsk ? setFixError : undefined}
                     onFallback={() => setArtifactFallback(true)}
                   />
                 </View>
@@ -491,6 +529,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
                     kind={viewKind}
                     html={viewHtml}
                     name={name}
+                    onError={canAsk ? setFixError : undefined}
                     onFallback={() => setArtifactFallback(true)}
                   />
                 </View>
@@ -502,6 +541,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
                 html={viewHtml}
                 name={name}
                 fileSize={activeVersion ? (viewHtml?.length ?? 0) : fileSize}
+                onError={canAsk ? setFixError : undefined}
                 onFallback={() => setArtifactFallback(true)}
               />
             )}
@@ -659,8 +699,27 @@ export function FileViewer({ uri, name }: FileViewerProps) {
     );
   };
 
+  const fixBar = canAsk ? (
+    <View style={{ borderTopWidth: 1, borderTopColor: th.colors.border, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 8, gap: 8, backgroundColor: th.colors.background }}>
+      {fixError ? (
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: th.colors.destructive, fontFamily: th.font.medium, fontSize: 14 }}>{t("artifact.errorTitle")}</Text>
+          {fixError.message ? (
+            <Text numberOfLines={3} style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 14 }}>
+              {fixError.line ? `${fixError.message} (${fixError.line})` : fixError.message}
+            </Text>
+          ) : null}
+          <Button title={t("artifact.fix")} onPress={() => sendToChat()} />
+        </View>
+      ) : null}
+      <TextField label={t("artifact.askPlaceholder")} value={ask} onChangeText={setAsk} />
+      <Button title={t("artifact.ask")} variant="secondary" disabled={!ask.trim()} onPress={() => sendToChat(ask)} />
+    </View>
+  ) : null;
+
   return (
     <View style={[styles.container, { backgroundColor: th.colors.background, paddingTop: insets.top }]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       {/* Header */}
       <View
         style={[
@@ -719,6 +778,8 @@ export function FileViewer({ uri, name }: FileViewerProps) {
 
       {/* Body */}
       <View style={{ flex: 1 }}>{renderBody()}</View>
+      {fixBar}
+      </KeyboardAvoidingView>
     </View>
   );
 }

@@ -10,7 +10,11 @@ import { ArtifactWebView, buildShellHtml, escapeHtml, CDN_VERSIONS } from "../..
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FileViewer } from "../../src/screens/viewer/FileViewer";
+import { artifactStore } from "../../src/screens/viewer/artifactStore";
 import { CodeBlock } from "../../src/ui/markdown/CodeBlock";
+import { sessionStore } from "../../src/state/sessionStore";
+import { threadStore } from "../../src/state/threadStore";
+import { router } from "expo-router";
 import * as FileSystemLegacy from "expo-file-system/legacy";
 
 beforeAll(async () => {
@@ -301,9 +305,27 @@ describe("P5-V1 Artifacts & Document Previews", () => {
   });
 
   test("A fence info string with an id keeps the preview and shows the title", async () => {
-    await wrap(<CodeBlock code="<h1>Hello</h1>" lang={'html id=sales-dashboard title="Vendite"'} />);
+    await wrap(<CodeBlock code="<h1>Hello</h1>" lang={'html id=sales-dashboard title="Vendite"'} chatKey="websocket:c1" />);
     expect(screen.getByLabelText(/Preview|Anteprima/i)).toBeTruthy();
     expect(screen.getByText("Vendite")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText(/Preview|Anteprima/i));
+    expect(router.push).toHaveBeenCalledWith({ pathname: "/viewer", params: { name: "preview.html", chat: "websocket:c1" } });
+    expect(JSON.stringify((router.push as jest.Mock).mock.calls.at(-1))).not.toContain("<h1>Hello</h1>");
+  });
+
+  test("onError receives a short message and does not call onFallback", async () => {
+    const onFallback = jest.fn();
+    const onError = jest.fn();
+    await wrap(<ArtifactWebView kind="html" html="<p>x</p>" onFallback={onFallback} onError={onError} />);
+    await act(async () => {
+      await capturedWebViewProps.onMessage({
+        nativeEvent: { data: JSON.stringify({ type: "error", message: "  boom  ", line: 7 }) },
+      });
+    });
+    expect(onFallback).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith({ message: "boom", line: 7 });
+    const shell = buildShellHtml({ kind: "html", html: "<p>x</p>" });
+    expect(shell).toContain('type: "error", message: message, line: line');
   });
 
   test("A chat code block with python does not show the Preview button", async () => {
@@ -544,6 +566,66 @@ test("mermaid follows the app theme and svg/mermaid pages carry the zoom script"
   expect(pdf).not.toContain("prefers-reduced-motion");
   // the sandbox is untouched
   expect(dark).toContain("connect-src 'none'");
+});
+
+test("Fix and ask send a short note to the source chat, never the artifact source", async () => {
+  const sendMessage = jest.fn();
+  const key = "websocket:fix";
+  artifactStore.set("<h1>SECRET SOURCE</h1>", "preview.html", { id: "sales-dashboard" });
+  threadStore.setState({
+    threads: {
+      [key]: {
+        messages: [],
+        running: false,
+        model: null,
+        preset: null,
+        notices: [],
+        draft: "",
+        loaded: true,
+        stopped: false,
+        sendError: null,
+        uploading: false,
+        pendingFiles: [],
+        forkBoundary: null,
+        temporary: false,
+      },
+    },
+  });
+  sessionStore.setState({
+    session: { client: { sendMessage } } as never,
+    state: "open" as never,
+    profile: null,
+  });
+  try {
+    await wrap(<FileViewer uri="" name="preview.html" chatKey={key} />);
+    expect(screen.queryByText("Preview not available")).toBeNull();
+    await act(async () => {
+      await capturedWebViewProps.onMessage({
+        nativeEvent: { data: JSON.stringify({ type: "error", message: "Unexpected token", line: 2 }) },
+      });
+    });
+    expect(screen.getByText("Artifact error")).toBeTruthy();
+    expect(screen.queryByText("Preview not available")).toBeNull();
+    (router.back as jest.Mock).mockClear();
+    fireEvent.press(screen.getByRole("button", { name: "Fix" }));
+    expect(sendMessage).toHaveBeenCalledWith("fix", expect.stringContaining("Correggi l'artefatto `sales-dashboard` (html)"), undefined, expect.any(Object));
+    expect(sendMessage.mock.calls[0][1]).toContain("Errore: Unexpected token (riga 2)");
+    expect(sendMessage.mock.calls[0][1]).not.toContain("SECRET SOURCE");
+    expect(router.back).toHaveBeenCalled();
+
+    sendMessage.mockClear();
+    await act(async () => {
+      screen.getByLabelText("What should change?").props.onChangeText("titolo più grande");
+    });
+    fireEvent.press(screen.getByRole("button", { name: "Ask for a change" }));
+    expect(sendMessage.mock.calls[0][1]).toContain("Modifica l'artefatto `sales-dashboard` (html)");
+    expect(sendMessage.mock.calls[0][1]).toContain("Richiesta: titolo più grande");
+    expect(sendMessage.mock.calls[0][1]).not.toContain("SECRET SOURCE");
+  } finally {
+    artifactStore.clear();
+    threadStore.setState({ threads: {} });
+    sessionStore.setState({ session: null, state: "none" as never, profile: null });
+  }
 });
 
 test("preview libraries are inlined from the app, never fetched from a CDN", () => {

@@ -56,11 +56,12 @@ export function CodeBlock({ code, lang, chatKey, messageId }: { code: string; la
     const found = locateVersion(collectArtifacts(messages), { id: info.id, code, messageId });
     const versions = found?.artifact.explicit && found.artifact.versions.length > 1 ? found.artifact.versions : undefined;
     artifactStore.set(fenceCode(code), name, {
+      id: info.id ?? (found?.artifact.explicit ? found.artifact.id : undefined),
       title: found?.artifact.title ?? info.title,
       versions,
       index: versions ? found?.index : undefined,
     });
-    router.push({ pathname: "/viewer", params: { name } });
+    router.push({ pathname: "/viewer", params: chatKey ? { name, chat: chatKey } : { name } });
   };
 
   return (
