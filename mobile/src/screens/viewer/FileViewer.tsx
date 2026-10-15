@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import * as Print from "expo-print";
 import { useStore } from "zustand";
 import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
@@ -17,6 +18,8 @@ import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, IconButton, TextField, toast } from "../../ui/components";
 import { artifactFixText } from "../../artifacts/fix";
+import { printDocument, writePng } from "./exportArtifact";
+import { lockViewer } from "./orientation";
 import { isWritable } from "../../state/chatsStore";
 import { useSession } from "../../state/sessionStore";
 import { threadStore } from "../../state/threadStore";
@@ -102,9 +105,30 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const [fixError, setFixError] = useState<{ message: string; line?: number } | null>(null);
   const [ask, setAsk] = useState("");
   const sending = useRef(false);
+  const [wide, setWide] = useState(false);
+  const [fit, setFit] = useState(true);
+  const [pngTicket, setPngTicket] = useState(0);
+  const [pngBusy, setPngBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const ext = useMemo(() => langOf(name), [name]);
   const kind = useMemo(() => viewerKind(name), [name]);
+  const toolKind = activeVersion?.kind ?? kind;
+  const canFit = toolKind === "html";
+  const canPng = toolKind === "svg" || toolKind === "mermaid";
+  const canPdf = toolKind === "html" || toolKind === "svg";
+
+  useEffect(() => {
+    return () => {
+      void lockViewer(false).catch(() => {});
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pngBusy) return;
+    const id = setTimeout(() => setPngBusy(false), 8000);
+    return () => clearTimeout(id);
+  }, [pngBusy]);
 
   const isArtifact = useMemo(
     () =>
@@ -239,6 +263,48 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     setAsk("");
     toast.show(t("artifact.sent"));
     handleBack();
+  };
+
+  const toggleWide = () => {
+    const next = !wide;
+    void lockViewer(next)
+      .then(() => setWide(next))
+      .catch(() => toast.show(t("artifact.rotateFailed")));
+  };
+
+  const requestPng = () => {
+    if (pngBusy) return;
+    setPngBusy(true);
+    setPngTicket((n) => n + 1);
+  };
+
+  const acceptPng = (dataUrl: string) => {
+    setPngBusy(false);
+    try {
+      const saved = writePng(dataUrl);
+      if (!saved) {
+        toast.show(t("artifact.exportFailed"));
+        return;
+      }
+      void shareMedia(saved).catch(() => toast.show(t("artifact.exportFailed")));
+    } catch {
+      toast.show(t("artifact.exportFailed"));
+    }
+  };
+
+  const savePdf = () => {
+    if (pdfBusy) return;
+    const body = activeVersion?.code ?? content;
+    if (!body.trim()) return;
+    setPdfBusy(true);
+    void Print.printToFileAsync({ html: printDocument(body) })
+      .then((result) => {
+        const out = result.uri;
+        if (!out.startsWith("file://") || out.includes("..")) throw new Error("export");
+        return shareMedia(out);
+      })
+      .catch(() => toast.show(t("artifact.exportFailed")))
+      .finally(() => setPdfBusy(false));
   };
 
   // Truncation check for code, json, text
@@ -518,6 +584,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                     kind={versions[otherIndex].kind}
                     html={versions[otherIndex].code}
                     name={name}
+                    fit={fit}
                     onError={canAsk ? setFixError : undefined}
                     onFallback={() => setArtifactFallback(true)}
                   />
@@ -529,6 +596,9 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                     kind={viewKind}
                     html={viewHtml}
                     name={name}
+                    fit={fit}
+                    pngTicket={pngTicket}
+                    onPng={acceptPng}
                     onError={canAsk ? setFixError : undefined}
                     onFallback={() => setArtifactFallback(true)}
                   />
@@ -541,6 +611,9 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                 html={viewHtml}
                 name={name}
                 fileSize={activeVersion ? (viewHtml?.length ?? 0) : fileSize}
+                fit={fit}
+                pngTicket={pngTicket}
+                onPng={acceptPng}
                 onError={canAsk ? setFixError : undefined}
                 onFallback={() => setArtifactFallback(true)}
               />
@@ -699,6 +772,25 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     );
   };
 
+  const showTools = allowed && !artifactFallback && !loading && !error && !tooLarge && (canFit || canPng || canPdf);
+  const toolRow = showTools ? (
+    <View style={{ flexDirection: "row", alignItems: "center", minHeight: 48, paddingHorizontal: 8, gap: 4, borderBottomWidth: 1, borderBottomColor: th.colors.border }}>
+      <IconButton
+        icon={wide ? "phone-rotate-portrait" : "phone-rotate-landscape"}
+        size={22}
+        onPress={toggleWide}
+        accessibilityLabel={wide ? t("artifact.portrait") : t("artifact.rotate")}
+      />
+      {canFit ? <Button title={fit ? t("artifact.actualSize") : t("artifact.fit")} variant="ghost" onPress={() => setFit((v) => !v)} /> : null}
+      {canPng ? (
+        <IconButton icon="image-outline" size={22} onPress={requestPng} disabled={pngBusy} accessibilityLabel={t("artifact.exportPng")} />
+      ) : null}
+      {canPdf ? (
+        <IconButton icon="file-pdf-box" size={22} onPress={savePdf} disabled={pdfBusy} accessibilityLabel={t("artifact.exportPdf")} />
+      ) : null}
+    </View>
+  ) : null;
+
   const fixBar = canAsk ? (
     <View style={{ borderTopWidth: 1, borderTopColor: th.colors.border, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 8, gap: 8, backgroundColor: th.colors.background }}>
       {fixError ? (
@@ -776,6 +868,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         ) : null}
       </View>
 
+      {toolRow}
       {/* Body */}
       <View style={{ flex: 1 }}>{renderBody()}</View>
       {fixBar}

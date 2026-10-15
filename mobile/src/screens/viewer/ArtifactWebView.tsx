@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Linking, StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { File } from "expo-file-system";
@@ -14,6 +14,7 @@ import {
   type ViewerLibMap,
   type ViewerLibName,
 } from "./viewerLibs";
+import { pngBase64 } from "./exportArtifact";
 
 // Keep in sync with mobile/scripts/fetch-viewer-libs.mjs. The bytes are
 // shipped in mobile/assets/viewers and inlined at view time (no CDN).
@@ -114,6 +115,12 @@ export type ArtifactWebViewProps = {
   onFallback: () => void;
   /** Render error with a short message. When set, a `{type:"error"}` message does not call onFallback. */
   onError?: (info: { message: string; line?: number }) => void;
+  /** Validated PNG data URL from the page's SVG. Other payloads are dropped. */
+  onPng?: (dataUrl: string) => void;
+  /** Increments to ask the page for a PNG of its SVG. */
+  pngTicket?: number;
+  /** HTML only. True scales the page down to the screen width. */
+  fit?: boolean;
   isLightPreview?: boolean;
 };
 
@@ -623,6 +630,57 @@ export function buildShellHtml({
     })();
   </script>`;
 
+  const paper = /^#[0-9a-fA-F]{3,8}$/.test(bg) ? bg : "#ffffff";
+  // Fit scales an HTML page to the screen. PNG draws the SVG onto a canvas and posts a data URL.
+  const fitScript = `<script>
+    window.__setHtmlFit = function(fit) {
+      var root = document.documentElement;
+      root.style.zoom = "1";
+      if (!fit) return;
+      var w = Math.max(document.body ? document.body.scrollWidth : 0, root.scrollWidth, 1);
+      var view = window.innerWidth || 1;
+      if (w > view + 1) root.style.zoom = String(view / w);
+    };
+  </script>`;
+  const exportPngScript = `<script>
+    window.__exportPng = function() {
+      try {
+        var svg = document.querySelector("svg");
+        if (!svg || !window.ReactNativeWebView) return;
+        if (!svg.getAttribute("xmlns")) svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        var box = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width ? svg.viewBox.baseVal : null;
+        var rect = svg.getBoundingClientRect();
+        var w = (box && box.width) || rect.width || 800;
+        var h = (box && box.height) || rect.height || 600;
+        var cap = 2048;
+        var scale = Math.min(1, cap / Math.max(w, h, 1));
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+        var xml = new XMLSerializer().serializeToString(svg);
+        var blob = new Blob([xml], { type: "image/svg+xml" });
+        var url = URL.createObjectURL(blob);
+        var img = new Image();
+        img.onload = function() {
+          try {
+            var canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext("2d");
+            ctx.fillStyle = "${paper}";
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            var dataUrl = canvas.toDataURL("image/png");
+            URL.revokeObjectURL(url);
+            if (!dataUrl || dataUrl.length > 8000000) return;
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: "png", dataUrl: dataUrl }));
+          } catch (e) { URL.revokeObjectURL(url); }
+        };
+        img.onerror = function() { URL.revokeObjectURL(url); };
+        img.src = url;
+      } catch (e) {}
+    };
+  </script>`;
+
   // Common bootstrap script that manages chunks & ready/error reporting
   const commonHead = `<head>
 ${CSP_META}
@@ -691,6 +749,8 @@ ${CSP_META}
   }
   </style>
 ${getChunkProtocolScript()}
+${fitScript}
+${exportPngScript}
 </head>`;
 
   const loadAllChunksScript = `<script>
@@ -1215,6 +1275,9 @@ export function ArtifactWebView({
   fileSize,
   onFallback,
   onError,
+  onPng,
+  pngTicket = 0,
+  fit = true,
   isLightPreview = false,
 }: ArtifactWebViewProps) {
   const t = useT();
@@ -1226,6 +1289,10 @@ export function ArtifactWebView({
   onFallbackRef.current = onFallback;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onPngRef = useRef(onPng);
+  onPngRef.current = onPng;
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
   const isReadyRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
@@ -1325,6 +1392,20 @@ export function ArtifactWebView({
     }, 20000);
   };
 
+  useEffect(() => {
+    if (kind !== "html" || !isReadyRef.current) return;
+    webViewRef.current?.injectJavaScript(`window.__setHtmlFit&&window.__setHtmlFit(${fit ? "true" : "false"});true;`);
+  }, [fit, kind]);
+
+  const exportedTicket = useRef(0);
+  useLayoutEffect(() => {
+    if (!pngTicket || exportedTicket.current === pngTicket) return;
+    const view = webViewRef.current;
+    if (!view) return;
+    exportedTicket.current = pngTicket;
+    view.injectJavaScript("window.__exportPng&&window.__exportPng();true;");
+  }, [pngTicket, shellHtml]);
+
   // Inactivity timeout runs on mount and when shellHtml changes. Never restarts after ready.
   useEffect(() => {
     if (!shellHtml) return;
@@ -1371,6 +1452,15 @@ export function ArtifactWebView({
         timeoutRef.current = null;
       }
       setLoading(false);
+      if (kind === "html") {
+        webViewRef.current?.injectJavaScript(`window.__setHtmlFit&&window.__setHtmlFit(${fitRef.current ? "true" : "false"});true;`);
+      }
+      return;
+    }
+
+    if (data.type === "png") {
+      const body = typeof data.dataUrl === "string" ? pngBase64(data.dataUrl) : null;
+      if (body) onPngRef.current?.(`data:image/png;base64,${body}`);
       return;
     }
 
