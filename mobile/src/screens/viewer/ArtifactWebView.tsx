@@ -6,7 +6,17 @@ import * as FileSystemLegacy from "expo-file-system/legacy";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Dialog } from "../../ui/components";
+import {
+  inlineScript,
+  jsStringLiteral,
+  loadViewerLibs,
+  takeCached,
+  type ViewerLibMap,
+  type ViewerLibName,
+} from "./viewerLibs";
 
+// Keep in sync with mobile/scripts/fetch-viewer-libs.mjs. The bytes are
+// shipped in mobile/assets/viewers and inlined at view time (no CDN).
 export const CDN_VERSIONS = {
   mermaid: "11.17.2",
   pdfjs: "3.11.174",
@@ -17,6 +27,15 @@ export const CDN_VERSIONS = {
   // Note: xlsx 0.18.5 is pinned. Any parsing risk from legacy SheetJS is strictly contained by the WebView sandbox (no network, connect-src 'none', no storage, no secrets).
   xlsx: "0.18.5",
 } as const;
+
+export function viewerLibsFor(kind: ArtifactKind, light: boolean): ViewerLibName[] {
+  if (kind === "mermaid") return ["mermaid"];
+  if (kind === "pdf") return ["pdfjs", "pdfjsWorker"];
+  if (kind === "docx") return light ? ["pako"] : ["jszip", "docxPreview"];
+  if (kind === "pptx") return light ? ["pako"] : ["pptxPreview"];
+  if (kind === "xlsx") return light ? ["pako"] : ["xlsx"];
+  return [];
+}
 
 export const ZIP_CAPS = {
   maxCdSize: 4 * 1024 * 1024, // 4 MB
@@ -51,19 +70,8 @@ export function parseZipCentralDirectory(tailChunk: Uint8Array, totalSize: numbe
   return { cdSize, cdStartOffset, cdEntriesCount };
 }
 
-export const CDN_URLS = {
-  mermaid: `https://cdn.jsdelivr.net/npm/mermaid@${CDN_VERSIONS.mermaid}/dist/mermaid.min.js`,
-  pdfjs: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${CDN_VERSIONS.pdfjs}/build/pdf.min.js`,
-  pdfjsWorker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${CDN_VERSIONS.pdfjs}/build/pdf.worker.min.js`,
-  jszip: `https://cdn.jsdelivr.net/npm/jszip@${CDN_VERSIONS.jszip}/dist/jszip.min.js`,
-  pako: `https://cdn.jsdelivr.net/npm/pako@${CDN_VERSIONS.pako}/dist/pako.min.js`,
-  docxPreview: `https://cdn.jsdelivr.net/npm/docx-preview@${CDN_VERSIONS.docxPreview}/dist/docx-preview.min.js`,
-  pptxPreview: `https://cdn.jsdelivr.net/npm/pptx-preview@${CDN_VERSIONS.pptxPreview}/dist/pptx-preview.umd.min.js`,
-  xlsx: `https://cdn.jsdelivr.net/npm/xlsx@${CDN_VERSIONS.xlsx}/dist/xlsx.full.min.js`,
-} as const;
-
 export const CSP_META =
-  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'unsafe-eval\' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; style-src \'unsafe-inline\' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src data: blob: https:; media-src data: blob:; worker-src blob:; connect-src \'none\'; frame-src \'none\'; form-action \'none\'; base-uri \'none\'">';
+  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'unsafe-eval\'; style-src \'unsafe-inline\'; font-src data:; img-src data: blob: https:; media-src data: blob:; worker-src blob:; connect-src \'none\'; frame-src \'none\'; form-action \'none\'; base-uri \'none\'">';
 
 export type ArtifactKind =
   | "html"
@@ -92,6 +100,8 @@ export type BuildShellHtmlOptions = {
   fileSize?: number;
   isLightPreview?: boolean;
   i18n?: ShellI18n;
+  /** Bundled library sources. Missing entries are not loaded from the network. */
+  libs?: ViewerLibMap;
 };
 
 export type ArtifactWebViewProps = {
@@ -241,12 +251,14 @@ function buildLightPreviewShell({
   bg,
   fg,
   isDark,
+  libs,
 }: {
   kind: "docx" | "pptx" | "xlsx";
   fileSize: number;
   bg: string;
   fg: string;
   isDark: boolean;
+  libs?: ViewerLibMap;
 }): string {
   const lightHead = `<head>
 ${CSP_META}
@@ -417,7 +429,7 @@ ${getChunkProtocolScript()}
 ${lightHead}
 <body>
   <div id="container"></div>
-  <script src="${CDN_URLS.pako}"></script>
+  ${inlineScript(libs?.pako)}
   <script>
     (async function() {
       try {
@@ -539,6 +551,7 @@ export function buildShellHtml({
   fileSize = 0,
   isLightPreview = false,
   i18n = {},
+  libs,
 }: BuildShellHtmlOptions): string {
   const loadingLabel = i18n.loading || "Caricamento...";
   const progressTpl = i18n.loadingProgress || "Caricamento {{loaded}}/{{total}} MB";
@@ -774,7 +787,7 @@ ${commonHead}
 ${commonHead}
 <body>
   <div id="container" style="padding:16px;"></div>
-  <script src="${CDN_URLS.mermaid}"></script>
+  ${inlineScript(libs?.mermaid)}
   ${loadAllChunksScript}
   <script>
     loadAllChunks(${fileSize}, null).then(function(bytes) {
@@ -799,7 +812,7 @@ ${commonHead}
   <div id="container" style="padding:16px;">
     <pre class="mermaid" style="display:flex;justify-content:center;">${escapeHtml(html)}</pre>
   </div>
-  <script src="${CDN_URLS.mermaid}"></script>
+  ${inlineScript(libs?.mermaid)}
   <script>
     try {
       mermaid.initialize(${mermaidTheme});
@@ -823,10 +836,10 @@ ${commonHead}
 ${commonHead}
 <body>
   <div id="container" style="display:flex;flex-direction:column;align-items:center;padding:16px;"></div>
-  <script src="${CDN_URLS.pdfjs}"></script>
+  ${inlineScript(libs?.pdfjs)}
   <script>
     try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "${CDN_URLS.pdfjsWorker}";
+      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([${jsStringLiteral(libs?.pdfjsWorker ?? "")}], { type: "text/javascript" }));
       var totalSize = ${fileSize};
 
       class RangeTransport extends pdfjsLib.PDFDataRangeTransport {
@@ -1030,7 +1043,7 @@ ${commonHead}
 
   if (kind === "docx") {
     if (isLightPreview) {
-      return buildLightPreviewShell({ kind: "docx", fileSize, bg, fg, isDark });
+      return buildLightPreviewShell({ kind: "docx", fileSize, bg, fg, isDark, libs });
     }
     return `<!DOCTYPE html>
 <html>
@@ -1038,8 +1051,8 @@ ${commonHead}
 <body>
   <div id="progress" class="progress-wrap">${escapeHtml(loadingLabel)}</div>
   <div id="container" style="padding:16px;"></div>
-  <script src="${CDN_URLS.jszip}"></script>
-  <script src="${CDN_URLS.docxPreview}"></script>
+  ${inlineScript(libs?.jszip)}
+  ${inlineScript(libs?.docxPreview)}
   ${loadAllChunksScript}
   <script>
     var prog = document.getElementById("progress");
@@ -1063,7 +1076,7 @@ ${commonHead}
 
   if (kind === "pptx") {
     if (isLightPreview) {
-      return buildLightPreviewShell({ kind: "pptx", fileSize, bg, fg, isDark });
+      return buildLightPreviewShell({ kind: "pptx", fileSize, bg, fg, isDark, libs });
     }
     return `<!DOCTYPE html>
 <html>
@@ -1071,7 +1084,7 @@ ${commonHead}
 <body>
   <div id="progress" class="progress-wrap">${escapeHtml(loadingLabel)}</div>
   <div id="container" style="display:flex;flex-direction:column;align-items:center;padding:16px;"></div>
-  <script src="${CDN_URLS.pptxPreview}"></script>
+  ${inlineScript(libs?.pptxPreview)}
   ${loadAllChunksScript}
   <script>
     var prog = document.getElementById("progress");
@@ -1099,7 +1112,7 @@ ${commonHead}
 
   if (kind === "xlsx") {
     if (isLightPreview) {
-      return buildLightPreviewShell({ kind: "xlsx", fileSize, bg, fg, isDark });
+      return buildLightPreviewShell({ kind: "xlsx", fileSize, bg, fg, isDark, libs });
     }
     return `<!DOCTYPE html>
 <html>
@@ -1108,7 +1121,7 @@ ${commonHead}
   <div id="progress" class="progress-wrap">${escapeHtml(loadingLabel)}</div>
   <div id="tab-bar" class="tab-bar"></div>
   <div id="sheet-content" style="overflow-x:auto;padding:8px;"></div>
-  <script src="${CDN_URLS.xlsx}"></script>
+  ${inlineScript(libs?.xlsx)}
   ${loadAllChunksScript}
   <script>
     var prog = document.getElementById("progress");
@@ -1231,8 +1244,39 @@ export function ArtifactWebView({
   );
 
   const activeLightPreview = lightMode || isLightPreview;
+  const neededLibs = useMemo(
+    () => viewerLibsFor(kind, activeLightPreview),
+    [kind, activeLightPreview],
+  );
+  const [libs, setLibs] = useState<ViewerLibMap | null>(() =>
+    takeCached(viewerLibsFor(kind, isLightPreview)),
+  );
+
+  useEffect(() => {
+    const cached = takeCached(neededLibs);
+    if (cached) {
+      setLibs((prev) => {
+        if (prev && neededLibs.every((name) => prev[name] === cached[name])) return prev;
+        return cached;
+      });
+      return;
+    }
+    let cancelled = false;
+    setLibs(null);
+    loadViewerLibs(neededLibs)
+      .then((got) => {
+        if (!cancelled) setLibs(got);
+      })
+      .catch(() => {
+        if (!cancelled) onFallbackRef.current();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [neededLibs]);
 
   const shellHtml = useMemo(() => {
+    if (!libs) return "";
     return buildShellHtml({
       kind,
       html,
@@ -1244,8 +1288,9 @@ export function ArtifactWebView({
       fileSize: resolvedSize,
       isLightPreview: activeLightPreview,
       i18n: shellI18n,
+      libs,
     });
-  }, [kind, html, th.scheme, th.colors.popover, th.colors.popoverForeground, th.colors.chartInput, th.colors.border, resolvedSize, activeLightPreview, shellI18n]);
+  }, [libs, kind, html, th.scheme, th.colors.popover, th.colors.popoverForeground, th.colors.chartInput, th.colors.border, resolvedSize, activeLightPreview, shellI18n]);
 
   // Track shell version and reset isFirstLoadRef whenever shellHtml changes
   const prevShellHtmlRef = useRef<string | null>(null);
@@ -1269,6 +1314,7 @@ export function ArtifactWebView({
 
   // Inactivity timeout runs on mount and when shellHtml changes. Never restarts after ready.
   useEffect(() => {
+    if (!shellHtml) return;
     isReadyRef.current = false;
     resetInactivityTimeout();
     return () => {
@@ -1374,26 +1420,28 @@ export function ArtifactWebView({
 
   return (
     <View testID={activeLightPreview ? "light-preview" : undefined} style={styles.container}>
-      <WebView
-        key={`webview-${shellVersionRef.current}`}
-        ref={webViewRef}
-        source={{ html: shellHtml, baseUrl: "about:blank" }}
-        javaScriptEnabled={true}
-        domStorageEnabled={false}
-        incognito={true}
-        allowFileAccess={false}
-        allowFileAccessFromFileURLs={false}
-        allowUniversalAccessFromFileURLs={false}
-        mixedContentMode="never"
-        setSupportMultipleWindows={false}
-        javaScriptCanOpenWindowsAutomatically={false}
-        geolocationEnabled={false}
-        mediaCapturePermissionGrantType="deny"
-        onShouldStartLoadWithRequest={handleShouldStartLoad}
-        onMessage={handleMessage}
-        onRenderProcessGone={handleRenderProcessGone}
-        style={{ flex: 1, backgroundColor: "transparent" }}
-      />
+      {shellHtml ? (
+        <WebView
+          key={`webview-${shellVersionRef.current}`}
+          ref={webViewRef}
+          source={{ html: shellHtml, baseUrl: "about:blank" }}
+          javaScriptEnabled={true}
+          domStorageEnabled={false}
+          incognito={true}
+          allowFileAccess={false}
+          allowFileAccessFromFileURLs={false}
+          allowUniversalAccessFromFileURLs={false}
+          mixedContentMode="never"
+          setSupportMultipleWindows={false}
+          javaScriptCanOpenWindowsAutomatically={false}
+          geolocationEnabled={false}
+          mediaCapturePermissionGrantType="deny"
+          onShouldStartLoadWithRequest={handleShouldStartLoad}
+          onMessage={handleMessage}
+          onRenderProcessGone={handleRenderProcessGone}
+          style={{ flex: 1, backgroundColor: "transparent" }}
+        />
+      ) : null}
 
       {loading && (
         <View style={styles.loadingOverlay} pointerEvents="none">

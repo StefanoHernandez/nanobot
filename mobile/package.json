@@ -72,7 +72,8 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "sync-nanobot": "scripts/sync-nanobot.sh",
-    "gen:katex": "node scripts/gen-katex-css.mjs"
+    "gen:katex": "node scripts/gen-katex-css.mjs",
+    "gen:viewers": "node scripts/fetch-viewer-libs.mjs"
   },
   "private": true
 }
