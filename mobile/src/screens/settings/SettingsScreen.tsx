@@ -7,7 +7,7 @@ import { ListItem, goBackOr } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { SettingsShell } from "./SettingsShell";
 
-export const SECTIONS = ["overview", "appearance", "models", "capabilities", "system", "advanced", "about"] as const;
+export const SECTIONS = ["overview", "appearance", "models", "capabilities", "system", "machine", "advanced", "about"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 const SECTION_ICONS: Record<Section, React.ComponentProps<typeof MaterialCommunityIcons>["name"]> = {
@@ -16,6 +16,7 @@ const SECTION_ICONS: Record<Section, React.ComponentProps<typeof MaterialCommuni
   models: "cube-outline",
   capabilities: "puzzle-outline",
   system: "cog-outline",
+  machine: "chip",
   advanced: "tune-vertical",
   about: "information-outline",
 };
