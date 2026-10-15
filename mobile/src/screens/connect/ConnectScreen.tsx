@@ -115,6 +115,7 @@ export function ConnectScreen() {
     if (!toDelete) return;
     const wasActive = profiles.activeId() === toDelete.id;
     await profiles.remove(toDelete.id);
+    pairedDevice.clear(toDelete.id);
     if (wasActive) sessionStore.getState().close(); // don't keep a live session (and its secret) for a deleted server
     setToDelete(null);
     setList(profiles.list());
