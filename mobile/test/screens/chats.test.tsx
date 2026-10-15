@@ -95,3 +95,11 @@ test("New chat awaits newChat then navigates", async () => {
   expect(router.navigate).toHaveBeenCalledWith("/chat/websocket%3Anew1");
   expect(onClose).toHaveBeenCalled();
 });
+
+test("Projects row navigates to /projects", async () => {
+  await show();
+  await fireEvent.press(screen.getByText("Projects"));
+  expect(router.push).toHaveBeenCalledWith("/projects");
+  expect(onClose).toHaveBeenCalled();
+});
+

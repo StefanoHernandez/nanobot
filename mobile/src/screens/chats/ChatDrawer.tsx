@@ -10,9 +10,11 @@ import { StatusDot } from "../../extras/StatusDot";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { ChatRow, chatTitle } from "./ChatRow";
 import { BotFace } from "../../ui/BotFace";
 import { outboxStore, pendingByChat } from "../../extras/outbox";
+import { projectsStore } from "../../projects/store";
 
 const chatPath = (key: string) => `/chat/${encodeURIComponent(key)}` as const;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -57,6 +59,10 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   const [renaming, setRenaming] = useState<ChatSummary | null>(null);
   const [deleting, setDeleting] = useState<ChatSummary | null>(null);
   const [title, setTitle] = useState("");
+
+  React.useEffect(() => {
+    void projectsStore.getState().refresh({ ifStaleMs: 60_000 });
+  }, []);
 
   const rows = q.trim() ? search(q) : chats;
   const label = (c: ChatSummary) => chatTitle(c, t("chats.untitled"));
@@ -112,6 +118,22 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
         <Button title={t("chats.newChat")} onPress={() => void start(false)} />
         <Button title={t("chats.temporaryChat")} variant="ghost" onPress={() => void start(true)} />
       </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          onClose();
+          router.push("/projects");
+        }}
+        style={({ pressed }) => [
+          styles.projectRow,
+          { backgroundColor: pressed ? th.colors.accent : "transparent" },
+        ]}
+      >
+        <MaterialCommunityIcons name="folder-outline" size={22} color={th.colors.foreground} />
+        <Text style={{ flex: 1, color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
+          {t("projects.title")}
+        </Text>
+      </Pressable>
       <View style={styles.search}>
         <TextField label={t("chats.search")} value={q} onChangeText={setQ} autoCapitalize="none" autoCorrect={false} />
       </View>
@@ -200,5 +222,15 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", paddingLeft: 16, paddingRight: 4, paddingTop: 8, gap: 10 },
   buttons: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, gap: 4 },
+  projectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 48,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: 8,
+    gap: 12,
+  },
   search: { paddingHorizontal: 16 },
 });
