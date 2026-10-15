@@ -484,9 +484,9 @@ describe("F-A: ThreadScreen header gallery button", () => {
     });
 
     await wrap(<ThreadScreen chatKey={key} onBack={() => {}} />);
-    const btn = screen.getByLabelText(/gallery|media and files|media e file/i);
-    expect(btn).toBeTruthy();
-    expect(btn.props.children[0].props.name).toBe("folder-multiple-image");
+    await fireEvent.press(screen.getByLabelText(/more actions|altre azioni/i));
+    expect(screen.getByLabelText(/gallery|media and files|media e file/i)).toBeTruthy();
+    expect(screen.getByTestId("gallery-menu-icon")).toBeTruthy();
   });
 
   test("hides button when chat has no media at all", async () => {

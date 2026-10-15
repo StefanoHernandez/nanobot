@@ -9,13 +9,15 @@ export type ListItemProps = {
   onLongPress?: () => void;
   right?: React.ReactNode;
   left?: React.ReactNode;
+  accessibilityLabel?: string;
 };
 
-export function ListItem({ title, subtitle, onPress, onLongPress, right, left }: ListItemProps) {
+export function ListItem({ title, subtitle, onPress, onLongPress, right, left, accessibilityLabel }: ListItemProps) {
   const th = useTheme();
   return (
     <Pressable
       accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       onLongPress={onLongPress}
       style={({ pressed }) => [styles.row, { backgroundColor: pressed ? th.colors.accent : "transparent" }]}

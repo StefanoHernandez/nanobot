@@ -32,6 +32,7 @@
     "message": "Messaggio",
     "readOnly": "Chat in sola lettura",
     "back": "Indietro",
+    "more": "Altre azioni",
     "notice": {
       "compaction": "Contesto compattato",
       "recovery": "Recupero della conversazione",
@@ -186,7 +187,14 @@
     "renameTitle": "Rinomina chat",
     "titleLabel": "Titolo",
     "deleteTitle": "Elimina chat",
-    "deleteConfirm": "Eliminare {{title}}?"
+    "deleteConfirm": "Eliminare {{title}}?",
+    "allProjects": "Tutti i progetti",
+    "section": {
+      "today": "Oggi",
+      "yesterday": "Ieri",
+      "week": "Questa settimana",
+      "older": "Più vecchie"
+    }
   },
   "composer": {
     "placeholder": "Scrivi a nanobot…",

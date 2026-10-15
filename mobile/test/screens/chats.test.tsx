@@ -96,10 +96,19 @@ test("New chat awaits newChat then navigates", async () => {
   expect(onClose).toHaveBeenCalled();
 });
 
-test("Projects row navigates to /projects", async () => {
+test("All projects navigates to /projects", async () => {
   await show();
-  await fireEvent.press(screen.getByText("Projects"));
+  expect(screen.getByText("Older")).toBeTruthy();
+  await fireEvent.press(screen.getByText("All projects"));
   expect(router.push).toHaveBeenCalledWith("/projects");
   expect(onClose).toHaveBeenCalled();
+});
+
+test("search flattens the list and hides the date sections", async () => {
+  await show();
+  await fireEvent.changeText(screen.getByLabelText("Search"), "alp");
+  expect(screen.getByText("Alpha")).toBeTruthy();
+  expect(screen.queryByText("Older")).toBeNull();
+  expect(screen.queryByText("Projects")).toBeNull();
 });
 

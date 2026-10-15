@@ -7,14 +7,30 @@ import { Button, IconButton, ListItem, Sheet, toast } from "../../ui/components"
 import { useTheme } from "../../ui/ThemeProvider";
 
 /** Header button + sheet; renders nothing for temporary chats or when the server forbids changing project. */
-export function WorkspaceButton({ chatKey }: { chatKey: string }) {
+export function WorkspaceButton({
+  chatKey,
+  trigger = true,
+  open: openProp,
+  onOpenChange,
+}: {
+  chatKey: string;
+  /** Header icon. The thread menu passes false and opens the sheet itself. */
+  trigger?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const t = useT();
   const { scope, info } = useWorkspace(chatKey);
-  const [open, setOpen] = useState(false);
+  const [inner, setInner] = useState(false);
+  const open = openProp ?? inner;
+  const setOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (openProp === undefined) setInner(next);
+  };
   if (!scope || info?.controls?.can_change_project === false) return null;
   return (
     <>
-      <IconButton icon="folder-outline" accessibilityLabel={t("workspace.open")} onPress={() => setOpen(true)} />
+      {trigger ? <IconButton icon="folder-outline" accessibilityLabel={t("workspace.open")} onPress={() => setOpen(true)} /> : null}
       <WorkspaceSheet chatKey={chatKey} open={open} onClose={() => setOpen(false)} />
     </>
   );

@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { KeyboardAvoidingView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useT } from "../../i18n";
 import { IconButton } from "../../ui/components/IconButton";
+import { ListItem, Sheet } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { router } from "expo-router";
 import { isWritable } from "../../state/chatsStore";
@@ -15,10 +17,12 @@ import { CommandDrawerButton } from "../../extras/CommandDrawer";
 import { OutboxBar } from "../../extras/OutboxBar";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
-import { SubagentsButton } from "./SubagentsSheet";
+import { isActive, SubagentsButton } from "./SubagentsSheet";
 import { ModelBadge } from "./ModelBadge";
 import { WorkspaceButton } from "./WorkspaceSheet";
 import { collectThreadFiles } from "../gallery/GalleryScreen";
+import { subagentsAvailable, subagentsStore } from "../../state/subagentsStore";
+import { useWorkspace } from "../../state/workspace";
 
 export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () => void }) {
   const th = useTheme();
@@ -31,7 +35,22 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const last = messages[messages.length - 1];
   const face = faceStateOf(conn, running, !!last && last.kind === "trace", !!notices.some((n) => n.kind === "stream_error"));
 
-  const hasFiles = React.useMemo(() => collectThreadFiles(messages, "").length > 0, [messages]);
+  const fileCount = React.useMemo(() => collectThreadFiles(messages, "").length, [messages]);
+  const { scope, info } = useWorkspace(chatKey);
+  const showWorkspace = !!scope && info?.controls?.can_change_project !== false;
+  const taskCount = useStore(subagentsStore, (s) => s.tasks[chatKey]?.length ?? 0);
+  const activeSubs = useStore(
+    subagentsStore,
+    (s) => s.tasks[chatKey]?.filter((x) => isActive(x.state)).length ?? 0,
+  );
+  const showSubagents = subagentsAvailable(session, chatKey) && taskCount > 0;
+  const showCommands = isWritable(chatKey);
+  const [menu, setMenu] = useState(false);
+  const [panel, setPanel] = useState<null | "workspace" | "subagents" | "commands">(null);
+  const openPanel = (next: NonNullable<typeof panel>) => {
+    setMenu(false);
+    setPanel(next);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
@@ -48,17 +67,54 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
           </View>
         </View>
         {temporary ? <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{t("temporary.label")}</Text> : null}
-        {hasFiles ? (
-          <IconButton
-            icon="folder-multiple-image"
+        <View>
+          <IconButton icon="dots-vertical" accessibilityLabel={t("thread.more")} onPress={() => setMenu(true)} />
+          {running || activeSubs > 0 ? (
+            <View
+              testID="thread-menu-dot"
+              pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              style={{ position: "absolute", top: 10, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: th.colors.brand }}
+            />
+          ) : null}
+        </View>
+      </View>
+      {menu ? <Sheet open onClose={() => setMenu(false)} title={t("thread.more")}>
+        {fileCount > 0 ? (
+          <ListItem
+            title={t("gallery.open")}
             accessibilityLabel={t("gallery.open")}
-            onPress={() => router.push(`/gallery/${encodeURIComponent(chatKey)}`)}
+            left={<MaterialCommunityIcons testID="gallery-menu-icon" name="folder-multiple-image" size={22} color={th.colors.foreground} />}
+            right={<Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.medium }}>{fileCount}</Text>}
+            onPress={() => {
+              setMenu(false);
+              router.push(`/gallery/${encodeURIComponent(chatKey)}`);
+            }}
           />
         ) : null}
-        <WorkspaceButton chatKey={chatKey} />
-        <SubagentsButton chatKey={chatKey} />
-        {isWritable(chatKey) ? <CommandDrawerButton chatKey={chatKey} /> : null}
-      </View>
+        {showWorkspace ? (
+          <ListItem title={t("workspace.open")} left={<MaterialCommunityIcons name="folder-outline" size={22} color={th.colors.foreground} />} onPress={() => openPanel("workspace")} />
+        ) : null}
+        {showSubagents ? (
+          <ListItem
+            title={t("subagents.open")}
+            left={<MaterialCommunityIcons name="robot-outline" size={22} color={th.colors.foreground} />}
+            right={activeSubs > 0 ? <Text style={{ color: th.colors.primary, fontFamily: th.font.medium }}>{activeSubs}</Text> : undefined}
+            onPress={() => openPanel("subagents")}
+          />
+        ) : null}
+        {showCommands ? (
+          <ListItem title={t("extras.commands")} left={<MaterialCommunityIcons name="console-line" size={22} color={th.colors.foreground} />} onPress={() => openPanel("commands")} />
+        ) : null}
+      </Sheet> : null}
+      {showWorkspace ? (
+        <WorkspaceButton chatKey={chatKey} trigger={false} open={panel === "workspace"} onOpenChange={(next) => { if (!next) setPanel(null); }} />
+      ) : null}
+      <SubagentsButton chatKey={chatKey} trigger={false} open={panel === "subagents"} onOpenChange={(next) => { if (!next) setPanel(null); }} />
+      {showCommands ? (
+        <CommandDrawerButton chatKey={chatKey} trigger={false} open={panel === "commands"} onOpenChange={(next) => { if (!next) setPanel(null); }} />
+      ) : null}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {loadError ? (
           <View accessibilityRole="alert" style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12, backgroundColor: th.colors.muted }}>
