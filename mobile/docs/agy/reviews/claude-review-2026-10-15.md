@@ -40,3 +40,17 @@ Also seen: `tests/webui/test_remote_pairing.py::test_server_appends_restricted_k
 | 10 | app | There is no warning when revoking the phone you are using. |
 | 11 | web | The secret is in `localStorage` with no CSP. There is no script that builds the web export. A `NANOBOT_APP_DIST` typo falls back silently. |
 | 12 | tests | Viewer libraries are stubbed under jest, so the Vega/Leaflet/JSX runtime paths never run. |
+
+## Closed 2026-10-16 (Claude)
+
+| Item | Fix |
+| --- | --- |
+| mobile-ci red | `m-a.test.tsx` set `process.env.TZ` at runtime, which Node ignores; it only passed on Europe/Rome machines. Now timezone-independent (checked in UTC, Rome, New York). |
+| Test Suite red (basedpyright strict) | Fork `nanobot/ext/*` and `kanban_tools.py` are strict-clean. `read_json` and `router_admin_authorized` are public in `ext.devices`. |
+| Windows job red | SQLite read-only URIs use `Path.as_uri()`. POSIX mode asserts are skipped on Windows. Backup tests are skipped there, since the server is Linux. Not yet confirmed green on CI. |
+| Async project reads | `dispatch_projects_get` runs in `asyncio.to_thread`. |
+| Revoked device keeps its open WebSocket | Device-minted tokens are tracked at the upgrade, and revoke closes those sockets with code 4003. |
+| Web build CSP | When `NANOBOT_APP_DIST` is served: `object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'`, plus nosniff and no-referrer. There are deliberately no script or connect rules, because the srcdoc previews inherit the CSP. The secret is still in `localStorage`: the web build is a secondary target. |
+| Kanban tools in every prompt | Merged into one `kanban` tool with `action`. |
+
+Still open: the 2 upstream failures (`test_remote_pairing`, `test_channel_setup`), which are not ours.
