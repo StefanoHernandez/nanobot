@@ -279,11 +279,20 @@ describe("O-A Task 2: PDF export & Markdown print sanitization", () => {
 <svg/onload=alert(1)>
 <img/src=x/onerror=alert(2)>
 <script>alert(3)</script>
+
+<img src="x" onerror="alert(4)">
+
+<pre><img src=x onerror=alert(5)></pre>
+
+\`\`\`html
+<button onclick="go()">ok</button>
+\`\`\`
 `;
     const result = markdownToPrintHtml(raw);
-    expect(result).not.toContain("onload");
-    expect(result).not.toContain("onerror");
+    expect(result).not.toMatch(/<[a-z][^>]*\son[a-z]+\s*=/i);
+    expect(result).not.toMatch(/<[a-z][^>]*\/on[a-z]+\s*=/i);
     expect(result).not.toMatch(/<script\b/i);
+    expect(result).toContain("onclick=&quot;go()&quot;"); // escaped code sample kept
     expect(result).toContain("script-src 'none'");
   });
 });
