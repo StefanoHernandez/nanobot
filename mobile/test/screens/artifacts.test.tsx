@@ -15,6 +15,9 @@ import { CodeBlock } from "../../src/ui/markdown/CodeBlock";
 import { sessionStore } from "../../src/state/sessionStore";
 import { threadStore } from "../../src/state/threadStore";
 import { router } from "expo-router";
+import * as ScreenOrientation from "expo-screen-orientation";
+import * as Print from "expo-print";
+import { shareMedia } from "../../src/screens/thread/media/media";
 import * as FileSystemLegacy from "expo-file-system/legacy";
 
 beforeAll(async () => {
@@ -54,6 +57,15 @@ jest.mock("expo-clipboard", () => ({
 
 jest.mock("expo-linking", () => ({
   openURL: jest.fn(async () => true),
+}));
+
+jest.mock("expo-screen-orientation", () => ({
+  OrientationLock: { LANDSCAPE: "LANDSCAPE", PORTRAIT_UP: "PORTRAIT_UP" },
+  lockAsync: jest.fn(async () => {}),
+}));
+
+jest.mock("expo-print", () => ({
+  printToFileAsync: jest.fn(async () => ({ uri: "file:///cache/artifacts/preview.pdf" })),
 }));
 
 const mockFileFactory = jest.fn();
@@ -326,6 +338,46 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(onError).toHaveBeenCalledWith({ message: "boom", line: 7 });
     const shell = buildShellHtml({ kind: "html", html: "<p>x</p>" });
     expect(shell).toContain('type: "error", message: message, line: line');
+    expect(shell).toContain("__setHtmlFit");
+    expect(shell).toContain("__exportPng");
+  });
+
+  test("a PNG message is accepted only when it is a bounded PNG data URL", async () => {
+    const onPng = jest.fn();
+    const onFallback = jest.fn();
+    await wrap(<ArtifactWebView kind="svg" html="<svg></svg>" onFallback={onFallback} onPng={onPng} />);
+    await act(async () => {
+      await capturedWebViewProps.onMessage({
+        nativeEvent: { data: JSON.stringify({ type: "png", dataUrl: "https://evil.example/x.png" }) },
+      });
+    });
+    expect(onPng).not.toHaveBeenCalled();
+    expect(onFallback).not.toHaveBeenCalled();
+    await act(async () => {
+      await capturedWebViewProps.onMessage({
+        nativeEvent: { data: JSON.stringify({ type: "png", dataUrl: "data:image/png;base64,iVBORw0KGgo=" }) },
+      });
+    });
+    expect(onPng).toHaveBeenCalledWith("data:image/png;base64,iVBORw0KGgo=");
+  });
+
+  test("a png ticket asks the page to draw the SVG", async () => {
+    mockInjectJavaScript.mockClear();
+    const rendered = await wrap(<ArtifactWebView kind="svg" html="<svg></svg>" onFallback={jest.fn()} pngTicket={0} />);
+    const provider = (ticket: number) => (
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 360, height: 640 },
+          insets: { top: 24, left: 0, bottom: 24, right: 0 },
+        }}
+      >
+        <ThemeProvider>
+          <ArtifactWebView kind="svg" html="<svg></svg>" onFallback={jest.fn()} pngTicket={ticket} />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    );
+    await rendered.rerender(provider(1));
+    expect(mockInjectJavaScript).toHaveBeenCalledWith("window.__exportPng&&window.__exportPng();true;");
   });
 
   test("A chat code block with python does not show the Preview button", async () => {
@@ -626,6 +678,30 @@ test("Fix and ask send a short note to the source chat, never the artifact sourc
     threadStore.setState({ threads: {} });
     sessionStore.setState({ session: null, state: "none" as never, profile: null });
   }
+});
+
+test("an HTML preview rotates, fits, and exports PDF", async () => {
+  artifactStore.set("<h1>Vendite</h1>", "preview.html");
+  const view = await wrap(<FileViewer uri="" name="preview.html" />);
+  expect(await screen.findByLabelText("Rotate")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "100%" })).toBeTruthy();
+  expect(screen.getByLabelText("Save PDF")).toBeTruthy();
+  expect(screen.queryByLabelText("Save PNG")).toBeNull();
+
+  await act(async () => {
+    fireEvent.press(screen.getByLabelText("Rotate"));
+  });
+  expect(ScreenOrientation.lockAsync).toHaveBeenCalledWith("LANDSCAPE");
+
+  fireEvent.press(screen.getByLabelText("Save PDF"));
+  await act(async () => {});
+  expect(Print.printToFileAsync).toHaveBeenCalledWith({
+    html: expect.stringContaining("<h1>Vendite</h1>"),
+  });
+  expect(shareMedia).toHaveBeenCalledWith("file:///cache/artifacts/preview.pdf");
+
+  await view.unmount();
+  artifactStore.clear();
 });
 
 test("preview libraries are inlined from the app, never fetched from a CDN", () => {
