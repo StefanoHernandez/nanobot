@@ -272,25 +272,64 @@ def list_devices_public(path: Path | None = None) -> list[dict[str, Any]]:
     return devices
 
 
-def header_is_live_device(headers: Any, path: Path | None = None) -> bool:
+def live_device_id(headers: Any, path: Path | None = None) -> str | None:
+    """Id of the live (not revoked) device whose token is in the headers; updates last_seen."""
     raw = _auth_token(headers)
     if not raw:
-        return False
+        return None
     digest = token_hash(raw)
     target = path or devices_file_path()
 
-    def mutate(state: dict[str, Any]) -> bool:
+    def mutate(state: dict[str, Any]) -> str | None:
         for device in state["devices"]:
             stored = str(device.get("hash") or "")
             if not hmac.compare_digest(stored, digest):
                 continue
             if device.get("revoked"):
-                return False
+                return None
             device["last_seen"] = int(time.time())
-            return True
-        return False
+            return str(device.get("id") or "") or None
+        return None
 
-    return cast(bool, _with_state(target, mutate, persist=bool))
+    return cast("str | None", _with_state(target, mutate, persist=bool))
+
+
+def header_is_live_device(headers: Any, path: Path | None = None) -> bool:
+    return live_device_id(headers, path) is not None
+
+
+# Gateway tokens minted at bootstrap for a device (in-memory, this process only).
+# Revoking the device drops them at once instead of waiting for their TTL, and
+# they can't mint pairing codes: pairing a new phone needs the master secret.
+_DEVICE_TOKENS: dict[str, str] = {}  # gateway token -> device id
+_DEVICE_TOKENS_LOCK = threading.Lock()
+
+
+def remember_device_tokens(device_id: str, tokens: Any, *issued: str | None) -> None:
+    live = set(getattr(tokens, "api_tokens", {})) | set(getattr(tokens, "issued_tokens", {}))
+    with _DEVICE_TOKENS_LOCK:
+        for token in [t for t in _DEVICE_TOKENS if t not in live]:
+            _DEVICE_TOKENS.pop(token, None)  # expired or already used
+        for token in issued:
+            if token:
+                _DEVICE_TOKENS[token] = device_id
+
+
+def drop_device_tokens(device_id: str, tokens: Any) -> int:
+    with _DEVICE_TOKENS_LOCK:
+        mine = [t for t, d in _DEVICE_TOKENS.items() if d == device_id]
+        for token in mine:
+            _DEVICE_TOKENS.pop(token, None)
+            tokens.api_tokens.pop(token, None)
+            tokens.issued_tokens.pop(token, None)
+            tokens.issued_token_audiences.pop(token, None)
+    return len(mine)
+
+
+def _is_device_minted(request: Any) -> bool:
+    raw = _auth_token(request.headers)
+    with _DEVICE_TOKENS_LOCK:
+        return bool(raw) and raw in _DEVICE_TOKENS
 
 
 def _router_admin_authorized(secret: str, router: Any, request: WsRequest) -> bool:
@@ -365,6 +404,8 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
         return web.json_response({"error": "unsupported_framing"}, status=400)
     try:
         if path == PREFIX + "/codes":
+            if _is_device_minted(request):
+                return web.json_response({"error": "device_cannot_pair"}, status=403)
             code, expires_in = create_pairing_code()
             origin = _request_origin(request.headers)
             qr = json.dumps({"v": 1, "url": origin, "code": code}, separators=(",", ":"))
@@ -375,6 +416,7 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
             if not isinstance(device_id, str) or not device_id.strip():
                 return web.json_response({"error": "invalid_id"}, status=400)
             revoke_device(device_id.strip())
+            drop_device_tokens(device_id.strip(), tokens)
             return web.json_response({"ok": True})
     except DeviceError as exc:
         return web.json_response({"error": exc.code}, status=exc.status)

@@ -739,12 +739,14 @@ class GatewayHTTPHandler:
             request.headers,
             self.config,
         )
+        device_id = None  # fork (nanobot/ext/devices.py): set when a paired phone bootstraps
         if not is_proxy_authenticated:
             if secret:
                 if not _issue_route_secret_matches(request.headers, secret):
-                    from nanobot.ext.devices import header_is_live_device
+                    from nanobot.ext.devices import live_device_id
 
-                    if not header_is_live_device(request.headers):
+                    device_id = live_device_id(request.headers)
+                    if not device_id:
                         return _http_error(401, "Unauthorized")
             elif not is_local_browser:
                 return _http_error(403, "bootstrap is localhost-only")
@@ -787,6 +789,10 @@ class GatewayHTTPHandler:
             if api_token_allowed
             else None
         )
+        if device_id:
+            from nanobot.ext.devices import remember_device_tokens
+
+            remember_device_tokens(device_id, self.tokens, token, api_token)
 
         ws_url = self._bootstrap_ws_url(request)
         expected_path = _normalize_config_path(self.config.path)
