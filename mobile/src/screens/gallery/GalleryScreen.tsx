@@ -388,7 +388,7 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
     }
     setSaveUploadBusy(true);
     try {
-      await uploadProjectFile(session, project.id, local.name, local, true);
+      await uploadProjectFile(session, project.id, local.name, local);
       toast.show(t("gallery.saved"));
       setSaveArtifact(null);
     } catch {
