@@ -1,6 +1,6 @@
 # PL-A: prompt library, app side (owner: agy)
 
-Branch `agy/PL-A`, from `main`. Start it only after MD-A or CO-A is merged (one free worktree).
+Branch `agy/PL-A`, from `main`. MD-A and CO-A are already merged.
 
 ## Read first
 - `nanobot/ext/prompts.py`: the server API (read-only for you).
