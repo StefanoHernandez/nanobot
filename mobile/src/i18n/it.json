@@ -774,6 +774,47 @@
     "newChat": "Nuova chat",
     "offline": "Non connesso: riprova quando nanobot è raggiungibile"
   },
+  "projects": {
+    "title": "Progetti",
+    "newProject": "Nuovo progetto",
+    "name": "Nome",
+    "nameRequired": "Il nome è obbligatorio",
+    "description": "Descrizione",
+    "instructions": "Istruzioni",
+    "instructionsEmpty": "Nessuna istruzione configurata",
+    "editInstructions": "Modifica istruzioni",
+    "discardChangesTitle": "Modifiche non salvate",
+    "discardChangesMessage": "Vuoi davvero scartare le modifiche?",
+    "discard": "Scarta",
+    "files": "File",
+    "uploadFile": "Carica file",
+    "uploadProgress": "Caricamento {{current}}/{{total}}…",
+    "replaceFileTitle": "Sostituisci file?",
+    "replaceFileMessage": "Il file \"{{name}}\" esiste già nel progetto. Vuoi sostituirlo?",
+    "replace": "Sostituisci",
+    "deleteFileTitle": "Elimina file?",
+    "deleteFileMessage": "Sei sicuro di voler eliminare il file \"{{name}}\"?",
+    "chats": "Chat",
+    "newChat": "Nuova chat nel progetto",
+    "meta": "{{files}} file · {{chats}} chat",
+    "emptyTitle": "Nessun progetto",
+    "emptySubtitle": "Crea un progetto per condividere istruzioni e file tra più chat",
+    "emptyFiles": "Nessun file caricato",
+    "emptyChats": "Nessuna chat in questo progetto",
+    "archive": "Archivia progetto",
+    "archiveConfirmTitle": "Archivia progetto?",
+    "archiveConfirmMessage": "Il progetto viene spostato in archivio sul server; i file non vengono cancellati",
+    "editProject": "Modifica progetto",
+    "err": {
+      "project_not_found": "Progetto non trovato",
+      "file_exists": "Il file esiste già",
+      "file_too_large": "File troppo grande (max 100 MB)",
+      "disk_full": "Spazio su disco insufficiente sul server",
+      "invalid_path": "Percorso del file non valido",
+      "too_large": "Download troppo grande (max 32 MB)",
+      "generic": "Operazione non riuscita"
+    }
+  },
   "home": {
     "hello": "Ciao, sono {{name}}"
   }

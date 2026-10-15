@@ -774,6 +774,47 @@
     "newChat": "New chat",
     "offline": "Offline: try again when nanobot is reachable"
   },
+  "projects": {
+    "title": "Projects",
+    "newProject": "New project",
+    "name": "Name",
+    "nameRequired": "Name is required",
+    "description": "Description",
+    "instructions": "Instructions",
+    "instructionsEmpty": "No instructions configured",
+    "editInstructions": "Edit instructions",
+    "discardChangesTitle": "Unsaved changes",
+    "discardChangesMessage": "Are you sure you want to discard your changes?",
+    "discard": "Discard",
+    "files": "Files",
+    "uploadFile": "Upload file",
+    "uploadProgress": "Uploading {{current}}/{{total}}…",
+    "replaceFileTitle": "Replace file?",
+    "replaceFileMessage": "The file \"{{name}}\" already exists in the project. Do you want to replace it?",
+    "replace": "Replace",
+    "deleteFileTitle": "Delete file?",
+    "deleteFileMessage": "Are you sure you want to delete the file \"{{name}}\"?",
+    "chats": "Chats",
+    "newChat": "New project chat",
+    "meta": "{{files}} files · {{chats}} chats",
+    "emptyTitle": "No projects yet",
+    "emptySubtitle": "Create a project to share instructions and files across chats",
+    "emptyFiles": "No files uploaded",
+    "emptyChats": "No chats in this project",
+    "archive": "Archive project",
+    "archiveConfirmTitle": "Archive project?",
+    "archiveConfirmMessage": "The project will be moved to the archive on the server; files will not be deleted",
+    "editProject": "Edit project",
+    "err": {
+      "project_not_found": "Project not found",
+      "file_exists": "File already exists",
+      "file_too_large": "File too large (max 100 MB)",
+      "disk_full": "Insufficient disk space on server",
+      "invalid_path": "Invalid file path",
+      "too_large": "Download too large (max 32 MB)",
+      "generic": "Operation failed"
+    }
+  },
   "home": {
     "hello": "Hi, I'm {{name}}"
   }
