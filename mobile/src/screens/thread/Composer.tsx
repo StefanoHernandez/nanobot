@@ -332,18 +332,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
         />
       ) : null}
 
-      <View style={styles.inputRow}>
-        <View style={styles.leftSlot}>
-          <IconButton
-            icon="paperclip"
-            accessibilityLabel={t("attach.button")}
-            disabled={uploading}
-            onPress={() => setSheetOpen(true)}
-          />
-          <EffortPill chatKey={chatKey} />
-          <ContextIndicator chatKey={chatKey} />
-        </View>
-
+      <View>
         <TextInput
           ref={inputRef}
           multiline
@@ -365,7 +354,16 @@ export function Composer({ chatKey }: { chatKey: string }) {
           ]}
         />
 
-        <View style={[styles.rightSlot, { flexDirection: "row" }]}>
+        <View style={styles.toolsRow}>
+          <IconButton
+            icon="paperclip"
+            accessibilityLabel={t("attach.button")}
+            disabled={uploading}
+            onPress={() => setSheetOpen(true)}
+          />
+          <EffortPill chatKey={chatKey} />
+          <ContextIndicator chatKey={chatKey} />
+          <View style={{ flex: 1 }} />
           {voiceOk ? <VoiceButton chatKey={chatKey} onTranscript={appendTranscript} /> : null}
           {voiceOk && !hasContent && !running ? null : isRunningEmpty ? (
             <IconButton
@@ -423,26 +421,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 4,
   },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  leftSlot: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
   input: {
-    flex: 1,
     minHeight: 44,
-    maxHeight: 140,
+    maxHeight: 160,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 16,
   },
-  rightSlot: {
-    justifyContent: "flex-end",
+  toolsRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
 });

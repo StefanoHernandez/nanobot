@@ -30,7 +30,7 @@ function MessageRowImpl({ unit, live, onLongPress }: Props) {
 
   if (m.role === "user")
     return (
-      <View style={{ alignSelf: "flex-end", maxWidth: "85%", marginVertical: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: th.radius.md, borderBottomRightRadius: 6, backgroundColor: th.colors.userBubble, opacity: m.deliveryStatus === "sending" ? 0.6 : 1 }}>
+      <View style={{ alignSelf: "flex-end", maxWidth: "85%", marginTop: 22, marginBottom: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: th.radius.md, borderBottomRightRadius: 6, backgroundColor: th.colors.userBubble, opacity: m.deliveryStatus === "sending" ? 0.6 : 1 }}>
         <Text selectable style={{ color: th.colors.userBubbleForeground, fontFamily: th.font.regular, fontSize: 16, lineHeight: 23 }}>{m.content}</Text>
         {m.media?.length ? <MediaList media={m.media} /> : null}
       </View>
@@ -41,7 +41,8 @@ function MessageRowImpl({ unit, live, onLongPress }: Props) {
   const Wrap = finished ? Pressable : View;
   return (
     <Wrap
-      style={m.content ? { alignSelf: "flex-start", maxWidth: "94%", marginVertical: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: th.radius.md, borderBottomLeftRadius: 6, backgroundColor: th.colors.card } : { marginVertical: 4 }}
+      // Answers sit on the page, full width: the bubble is reserved for the user's messages.
+      style={{ marginVertical: 6, paddingHorizontal: 16 }}
       {...(finished ? { onLongPress: () => onLongPress!(m) } : {})}
     >
       {m.reasoning ? <ReasoningBlock text={m.reasoning} streaming={!!m.reasoningStreaming} /> : null}

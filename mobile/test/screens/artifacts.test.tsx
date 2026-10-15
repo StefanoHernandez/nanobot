@@ -519,3 +519,18 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     );
   });
 });
+
+test("mermaid follows the app theme and svg/mermaid pages carry the zoom script", () => {
+  const dark = buildShellHtml({ kind: "mermaid", html: "graph TD; A-->B", isDark: true, bg: "#1c3a34", fg: "#e8f0ed", accent: "#e4d4ec" });
+  expect(dark).toContain('theme: "dark"');
+  expect(dark).toContain('primaryColor: "#e4d4ec"');
+  expect(dark).toContain('touchstart');
+  const light = buildShellHtml({ kind: "mermaid", html: "graph TD; A-->B" });
+  expect(light).toContain('theme: "default"');
+  const svg = buildShellHtml({ kind: "svg", html: "<svg></svg>" });
+  expect(svg).toContain("touchstart");
+  const pdf = buildShellHtml({ kind: "pdf", fileSize: 1000 });
+  expect(pdf).not.toContain("prefers-reduced-motion");
+  // the sandbox is untouched
+  expect(dark).toContain("connect-src 'none'");
+});
