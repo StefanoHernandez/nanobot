@@ -29,7 +29,6 @@ from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.channels.websocket.binary_http import BinaryHTTPBridge
 from nanobot.config.schema import Base
-from nanobot.ext.projects import projects_post_handler
 from nanobot.session.webui_turns import (
     clear_websocket_turn_if_current,
     mark_websocket_turn_transcript_persistence_failed,
@@ -701,6 +700,9 @@ class WebSocketChannel(BaseChannel):
             await self._connection_loop(connection)
 
         # Fork extensions (nanobot/ext) take their POST paths; the rest stays upstream's.
+        # Imported here, not at the top, so upstream import edits never conflict with the fork.
+        from nanobot.ext.projects import projects_post_handler
+
         bridge = BinaryHTTPBridge(
             projects_post_handler(self.gateway.tokens, self.gateway.workspaces, self._uploads.handle)
         )

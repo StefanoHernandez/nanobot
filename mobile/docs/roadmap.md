@@ -23,6 +23,21 @@
 | 7 | **Kanban multi-bot** `nanobot-kanban` (modelled on Hermes kanban, see below). App section "Kanban" (+ WebUI page in the fork). | fork/UNO Q + app | planned |
 | — | iOS | — | postponed |
 
+## Feature backlog chosen by the user (2026-10-15)
+In progress:
+- **Projects** (spec `superpowers/specs/2026-10-15-projects-design.md`; server done, app screens with agy);
+- **Chat "Media e file"**.
+
+Next, each one needs a short design pass first:
+- **Approvals from the phone:** Allow/Deny for risky agent actions (shell, deletes, big spend). Upstream has no tool-approval mechanism, so this needs a fork hook in the tool runner.
+- **Machine dashboard:** CPU, RAM, temperature, disk, gateway uptime, recent log errors, restart.
+- **Costs and usage:** daily spend per model, a budget cap and alerts. Builds on upstream `nanobot/llm_usage`.
+- **Prompt library:** saved prompts, recalled with one tap or from `/`, also per project.
+- **Export and backup:** a chat or project to Markdown/PDF, plus a scheduled backup of `~/.nanobot`.
+- **Continuous voice conversation:** dictate, get the reply read aloud, repeat.
+
+Also noted: webhooks and checkpoints (ideas from Hermes/OpenClaw), then Phases 5b, 6 and 7.
+
 ## Fork operations (decided 2026-10-14)
 - **Repo:** `https://github.com/StefanoHernandez/nanobot` (public fork of HKUDS/nanobot, MIT). Never commit secrets: config, keys and the WebUI secret stay in `~/.nanobot` on luffy.
 - **Mac clone:** `~/Documents/Progetti_personali/nanobot`, with remotes `origin` (fork) and `upstream` (HKUDS).
