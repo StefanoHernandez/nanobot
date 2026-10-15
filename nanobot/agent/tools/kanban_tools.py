@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from nanobot.agent.tools.base import Tool, ToolResult, tool_parameters
 from nanobot.agent.tools.context import ToolContext, current_request_session_key
@@ -33,7 +33,7 @@ def _guard(task_id: str, *, verdict: bool = False) -> ToolResult | None:
             task = _store().get_task_detail(task_id)
         except KanbanError as exc:
             return _kanban_error(exc)
-        t = task.get("task", task) if isinstance(task, dict) else {}
+        t = cast(dict[str, Any], task.get("task", task))
         if owner[1] != t.get("reviewer_bot_id") or owner[1] == t.get("assignee_bot_id"):
             return ToolResult.error("kanban error: not_reviewer")
     return None
@@ -125,9 +125,9 @@ class KanbanCompleteTool(Tool):
                     parsed = json.loads(artifacts_raw)
                 except ValueError:
                     return ToolResult.error("artifacts must be a JSON array")
-                artifacts = parsed if isinstance(parsed, list) else None
+                artifacts = cast(list[str], parsed) if isinstance(parsed, list) else None
             elif isinstance(artifacts_raw, list):
-                artifacts = artifacts_raw
+                artifacts = cast(list[str], artifacts_raw)
             if artifacts is None:
                 return ToolResult.error("artifacts must be a JSON array")
         if (denied := _guard(task_id.strip())) is not None:
@@ -173,11 +173,11 @@ class KanbanRequestReviewTool(Tool):
             try:
                 parsed = json.loads(artifacts_raw)
                 if isinstance(parsed, list):
-                    artifacts = parsed
+                    artifacts = cast(list[str], parsed)
             except ValueError:
                 return ToolResult.error("artifacts must be a JSON array")
         elif isinstance(artifacts_raw, list):
-            artifacts = artifacts_raw
+            artifacts = cast(list[str], artifacts_raw)
         if (denied := _guard(task_id.strip())) is not None:
             return denied
         try:

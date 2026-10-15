@@ -16,7 +16,7 @@ from typing import Any
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
-from nanobot.ext.devices import _router_admin_authorized
+from nanobot.ext.devices import router_admin_authorized
 from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/system"
@@ -140,6 +140,6 @@ def dispatch_system_get(router: Any, request: WsRequest, got: str) -> Response |
     if got != PREFIX:
         return None
     secret = router.config.token_issue_secret.strip() or router.config.token.strip()
-    if not _router_admin_authorized(secret, router, request):
+    if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
     return http_json_response(snapshot(), extra_headers=[("Cache-Control", "no-store")])

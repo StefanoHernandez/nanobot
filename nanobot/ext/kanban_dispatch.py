@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from loguru import logger
 
@@ -111,7 +112,7 @@ def _fail_running_task(store: KanbanStore, task_id: str) -> None:
         store.record_failure(task_id, _TURN_FAILURE)
 
 
-def _fail_wake(store: KanbanStore, wake: dict, bot_id: str, board_id: str) -> None:
+def _fail_wake(store: KanbanStore, wake: dict[str, Any], bot_id: str, board_id: str) -> None:
     attempts = int(wake["attempts"]) + 1
     if not store.requeue_wake(wake, attempts):
         return

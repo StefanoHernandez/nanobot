@@ -115,17 +115,17 @@ def _load_raw(path: Path) -> dict[str, Any]:
         return _empty_state()
     if not isinstance(raw, dict):
         return _empty_state()
-    codes = raw.get("codes")
-    devices = raw.get("devices")
-    if not isinstance(codes, list):
-        codes = []
-    if not isinstance(devices, list):
-        devices = []
+    raw = cast(dict[str, Any], raw)
+    codes_raw = raw.get("codes")
+    devices_raw = raw.get("devices")
+    codes = cast(list[Any], codes_raw) if isinstance(codes_raw, list) else []
+    devices = cast(list[Any], devices_raw) if isinstance(devices_raw, list) else []
     now = int(time.time())
     cleaned_codes: list[dict[str, Any]] = []
     for entry in codes:
         if not isinstance(entry, dict):
             continue
+        entry = cast(dict[str, Any], entry)
         expires = entry.get("expires")
         if not isinstance(expires, (int, float)) or int(expires) <= now:
             continue
@@ -140,6 +140,7 @@ def _load_raw(path: Path) -> dict[str, Any]:
     for entry in devices:
         if not isinstance(entry, dict):
             continue
+        entry = cast(dict[str, Any], entry)
         cleaned_devices.append(
             {
                 "id": str(entry.get("id") or ""),
@@ -204,7 +205,7 @@ def create_pairing_code(path: Path | None = None) -> tuple[str, int]:
     return cast(tuple[str, int], _with_state(target, mutate))
 
 
-def claim_pairing_code(code: str, name: str, path: Path | None = None) -> tuple[str, str, str]:
+def claim_pairing_code(code: object, name: str, path: Path | None = None) -> tuple[str, str, str]:
     target = path or devices_file_path()
     cleaned_name = _validate_name(name)
     if not isinstance(code, str) or not code.strip():
@@ -338,7 +339,7 @@ def _is_device_minted(request: Any) -> bool:
         return bool(raw) and raw in _DEVICE_TOKENS
 
 
-def _router_admin_authorized(secret: str, router: Any, request: WsRequest) -> bool:
+def router_admin_authorized(secret: str, router: Any, request: WsRequest) -> bool:
     if secret and issue_route_secret_matches(request.headers, secret):
         return True
     return bool(router.check_api_token(request))
@@ -348,7 +349,7 @@ def dispatch_devices_get(router: Any, request: WsRequest, got: str) -> Response 
     if got != PREFIX:
         return None
     secret = router.config.token_issue_secret.strip() or router.config.token.strip()
-    if not _router_admin_authorized(secret, router, request):
+    if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
     payload = {"devices": list_devices_public()}
     return http_json_response(payload, extra_headers=[("Cache-Control", "no-store")])
@@ -371,7 +372,7 @@ def devices_post_handler(
     return handler
 
 
-async def _read_json(request: web.BaseRequest) -> dict[str, Any]:
+async def read_json(request: web.BaseRequest) -> dict[str, Any]:
     if request.content_length is not None and request.content_length > MAX_JSON_BODY_BYTES:
         raise DeviceError(413, "body_too_large")
     raw = await request.content.read(MAX_JSON_BODY_BYTES + 1)
@@ -394,7 +395,7 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
     path = request.path
     if path == PREFIX + "/claim":
         try:
-            body = await _read_json(request)
+            body = await read_json(request)
             device_token, device_id, name = claim_pairing_code(body.get("code", ""), body.get("name", ""))
             return web.json_response(
                 {"device_token": device_token, "id": device_id, "name": name},
@@ -417,7 +418,7 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
             qr = json.dumps({"v": 1, "url": origin, "code": code}, separators=(",", ":"))
             return web.json_response({"code": code, "expires_in": expires_in, "qr": qr}, status=201)
         if path == PREFIX + "/revoke":
-            body = await _read_json(request)
+            body = await read_json(request)
             device_id = body.get("id")
             if not isinstance(device_id, str) or not device_id.strip():
                 return web.json_response({"error": "invalid_id"}, status=400)
