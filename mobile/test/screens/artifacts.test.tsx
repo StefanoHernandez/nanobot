@@ -108,6 +108,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     jest.useRealTimers();
     jest.clearAllMocks();
     capturedWebViewProps = null;
+    artifactStore.clear();
   });
 
   afterEach(() => {
@@ -782,7 +783,7 @@ test("an HTML preview rotates, fits, and exports PDF", async () => {
   expect(ScreenOrientation.lockAsync).toHaveBeenCalledWith("LANDSCAPE");
 
   fireEvent.press(screen.getByLabelText("Save PDF"));
-  await act(async () => {});
+  await waitFor(() => expect(shareMedia).toHaveBeenCalled());
   expect(Print.printToFileAsync).toHaveBeenCalledWith({
     html: expect.stringContaining("<h1>Vendite</h1>"),
   });
@@ -790,6 +791,31 @@ test("an HTML preview rotates, fits, and exports PDF", async () => {
 
   await view.unmount();
   artifactStore.clear();
+});
+
+test("answer.md uses paginated reading view from artifactStore, not route params", async () => {
+  const md = "## Alpha\n\nPage one text\n\n## Beta\n\nPage two text";
+  artifactStore.set(md, "answer.md");
+  const routeParams = { name: "answer.md" };
+  expect(JSON.stringify(routeParams)).not.toContain("Page one text");
+
+  try {
+    const view = await wrap(<FileViewer uri="" name="answer.md" />);
+    expect(await screen.findByText("Alpha")).toBeTruthy();
+    expect(screen.getByText("Page one text")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText("Next page"));
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Page 2 of 2")).toBeTruthy();
+    });
+    expect(screen.getByText("Beta")).toBeTruthy();
+    expect(screen.getByText("Page two text")).toBeTruthy();
+    expect(screen.getByLabelText("Save PDF")).toBeTruthy();
+    await view.unmount();
+  } finally {
+    artifactStore.clear();
+  }
 });
 
 test("preview libraries are inlined from the app, never fetched from a CDN", () => {
