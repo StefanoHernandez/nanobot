@@ -1,6 +1,7 @@
 import { AnyImage } from "../../ui/AnyImage";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Modal,
@@ -48,19 +49,22 @@ export type ThreadFile = {
 
 export function collectThreadFiles(messages: UIMessage[], baseUrl: string): ThreadFile[] {
   const files: ThreadFile[] = [];
-  const seenUrls = new Set<string>();
+  const seenImageUrls = new Set<string>();
+  const seenOtherUrls = new Set<string>();
 
   for (const m of messages) {
-    const role: "user" | "assistant" = m.role === "assistant" ? "assistant" : "user";
+    const role: "user" | "assistant" = m.role === "user" ? "user" : "assistant";
 
     // 1. m.media where url is set
     if (m.media) {
       for (const item of m.media) {
         if (item.url) {
           const abs = absoluteMediaUrl(baseUrl, item.url);
-          if (!seenUrls.has(abs)) {
-            seenUrls.add(abs);
-            const kind = classify(item);
+          const kind = classify(item);
+          const isImage = kind === "image";
+          const seen = isImage ? seenImageUrls : seenOtherUrls;
+          if (!seen.has(abs)) {
+            seen.add(abs);
             files.push({
               url: abs,
               name: item.name || mediaName(item),
@@ -78,8 +82,8 @@ export function collectThreadFiles(messages: UIMessage[], baseUrl: string): Thre
       for (const img of m.images) {
         if (img.url) {
           const abs = absoluteMediaUrl(baseUrl, img.url);
-          if (!seenUrls.has(abs)) {
-            seenUrls.add(abs);
+          if (!seenImageUrls.has(abs)) {
+            seenImageUrls.add(abs);
             files.push({
               url: abs,
               name: img.name || mediaName({ url: img.url, kind: "image" }),
@@ -121,6 +125,86 @@ function fileIcon(
   return "file-outline";
 }
 
+type FileRowItemProps = {
+  item: ThreadFile;
+  busy: boolean;
+  onOpen: (item: ThreadFile) => void;
+  onShare: (item: ThreadFile) => void;
+};
+
+function FileRowItem({ item, busy, onOpen, onShare }: FileRowItemProps) {
+  const th = useTheme();
+  const t = useT();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${item.name}, ${item.role === "user" ? t("gallery.sentByUser") : t("gallery.sentByBot")}`}
+      accessibilityState={{ busy, disabled: busy }}
+      disabled={busy}
+      onPress={() => onOpen(item)}
+      style={[
+        styles.fileRow,
+        {
+          backgroundColor: th.colors.card,
+          borderRadius: th.radius.md,
+        },
+      ]}
+    >
+      <View style={styles.iconContainer}>
+        {busy ? (
+          <ActivityIndicator
+            size="small"
+            color={th.colors.foreground}
+            accessibilityLabel={t("media.opening")}
+          />
+        ) : (
+          <MaterialCommunityIcons
+            name={fileIcon(item.kind, item.name)}
+            size={28}
+            color={th.colors.foreground}
+          />
+        )}
+      </View>
+      <View style={styles.fileInfo}>
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="middle"
+          style={[
+            styles.fileName,
+            {
+              color: th.colors.foreground,
+              fontFamily: th.font.medium,
+            },
+          ]}
+        >
+          {item.name}
+        </Text>
+        <Text
+          style={[
+            styles.fileSubtitle,
+            {
+              color: th.colors.mutedForeground,
+              fontFamily: th.font.regular,
+            },
+          ]}
+        >
+          {item.role === "user" ? t("gallery.sentByUser") : t("gallery.sentByBot")}
+        </Text>
+      </View>
+      <IconButton
+        icon="share-variant"
+        size={22}
+        color={th.colors.mutedForeground}
+        loading={busy}
+        disabled={busy}
+        onPress={() => onShare(item)}
+        accessibilityLabel={t("gallery.share")}
+      />
+    </Pressable>
+  );
+}
+
 export function GalleryScreen({ chatKey }: GalleryScreenProps) {
   const th = useTheme();
   const t = useT();
@@ -140,6 +224,8 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
   const activeTab = manualTab ?? (images.length === 0 && otherFiles.length > 0 ? "files" : "images");
 
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [busyUrls, setBusyUrls] = useState<Record<string, boolean>>({});
+  const busyRef = useRef<Record<string, boolean>>({});
 
   const numColumns = 3;
   const screenWidth = Dimensions.get("window").width;
@@ -154,6 +240,9 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
   };
 
   const handleOpenFile = async (item: ThreadFile) => {
+    if (busyRef.current[item.url]) return;
+    busyRef.current[item.url] = true;
+    setBusyUrls((prev) => ({ ...prev, [item.url]: true }));
     try {
       const local = await downloadMedia(item.url, item.name);
       if (viewerKind(item.name) !== null) {
@@ -163,15 +252,32 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
       }
     } catch {
       toast.show(t("media.openFailed"));
+    } finally {
+      busyRef.current[item.url] = false;
+      setBusyUrls((prev) => {
+        const next = { ...prev };
+        delete next[item.url];
+        return next;
+      });
     }
   };
 
   const handleShare = async (item: ThreadFile) => {
+    if (busyRef.current[item.url]) return;
+    busyRef.current[item.url] = true;
+    setBusyUrls((prev) => ({ ...prev, [item.url]: true }));
     try {
       const local = await downloadMedia(item.url, item.name);
       await shareMedia(local);
     } catch {
       toast.show(t("media.shareFailed"));
+    } finally {
+      busyRef.current[item.url] = false;
+      setBusyUrls((prev) => {
+        const next = { ...prev };
+        delete next[item.url];
+        return next;
+      });
     }
   };
 
@@ -326,57 +432,12 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
           keyExtractor={(item) => item.url}
           contentContainerStyle={[styles.filesListContainer, { paddingBottom: insets.bottom + 16 }]}
           renderItem={({ item }) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${item.name}, ${item.role === "user" ? t("gallery.sentByUser") : t("gallery.sentByBot")}`}
-              onPress={() => handleOpenFile(item)}
-              style={[
-                styles.fileRow,
-                {
-                  backgroundColor: th.colors.card,
-                  borderRadius: th.radius.md,
-                },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name={fileIcon(item.kind, item.name)}
-                size={28}
-                color={th.colors.foreground}
-              />
-              <View style={styles.fileInfo}>
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                  style={[
-                    styles.fileName,
-                    {
-                      color: th.colors.foreground,
-                      fontFamily: th.font.medium,
-                    },
-                  ]}
-                >
-                  {item.name}
-                </Text>
-                <Text
-                  style={[
-                    styles.fileSubtitle,
-                    {
-                      color: th.colors.mutedForeground,
-                      fontFamily: th.font.regular,
-                    },
-                  ]}
-                >
-                  {item.role === "user" ? t("gallery.sentByUser") : t("gallery.sentByBot")}
-                </Text>
-              </View>
-              <IconButton
-                icon="share-variant"
-                size={22}
-                color={th.colors.mutedForeground}
-                onPress={() => handleShare(item)}
-                accessibilityLabel={t("gallery.share")}
-              />
-            </Pressable>
+            <FileRowItem
+              item={item}
+              busy={!!busyUrls[item.url]}
+              onOpen={handleOpenFile}
+              onShare={handleShare}
+            />
           )}
         />
       )}
@@ -495,6 +556,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     minHeight: 56,
     gap: 12,
+  },
+  iconContainer: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   fileInfo: {
     flex: 1,

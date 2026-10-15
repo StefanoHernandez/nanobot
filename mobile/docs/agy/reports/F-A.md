@@ -132,3 +132,130 @@ Ran all test suites.
 
 ## What Could Not Be Verified
 - **Physical device execution:** Nothing was tested on a physical Android/iOS phone or tablet. Actual opening of system viewers via `IntentLauncher.startActivityAsync`, the system share sheet via `Sharing.shareAsync`, and hardware rendering of large media files could not be checked in this headless Linux development environment.
+
+
+## fix1: Review fixes (busy state, progress feedback, roles, dedupe, labels)
+
+### Files Touched
+- `mobile/src/screens/gallery/GalleryScreen.tsx`:
+  - Added per-URL busy guard (`busyRef` and `busyUrls` state) preventing concurrent downloads from rapid double taps on the file row or share button.
+  - Added progress feedback: renders `ActivityIndicator` in place of the file icon with accessibility label `media.opening`, and sets `loading={busy}` / `disabled={busy}` on the share `IconButton`.
+  - Fixed sender role classification: only `m.role === "user"` maps to `"user"` ("Inviato da te"); `assistant`, `tool` and `system` all map to `"assistant"` ("Dal bot").
+  - Fixed deduplication edge case: separate dedupe tracking for images (`seenImageUrls`) and other files (`seenOtherUrls`), so an image whose URL was first encountered in a non-image attachment is never lost.
+- `mobile/src/i18n/en.json`:
+  - Updated `gallery.open` to `"Media and files"`.
+- `mobile/test/screens/diffs-gallery.test.tsx`:
+  - Updated gallery label regex to `/gallery|media and files/i` to maintain compatibility with updated `gallery.open`.
+- `mobile/test/screens/gallery-files.test.tsx`:
+  - Added test verifying dedupe edge case where an image URL was first seen as a non-image file.
+  - Added test verifying role mapping (`user` vs `assistant`, `tool`, `system`).
+  - Added test for rapid double presses on the same PDF row (asserts `downloadMedia` and `router.push` called once, and `ActivityIndicator` with `media.opening` is displayed).
+  - Added test for `openLocal` branch with `.zip` file (not supported by file viewer).
+  - Added test for share button calling `shareMedia` once.
+  - Updated header button test to explicitly assert `icon === "folder-multiple-image"`.
+
+### TDD
+- **RED phase:** Added new unit tests in `mobile/test/screens/gallery-files.test.tsx` for dedupe edge cases, non-user roles, rapid double-press busy guard, `openLocal`, and share button. Observed failures as expected.
+- **GREEN phase:** Implemented the busy guard, progress indicator, role fix, and kind-grouped deduplication in `GalleryScreen.tsx`, updated `en.json`, and updated `diffs-gallery.test.tsx`. All 10 tests in `gallery-files.test.tsx` and all 64 test suites across the project passed.
+
+### Raw Output
+
+`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest test/screens/gallery-files.test.tsx`:
+```
+PASS test/screens/gallery-files.test.tsx
+  F-A: collectThreadFiles
+    ✓ mixes user/assistant images, a PDF, an .m4a and an .mp4, checks kinds/roles, de-duplicates URL and keeps order (3 ms)
+    ✓ dedupe edge case: does not lose an image whose URL was first seen as a non-image file (4 ms)
+    ✓ roles: only user maps to user, assistant, tool and system all map to assistant (1 ms)
+  F-A: GalleryScreen with Files tab
+    ✓ with only files it opens on the File tab and shows file info (151 ms)
+    ✓ the File row tap with a .pdf calls downloadMedia, then navigates to /viewer (9 ms)
+    ✓ two quick presses on the same PDF row: downloadMedia called once, progress feedback shown, router.push called once (24 ms)
+    ✓ openLocal branch: file that viewer cannot show (.zip) calls openLocal and does not navigate (7 ms)
+    ✓ share button calls shareMedia once and does not navigate (7 ms)
+  F-A: ThreadScreen header gallery button
+    ✓ shows button with icon folder-multiple-image when chat has a PDF (non-image file) (23 ms)
+    ✓ hides button when chat has no media at all (8 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+Time:        1.388 s, estimated 2 s
+Ran all test suites matching /test\/screens\/gallery-files.test.tsx/i.
+```
+
+`npx tsc --noEmit`:
+```
+(clean - 0 errors)
+```
+
+`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest` (whole suite):
+```
+PASS test/screens/composer.test.tsx
+PASS test/state/fork-temp-workspace.test.ts
+PASS test/settings/store.test.ts
+PASS test/state/chats.test.ts
+PASS test/ui/components.test.tsx
+PASS test/extras/useEffort.test.tsx
+PASS test/extras/m-b.test.tsx
+PASS test/extras/widget.test.tsx
+PASS test/state/sessionStore.test.ts
+PASS test/core/profiles.test.ts
+PASS test/settings/models-providers.test.ts
+PASS test/core/upload.test.ts
+PASS test/extras/native.test.tsx
+PASS test/state/subagents.test.ts
+PASS test/extras/effort.test.ts
+PASS test/core/session.test.ts
+PASS test/extras/notifier.test.ts
+PASS test/extras/outbox.test.tsx
+PASS test/ecosystem/channels.test.ts
+PASS test/screens/thread.test.tsx
+PASS test/extras/voice.test.ts
+PASS test/vendor-smoke.test.ts
+PASS test/ui/anyimage.test.tsx
+PASS test/ui/botface.test.tsx
+PASS test/platform.test.ts
+PASS test/state/usage.test.ts
+PASS test/settings/runtime-capabilities.test.ts
+PASS test/extras/logic.test.ts
+PASS test/screens/mainLayout.test.tsx
+PASS test/vendorVersion.test.ts
+PASS test/ecosystem/apps-skills-automations.test.ts
+PASS test/ui/theme.test.ts
+PASS test/ui/math.test.tsx
+PASS test/state/thread.integration.test.ts
+PASS test/fixes/m-a.test.tsx
+PASS test/screens/gallery-files.test.tsx
+PASS test/screens/diffs-gallery.test.tsx
+
+Test Suites: 64 passed, 64 total
+Tests:       557 passed, 557 total
+Snapshots:   0 total
+Time:        6.393 s
+Ran all test suites.
+```
+
+### Requirements Breakdown & Implementation Citations
+
+1. **Busy guard (`GalleryScreen.tsx`):**
+   - Per-URL busy state tracking via `busyRef` and `busyUrls`: `mobile/src/screens/gallery/GalleryScreen.tsx:238-239`.
+   - `handleOpenFile` and `handleShare` guard against concurrent execution: `mobile/src/screens/gallery/GalleryScreen.tsx:249, 269`.
+   - Row pressable and share button disabled while busy: `mobile/src/screens/gallery/GalleryScreen.tsx:139-140, 196-197`.
+2. **Progress feedback (`GalleryScreen.tsx`):**
+   - Shows `ActivityIndicator` in place of the file icon with accessibility label `t("media.opening")`: `mobile/src/screens/gallery/GalleryScreen.tsx:151-163`.
+   - Pass `loading={busy}` to the share `IconButton`: `mobile/src/screens/gallery/GalleryScreen.tsx:195-197`.
+3. **Label in `en.json`:**
+   - Updated `gallery.open` to `"Media and files"`: `mobile/src/i18n/en.json:464`.
+4. **Roles mapping:**
+   - Only `m.role === "user"` maps to `"user"` ("Inviato da te"); `assistant`, `tool` and `system` all map to `"assistant"` ("Dal bot"): `mobile/src/screens/gallery/GalleryScreen.tsx:54`.
+5. **Dedupe edge case:**
+   - Dedupe per kind group (`seenImageUrls` and `seenOtherUrls`), ensuring images with identical URLs to earlier non-image attachments are not dropped from `collectThreadImages`: `mobile/src/screens/gallery/GalleryScreen.tsx:51-52, 63-65, 83-84`.
+6. **Tests:**
+   - Assert `btn.props.children[0].props.name === "folder-multiple-image"`: `mobile/test/screens/gallery-files.test.tsx:489`.
+   - Rapid double-press busy guard and progress feedback test: `mobile/test/screens/gallery-files.test.tsx:336-360`.
+   - `openLocal` branch test: `mobile/test/screens/gallery-files.test.tsx:362-404`.
+   - Share button test: `mobile/test/screens/gallery-files.test.tsx:406-449`.
+
+### What Could Not Be Verified
+- Real touch double-tap latency on a physical touch screen; actual Android system viewer launch for .zip files; native share sheet animations.
