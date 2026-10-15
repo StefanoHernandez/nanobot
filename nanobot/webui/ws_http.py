@@ -32,7 +32,6 @@ from nanobot.command.builtin import builtin_command_palette
 from nanobot.cron.binding import CronBindingError, binding_revision
 from nanobot.cron.session_turns import is_bound_cron_job
 from nanobot.cron.types import CronJob, CronSchedule
-from nanobot.ext.projects import dispatch_projects_get
 from nanobot.security.workspace_access import WorkspaceScope, WorkspaceScopeError
 from nanobot.session.manager import SessionManager
 from nanobot.session.recovery import RecoveryActionError
@@ -612,7 +611,9 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
-        # Fork extensions (nanobot/ext): one hook, keep upstream merges clean
+        # Fork extensions (nanobot/ext): one hook, imported here so upstream import edits never conflict
+        from nanobot.ext.projects import dispatch_projects_get
+
         response = dispatch_projects_get(self, request, got)
         if response is not None:
             return response
