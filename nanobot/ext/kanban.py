@@ -201,12 +201,21 @@ def _task_public(row: sqlite3.Row) -> dict[str, Any]:
     return data
 
 
+_SCHEMA_READY: set[tuple[str, bool]] = set()
+
+
 class KanbanStore:
     def __init__(self, path: Path | None = None, *, seed: bool = True) -> None:
         self._path = path or kanban_db_path()
         self._seed = seed
         self._lock = _lock
-        self._ensure_schema()
+        # HTTP handlers build a store per request: create the schema (and harden the
+        # file) once per DB path and process, not on every request.
+        key = (str(self._path), seed)
+        if key not in _SCHEMA_READY or not self._path.exists():
+            self._ensure_schema()
+            _harden_db(self._path)
+            _SCHEMA_READY.add(key)
 
     @property
     def path(self) -> Path:
@@ -215,9 +224,7 @@ class KanbanStore:
     def _connect(self) -> sqlite3.Connection:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self._path), timeout=30.0)
-        _harden_db(self._path)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=30000")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
@@ -225,6 +232,7 @@ class KanbanStore:
     def _ensure_schema(self) -> None:
         with self._lock:
             with self._connect() as conn:
+                conn.execute("PRAGMA journal_mode=WAL")  # persistent on the DB file
                 conn.executescript(
                     """
                     CREATE TABLE IF NOT EXISTS bots (

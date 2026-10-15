@@ -164,7 +164,7 @@ async def test_wake_dropped_after_three_failures(store_path):
         for m in snapshot["messages"]
         if m["author_type"] == "bot"
         and m["author_id"] == "coder"
-        and m["content"] == "Non sono riuscito a rispondere."
+        and m["content"] == dispatch._WAKE_FAILURE_MESSAGE
     ]
     assert len(failure_msgs) == 1
 
