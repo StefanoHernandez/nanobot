@@ -179,3 +179,60 @@ def test_pairing_origin_rejects_a_host_with_a_path():
     with pytest.raises(dev.DeviceError) as exc:
         dev._request_origin({"Host": "evil.example/steal"})
     assert exc.value.status == 400
+
+
+def _post(path: str, body: dict, auth: str):
+    raw = json.dumps(body).encode("utf-8")
+
+    class _Content:
+        @staticmethod
+        async def read(_limit: int) -> bytes:
+            return raw
+
+    return SimpleNamespace(
+        method="POST",
+        path=dev.PREFIX + path,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {auth}"},
+        content_length=len(raw),
+        content=_Content(),
+    )
+
+
+def _paired_phone(devices_path):
+    code, _ = dev.create_pairing_code(devices_path)
+    device_token, device_id, _ = dev.claim_pairing_code(code, "phone", devices_path)
+    return device_token, device_id
+
+
+@pytest.mark.asyncio
+async def test_revoke_drops_the_phone_tokens_at_once(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    device_token, device_id = _paired_phone(devices_path)
+    assert dev.live_device_id({"Authorization": f"Bearer {device_token}"}) == device_id
+    ws, api = store.issue_token(300), store.issue_api_token(300)
+    dev.remember_device_tokens(device_id, store, ws, api)
+
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+    resp = await handler(_post("/revoke", {"id": device_id}, MASTER))
+    assert resp.status == 200
+    assert api not in store.api_tokens and ws not in store.issued_tokens
+    assert dev.live_device_id({"Authorization": f"Bearer {device_token}"}) is None
+
+
+@pytest.mark.asyncio
+async def test_a_phone_token_cannot_pair_new_phones(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    _, device_id = _paired_phone(devices_path)
+    api = store.issue_api_token(300)
+    dev.remember_device_tokens(device_id, store, api)
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+
+    denied = await handler(_post("/codes", {}, api))
+    assert denied.status == 403
+    master_api = store.issue_api_token(300)  # minted with the master secret
+    allowed = await handler(_post("/codes", {}, master_api))
+    assert allowed.status != 403  # past the device check (400 here only for the missing Origin)

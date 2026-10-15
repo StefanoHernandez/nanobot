@@ -14,6 +14,17 @@ Scope: `81ebc82d..claude/projects`, 42 commits. App: 677/677 jest, tsc clean. Se
   - a turn times out after 10 min.
 - **Test order bug:** `tests/ext/test_subagent_model.py` used `Config.model_validate`, which skips the lazy tool-config resolution.
 
+## Fixed later by Claude (branch `claude/server-fixes`)
+| Row | Fix |
+|---|---|
+| 2 | Interrupted `running` tasks count as a failed attempt at dispatcher start (`recover_interrupted`). A wake stays queued until its reply is posted (`finish_wake`), so a crash mid-turn retries it. |
+| 3 | Bootstrap remembers the gateway tokens it minted for a device, and revoke drops them at once. Device-minted tokens can't create pairing codes (master secret only). Already-open WebSockets still last until they reconnect. |
+| 4 | The kanban schema is created once per process, not per request. Device `last_seen` is written at most once a minute. Project file reads (sync, up to 32 MB) are **still open**. |
+| 5 | One wake session per (board, bot) instead of one per mention. The server copy is in English. |
+| 11 | `mobile/scripts/build-web.sh` exports the web build (~20 MB, `mobile/dist-web`). A bad `NANOBOT_APP_DIST` now logs a warning. **CSP still open:** it needs a browser test, because the preview iframes inherit it. |
+
+Also seen: `tests/webui/test_remote_pairing.py::test_server_appends_restricted_key_and_revoke_preserves_existing` and `tests/channels/test_channel_setup.py::test_every_runtime_channel_field_has_a_webui_contract` fail on `main` without these changes. They are pre-existing.
+
 ## Open (to do next)
 | # | Where | Issue |
 |---|---|---|
