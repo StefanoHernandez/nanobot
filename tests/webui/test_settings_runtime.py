@@ -138,7 +138,10 @@ def test_every_exposed_runtime_setting_has_a_frontend_use():
     assert len(paths) == len(set(paths))
     # The CLI enable flag controls visibility of its advanced fields, without an editor.
     visibility_only = {"tools.cli_apps.enable"}
-    assert set(paths) | visibility_only == set(RUNTIME_CONFIG_PATHS)
+    # Fork: settings edited by the mobile app only.
+    from nanobot.ext.subagent_model import MOBILE_ONLY_RUNTIME_PATHS
+
+    assert set(paths) | visibility_only | MOBILE_ONLY_RUNTIME_PATHS == set(RUNTIME_CONFIG_PATHS)
 
 
 def test_disabling_memory_consolidation_preserves_other_memory_settings():

@@ -358,6 +358,16 @@
       "required": "Obbligatorio",
       "duplicate": "Esiste gia",
       "invalid": "Valore non valido"
+    },
+    "tasks": {
+      "title": "Modelli per i compiti",
+      "subagent": "Sub-agent",
+      "subagentHelp": "aiutanti che il bot avvia per lavorare in parallelo",
+      "dream": "Dream (memoria)",
+      "dreamHelp": "consolidamento periodico della memoria",
+      "sameAsChat": "Come la chat",
+      "selected": "Selezionato",
+      "saveFailed": "Impossibile salvare la scelta del modello"
     }
   },
   "providers": {

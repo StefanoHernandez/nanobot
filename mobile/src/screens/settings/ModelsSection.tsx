@@ -13,6 +13,7 @@ import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from ".
 import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 import { ProvidersPanel } from "./ProvidersPanel";
+import { TaskModels } from "./TaskModels";
 
 const jsonText = (v: Record<string, unknown> | null | undefined) => (v && Object.keys(v).length ? JSON.stringify(v, null, 2) : "");
 const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -84,6 +85,7 @@ export function ModelsSection() {
           </View>
         </>
       ) : null}
+      <TaskModels />
       <View style={{ padding: 16, gap: 8 }}>
         <Button title={t("models.addPreset")} variant="secondary" onPress={() => setEditing("new")} />
         {data.model_configuration_migratable ? (

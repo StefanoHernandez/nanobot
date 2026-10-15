@@ -137,9 +137,12 @@ class SubagentTool(Tool):
             return ToolResult.error("Error: create requires an active session identity")
         inline = wait or not request_ctx.can_receive_background_results or not request_ctx.persist_session
         method = self._manager.run_inline if inline else self._manager.spawn
+        # Fork extension (nanobot/ext/subagent_model.py): optional subagent model preset.
+        from nanobot.ext.subagent_model import runtime_for
+
         return await method(
             task=task,
-            runtime=request_ctx.runtime,
+            runtime=runtime_for(self._manager, request_ctx.runtime),
             label=label,
             origin_channel=origin_channel,
             origin_chat_id=origin_chat_id,

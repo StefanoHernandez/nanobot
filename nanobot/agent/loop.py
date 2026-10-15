@@ -484,7 +484,7 @@ class AgentLoop:
             config,
             provider_snapshot_loader,
         )
-        return cls(
+        loop = cls(
             bus=bus,
             provider=provider,
             workspace=config.workspace_path,
@@ -512,6 +512,11 @@ class AgentLoop:
             tool_registry=tool_registry,
             **extra,
         )
+        # Fork extension (nanobot/ext/subagent_model.py): optional subagent model preset.
+        from nanobot.ext.subagent_model import attach
+
+        attach(loop, defaults.subagent_model_preset)
+        return loop
 
     def _sync_subagent_runtime_limits(self) -> None:
         """Keep subagent runtime limits aligned with mutable loop settings."""

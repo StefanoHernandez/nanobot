@@ -26,6 +26,9 @@ RUNTIME_CONFIG_PATHS = (
     "agents.defaults.provider_retry_mode",
     "agents.defaults.tool_hint_max_length",
     "agents.defaults.dream.enabled",
+    # Fork: model choice for Dream and subagents (None = same as the chat)
+    "agents.defaults.dream.model_override",
+    "agents.defaults.subagent_model_preset",
     "gateway.host",
     "gateway.port",
     "gateway.restart_mode",
