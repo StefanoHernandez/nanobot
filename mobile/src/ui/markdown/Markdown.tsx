@@ -57,7 +57,8 @@ function Blocks({ tokens, ctx, top }: { tokens: Token[]; ctx: Ctx; top?: boolean
             return null;
           case "heading": {
             const h = t as Tokens.Heading;
-            return <Text key={i} style={[body, { fontFamily: h.depth <= 3 ? th.font.displayBold : th.font.medium, fontSize: base + Math.max(0, 5 - h.depth) * 2, lineHeight: (base + Math.max(0, 5 - h.depth) * 2) * 1.25, marginTop: 10 }]}><Inline tokens={h.tokens} ctx={ctx} /></Text>;
+            const headingSize = [22, 22, 19, 17, 16, 16, 16][h.depth];
+            return <Text key={i} style={[body, { fontFamily: th.font.medium, fontSize: headingSize, lineHeight: Math.round(headingSize * 1.3), marginTop: 12, marginBottom: 4 }]}><Inline tokens={h.tokens} ctx={ctx} /></Text>;
           }
           case "paragraph":
           case "text": {

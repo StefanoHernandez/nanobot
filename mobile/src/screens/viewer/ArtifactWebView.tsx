@@ -86,6 +86,9 @@ export type BuildShellHtmlOptions = {
   isDark?: boolean;
   bg?: string;
   fg?: string;
+  /** Diagram accent colour (theme chartInput): Mermaid lines and shapes. */
+  accent?: string;
+  border?: string;
   fileSize?: number;
   isLightPreview?: boolean;
   i18n?: ShellI18n;
@@ -531,6 +534,8 @@ export function buildShellHtml({
   isDark = false,
   bg = "#ffffff",
   fg = "#000000",
+  accent = "#2f3389",
+  border = "#d3d7f3",
   fileSize = 0,
   isLightPreview = false,
   i18n = {},
@@ -538,6 +543,62 @@ export function buildShellHtml({
   const loadingLabel = i18n.loading || "Caricamento...";
   const progressTpl = i18n.loadingProgress || "Caricamento {{loaded}}/{{total}} MB";
   const showMoreRowsLabel = i18n.showMoreRows || "Mostra altre righe";
+
+  const mermaidTheme = `{
+    startOnLoad: false,
+    theme: "${isDark ? "dark" : "default"}",
+    themeVariables: {
+      background: "${bg}",
+      primaryColor: "${accent}",
+      primaryTextColor: "${fg}",
+      lineColor: "${fg}",
+      textColor: "${fg}",
+      clusterBkg: "${bg}",
+      edgeLabelBackground: "${bg}",
+      mainBkg: "${accent}",
+      nodeBorder: "${border}"
+    }
+  }`;
+
+  // Pinch zoom, drag to pan, double-tap toggles fit / 2x. CSS transforms only; reduced motion skips the easing.
+  const zoomScript = `<script>
+    (function() {
+      var target = document.getElementById("container");
+      if (!target) return;
+      var scale = 1, x = 0, y = 0, startDist = 0, startScale = 1, lastTap = 0;
+      var drag = null;
+      var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      function dist(a, b) { var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY; return Math.hypot(dx, dy); }
+      function apply(animate) {
+        target.style.transition = animate && !still ? "transform 160ms ease-out" : "none";
+        target.style.transformOrigin = "0 0";
+        target.style.transform = "translate(" + x + "px," + y + "px) scale(" + scale + ")";
+      }
+      target.addEventListener("touchstart", function(e) {
+        if (e.touches.length === 2) { startDist = dist(e.touches[0], e.touches[1]); startScale = scale; }
+        else if (e.touches.length === 1) { drag = { sx: e.touches[0].clientX, sy: e.touches[0].clientY, ox: x, oy: y }; }
+      }, { passive: true });
+      target.addEventListener("touchmove", function(e) {
+        if (e.touches.length === 2 && startDist) {
+          scale = Math.min(6, Math.max(0.5, startScale * dist(e.touches[0], e.touches[1]) / startDist));
+          apply(false); e.preventDefault();
+        } else if (e.touches.length === 1 && drag && scale > 1) {
+          x = drag.ox + (e.touches[0].clientX - drag.sx);
+          y = drag.oy + (e.touches[0].clientY - drag.sy);
+          apply(false); e.preventDefault();
+        }
+      }, { passive: false });
+      target.addEventListener("touchend", function(e) {
+        if (e.touches.length < 2) startDist = 0;
+        if (e.touches.length === 0) drag = null;
+        if (e.changedTouches.length === 1 && scale === 1) {
+          var now = Date.now();
+          if (now - lastTap < 300) { scale = 2; apply(true); }
+          lastTap = now;
+        }
+      });
+    })();
+  </script>`;
 
   // Common bootstrap script that manages chunks & ready/error reporting
   const commonHead = `<head>
@@ -701,6 +762,7 @@ ${commonHead}
   <script>
     postReady();
   </script>
+  ${zoomScript}
 </body>
 </html>`;
   }
@@ -719,10 +781,7 @@ ${commonHead}
       var text = new TextDecoder("utf-8").decode(bytes);
       var container = document.getElementById("container");
       container.innerHTML = '<pre class="mermaid" style="display:flex;justify-content:center;">' + escapeHtml(text) + '</pre>';
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "${isDark ? "dark" : "default"}"
-      });
+      mermaid.initialize(${mermaidTheme});
       return mermaid.run();
     }).then(function() {
       postReady();
@@ -743,10 +802,7 @@ ${commonHead}
   <script src="${CDN_URLS.mermaid}"></script>
   <script>
     try {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "${isDark ? "dark" : "default"}"
-      });
+      mermaid.initialize(${mermaidTheme});
       mermaid.run().then(function() {
         postReady();
       }).catch(function() {
@@ -756,6 +812,7 @@ ${commonHead}
       postError(e);
     }
   </script>
+  ${zoomScript}
 </body>
 </html>`;
   }
@@ -1180,13 +1237,15 @@ export function ArtifactWebView({
       kind,
       html,
       isDark: th.scheme === "dark",
-      bg: th.colors.background,
-      fg: th.colors.foreground,
+      bg: th.colors.popover,
+      fg: th.colors.popoverForeground,
+      accent: th.colors.chartInput,
+      border: th.colors.border,
       fileSize: resolvedSize,
       isLightPreview: activeLightPreview,
       i18n: shellI18n,
     });
-  }, [kind, html, th.scheme, th.colors.background, th.colors.foreground, resolvedSize, activeLightPreview, shellI18n]);
+  }, [kind, html, th.scheme, th.colors.popover, th.colors.popoverForeground, th.colors.chartInput, th.colors.border, resolvedSize, activeLightPreview, shellI18n]);
 
   // Track shell version and reset isFirstLoadRef whenever shellHtml changes
   const prevShellHtmlRef = useRef<string | null>(null);
