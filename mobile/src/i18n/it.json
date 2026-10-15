@@ -518,6 +518,11 @@
     "sentByBot": "Dal bot",
     "emptyImages": "Nessuna immagine in questa chat",
     "emptyFiles": "Nessun file in questa chat",
+    "tabArtifacts": "Artefatti",
+    "emptyArtifacts": "Nessun artefatto in questa chat",
+    "saveToProject": "Salva nel progetto",
+    "saved": "Salvato nel progetto",
+    "saveFailed": "Salvataggio non riuscito",
     "share": "Condividi"
   },
   "system": {
