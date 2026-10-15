@@ -49,6 +49,11 @@ export type Theme = {
     brandSoftForeground: string;
     userBubble: string;
     userBubbleForeground: string;
+    /** Data series (context chart): distinct by lightness as well as hue, so they survive colour-blindness. */
+    chartInput: string;
+    chartOutput: string;
+    chartCached: string;
+    chartWarn: string;
   };
   radius: { sm: number; md: number; lg: number };
   spacing: (n: number) => number;
@@ -86,37 +91,47 @@ const LIGHT: Theme["colors"] = {
   brandSoftForeground: "#6b4a07",
   userBubble: "#1e2150",
   userBubbleForeground: "#ffffff",
+  chartInput: "#2f3389",
+  chartOutput: "#b8780a",
+  chartCached: "#7f84cf",
+  chartWarn: "#c2413b",
 };
 
+// Dark: the user's palette (2026-10-15): Evergreen #16302b, Vintage Grape #694873, Dusty Mauve #8b728e.
+// Surfaces step up in lightness (bg < card < popover); you are grape, the bot stays sunflower.
 const DARK: Theme["colors"] = {
-  background: "#14163a",
-  foreground: "#ecedff",
-  card: "#1e2150",
-  cardForeground: "#ecedff",
-  popover: "#232764",
-  popoverForeground: "#ecedff",
-  primary: "#f4b63f",
-  primaryForeground: "#1e2150",
-  secondary: "#2a2e6e",
-  secondaryForeground: "#ecedff",
-  muted: "#262a66",
-  mutedForeground: "#a3a7d6",
-  accent: "#2f3478",
-  accentForeground: "#ecedff",
-  destructive: "#ff8a80",
-  destructiveForeground: "#14163a",
-  success: "#5cc98f",
-  border: "#33377a",
-  input: "#33377a",
+  background: "#0e221e",
+  foreground: "#e8f0ed",
+  card: "#16302b",
+  cardForeground: "#e8f0ed",
+  popover: "#1c3a34",
+  popoverForeground: "#e8f0ed",
+  primary: "#c9a7d2",
+  primaryForeground: "#2a1a30",
+  secondary: "#234640",
+  secondaryForeground: "#e8f0ed",
+  muted: "#1f3d37",
+  mutedForeground: "#b9a8bd",
+  accent: "#2a4a43",
+  accentForeground: "#e8f0ed",
+  destructive: "#ff9a94",
+  destructiveForeground: "#2a0d0b",
+  success: "#74d4a8",
+  border: "#2d4d46",
+  input: "#2d4d46",
   ring: "#f4b63f",
-  overlay: "#08091f",
+  overlay: "#050f0d",
   overlayForeground: "#ffffff",
   brand: "#f4b63f",
-  brandForeground: "#1e2150",
-  brandSoft: "#4a3a12",
-  brandSoftForeground: "#fce7b8",
-  userBubble: "#3a3f8f",
+  brandForeground: "#241a03",
+  brandSoft: "#3a3a1a",
+  brandSoftForeground: "#f7dc9b",
+  userBubble: "#694873",
   userBubbleForeground: "#ffffff",
+  chartInput: "#e4d4ec",
+  chartOutput: "#f4b63f",
+  chartCached: "#9d7fa3",
+  chartWarn: "#ff9a94",
 };
 
 const build = (scheme: Theme["scheme"], colors: Theme["colors"]): Theme => ({

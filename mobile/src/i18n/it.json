@@ -271,7 +271,12 @@
     "summary": "Contesto: {{used}} / {{total}} ({{pct}}%)",
     "input": "Input",
     "output": "Output",
-    "cached": "Cache"
+    "cached": "Cache",
+    "ofTotal": "di {{total}} ({{pct}}%)",
+    "nearLimit": "Quasi al limite: a breve il bot compatterà i messaggi più vecchi.",
+    "recentRounds_one": "Ultimo scambio",
+    "recentRounds_other": "Ultimi {{count}} scambi",
+    "latestRound": "Ultimo scambio"
   },
   "workspace": {
     "open": "Workspace",

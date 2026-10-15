@@ -208,3 +208,25 @@ test("copy writes the text and toasts", async () => {
   fireEvent.press(await screen.findByText("Copy"));
   await screen.findByText("Copied");
 });
+
+test("popover: legend shows the latest exchange values and the total of the window", async () => {
+  const messages = [
+    asst("a", { roundUsages: [round(1000, 10)] }),
+    asst("b", { usage: { context_tokens: 3000 }, contextWindowTokens: 128000, roundUsages: [{ ...round(2000, 400), cached_tokens: 1500 }] }),
+  ] as never;
+  await wrap(<ContextPopover open onClose={() => {}} messages={messages} />);
+  expect(screen.getByText("3k")).toBeTruthy();
+  expect(screen.getByText(i18n.t("context.ofTotal", { total: "128k", pct: 2 }))).toBeTruthy();
+  expect(flat(screen.getByTestId("legend-input"))).toContain("2k");
+  expect(flat(screen.getByTestId("legend-output"))).toContain("400");
+  expect(flat(screen.getByTestId("legend-cached"))).toContain("1.5k");
+});
+
+test("popover and ring switch to the warning colour at 80%", async () => {
+  const { lightTheme } = require("../../src/ui/theme");
+  const messages = [asst("a", { usage: { context_tokens: 104000 }, contextWindowTokens: 128000, roundUsages: [round(104000, 10)] })] as never;
+  await wrap(<ContextPopover open onClose={() => {}} messages={messages} />);
+  expect(screen.getByText(i18n.t("context.nearLimit"))).toBeTruthy();
+  const meterFill = screen.getByTestId("context-meter").props.children;
+  expect(meterFill.props.style.backgroundColor).toBe(lightTheme.colors.chartWarn);
+});

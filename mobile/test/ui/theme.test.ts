@@ -33,3 +33,21 @@ test("text pairs meet WCAG AA (4.5:1) in both schemes", () => {
     for (const [fg, bg] of pairs) expect([fg, bg, contrast(fg, bg) >= 4.5]).toEqual([fg, bg, true]);
   }
 });
+
+test("chart series read against the panel (3:1, non-text graphics) and differ from each other", () => {
+  for (const { colors: c } of [lightTheme, darkTheme]) {
+    const series = [c.chartInput, c.chartOutput, c.chartCached, c.chartWarn];
+    for (const s of series) expect([s, contrast(s, c.popover) >= 3]).toEqual([s, true]);
+    // input vs cached share a hue family: they must differ clearly in lightness
+    expect(contrast(c.chartInput, c.chartCached)).toBeGreaterThanOrEqual(1.8);
+    expect(new Set(series).size).toBe(4);
+  }
+});
+
+test("the user's dark palette is used: Evergreen card, Vintage Grape bubble", () => {
+  expect(darkTheme.colors.card).toBe("#16302b");
+  expect(darkTheme.colors.userBubble).toBe("#694873");
+  expect(darkTheme.colors.background).not.toBe(darkTheme.colors.card);
+  expect(lum(darkTheme.colors.background)).toBeLessThan(lum(darkTheme.colors.card));
+  expect(lum(darkTheme.colors.card)).toBeLessThan(lum(darkTheme.colors.popover));
+});
