@@ -129,7 +129,8 @@ export async function handleShare(intent: Intent, d: ShareDeps = real): Promise<
     if (!isSharedPathAllowed(f.path)) continue;
     const name = f.fileName || "file";
     const size = f.size ?? sizeOf(f.path);
-    if (size > limits.max_file_bytes) {
+    // Images are re-encoded to fit at send time (prepareImage), as from the composer: don't drop them here.
+    if (size > limits.max_file_bytes && !(f.mimeType || "").startsWith("image/")) {
       hadOversized = true;
       d.toast(i18n.t("extras.shareTooLarge", { name }));
       continue;

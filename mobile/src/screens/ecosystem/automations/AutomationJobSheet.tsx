@@ -267,7 +267,8 @@ export function AutomationJobSheet({
           setEditError(t("automations.err.invalid", "Valore non valido"));
           return;
         }
-        if (atDate.getTime() <= Date.now()) {
+        // Only a newly picked moment must be in the future: an already-past one-shot job stays editable.
+        if (atDate.getTime() !== job.schedule.at_ms && atDate.getTime() <= Date.now()) {
           setEditError(t("automations.err.past", "La data selezionata è nel passato"));
           return;
         }
@@ -277,7 +278,9 @@ export function AutomationJobSheet({
           ...(tz ? { tz } : {}),
         };
       } else if (kind === "every") {
-        const ms = everyUnitToMs(everyAmount, everyUnit);
+        // Untouched interval: send the stored ms as-is (the display amount is rounded).
+        const pre = job.schedule.every_ms ? parseEveryMsToUnit(job.schedule.every_ms) : null;
+        const ms = pre && everyAmount === pre.amount && everyUnit === pre.unit ? job.schedule.every_ms! : everyUnitToMs(everyAmount, everyUnit);
         if (ms === null || ms <= 0) {
           setEditError(t("automations.err.invalid", "Valore non valido"));
           return;

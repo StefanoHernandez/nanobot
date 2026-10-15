@@ -268,6 +268,7 @@ describe("M-B: Share merging and file size checks", () => {
         files: [
           { path: "/mock/cache/giant.zip", mimeType: "application/zip", fileName: "giant.zip", size: 10 * 1024 * 1024 },
           { path: "/mock/cache/valid.txt", mimeType: "text/plain", fileName: "valid.txt", size: 100 },
+          { path: "/mock/cache/photo.jpg", mimeType: "image/jpeg", fileName: "photo.jpg", size: 10 * 1024 * 1024 },
         ],
       },
       customDeps,
@@ -280,10 +281,10 @@ describe("M-B: Share merging and file size checks", () => {
     expect(sizeToast).not.toContain("file:///");
     expect(sizeToast).not.toContain("/mock/cache");
 
-    // Only valid.txt is in pending files
+    // valid.txt kept; the big photo is kept too (re-encoded at send time); only the zip is dropped
     const pending = shareStore.getState().pending;
     expect(pending?.text).toBe("big attachment");
-    expect(pending?.files).toHaveLength(1);
-    expect(pending?.files[0].name).toBe("valid.txt");
+    expect(pending?.files.map((f) => f.name)).toEqual(["valid.txt", "photo.jpg"]);
+    expect(toastCalls.some((m) => m.includes("photo.jpg"))).toBe(false);
   });
 });
