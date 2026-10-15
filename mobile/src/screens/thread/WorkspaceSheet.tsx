@@ -3,6 +3,7 @@ import { ScrollView, Switch, Text, View } from "react-native";
 import { useT } from "../../i18n";
 import type { ProjectDirectory, WorkspaceDirectoriesPayload, WorkspaceScopePayload } from "@/lib/types";
 import { workspaceStore, useWorkspace, withAccessMode } from "../../state/workspace";
+import { browseEntries, isAgentWorkspace } from "./workspaceBrowse";
 import { Button, IconButton, ListItem, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 
@@ -60,6 +61,8 @@ export function WorkspaceSheet({ chatKey, open, onClose }: { chatKey: string; op
   };
   const go = (path: string) => browse(path).then(setDir, () => toast.show(t("workspace.error")));
   const pick = (p: ProjectDirectory) => { void apply({ ...scope, project_path: p.path, project_name: p.name }); };
+  const shown = dir ? browseEntries(dir.path, dir.entries) : [];
+  const hidInternal = !!dir && isAgentWorkspace(dir.path) && shown.length !== dir.entries.length;
   const muted = { color: th.colors.mutedForeground, fontSize: 13, marginTop: 12 };
   const list = (title: string, items?: ProjectDirectory[]) =>
     items?.length ? (
@@ -76,7 +79,8 @@ export function WorkspaceSheet({ chatKey, open, onClose }: { chatKey: string; op
           <>
             <Text style={{ color: th.colors.popoverForeground, marginBottom: 8 }}>{dir.path}</Text>
             {dir.parent ? <ListItem title=".." onPress={() => void go(dir.parent!)} /> : null}
-            {dir.entries.map((e) => <ListItem key={e.path} title={e.name} onPress={() => void go(e.path)} />)}
+            {shown.map((e) => <ListItem key={e.path} title={e.name} onPress={() => void go(e.path)} />)}
+            {hidInternal ? <Text style={muted}>{t("workspace.internalHidden")}</Text> : null}
             <Button title={t("workspace.useFolder")} onPress={() => { void apply({ ...scope, project_path: dir.path, project_name: undefined }); setDir(null); }} />
           </>
         ) : (

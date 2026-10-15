@@ -282,6 +282,8 @@
     "cached": "Cache",
     "ofTotal": "di {{total}} ({{pct}}%)",
     "nearLimit": "Quasi al limite: a breve il bot compatterà i messaggi più vecchi.",
+    "compact": "Compatta",
+    "compactFailed": "Compattazione non riuscita",
     "recentRounds_one": "Ultimo scambio",
     "recentRounds_other": "Ultimi {{count}} scambi",
     "latestRound": "Ultimo scambio"
@@ -294,6 +296,7 @@
     "favorites": "Preferiti",
     "browse": "Sfoglia…",
     "useFolder": "Usa questa cartella",
+    "internalHidden": "Le cartelle interne del bot restano nascoste.",
     "error": "Impossibile cambiare il workspace"
   },
   "fork": {
@@ -338,6 +341,11 @@
     "exportPdf": "Salva PDF",
     "exportFailed": "Esportazione non riuscita",
     "rotateFailed": "Rotazione non disponibile",
+    "network": "Consenti rete",
+    "networkOn": "Rete consentita",
+    "networkTitle": "Consenti la rete a questo artefatto?",
+    "networkBody": "Potrà contattare siti https. Vale solo per questa anteprima, e gli script restano quelli già nell'app.",
+    "networkAllow": "Consenti",
     "previewAnyway": "Anteprima comunque",
     "largeFileNotice": "File grande ({{size}} MB): l'anteprima può richiedere tempo",
     "openPreview": "Apri anteprima",
@@ -510,6 +518,11 @@
     "sentByBot": "Dal bot",
     "emptyImages": "Nessuna immagine in questa chat",
     "emptyFiles": "Nessun file in questa chat",
+    "tabArtifacts": "Artefatti",
+    "emptyArtifacts": "Nessun artefatto in questa chat",
+    "saveToProject": "Salva nel progetto",
+    "saved": "Salvato nel progetto",
+    "saveFailed": "Salvataggio non riuscito",
     "share": "Condividi"
   },
   "system": {
@@ -599,6 +612,19 @@
     "skills": "Skills",
     "automations": "Automazioni",
     "comingSoon": "Presto"
+  },
+  "memory": {
+    "title": "Memoria",
+    "subtitle": "Quello che Dream ricorda",
+    "profile": "Profilo",
+    "notes": "Note",
+    "voice": "Voce",
+    "dreamOn": "Dream acceso",
+    "dreamOff": "Dream spento",
+    "everyHours": "Ogni {{count}} ore",
+    "empty": "Ancora vuoto",
+    "truncated": "Testo accorciato",
+    "latest": "Ultima modifica"
   },
   "channels": {
     "title": "Canali",

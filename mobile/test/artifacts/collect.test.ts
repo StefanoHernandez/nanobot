@@ -28,6 +28,33 @@ test("the same id across messages is one artifact with versions in order", () =>
   expect(artifacts[1].versions[0].kind).toBe("svg");
 });
 
+const claim = (kind: string, id: string) =>
+  `Modifica l'artefatto ${kind}.\nStessa prima riga, non un artefatto nuovo: \`${kind} id=${id}\`.\nRichiesta: più grande`;
+
+test("a modify note versions the previous svg even when the reply forgets the id", () => {
+  const artifacts = collectArtifacts([
+    msg("m1", "```svg\n<svg>1</svg>\n```"),
+    msg("m2", claim("svg", "svg-ab12cd34")),
+    msg("m3", "Ecco."),
+    msg("m4", "```svg\n<svg>2</svg>\n```"),
+  ]);
+  expect(artifacts).toHaveLength(1);
+  expect(artifacts[0].id).toBe("svg-ab12cd34");
+  expect(artifacts[0].explicit).toBe(true);
+  expect(artifacts[0].versions.map((v) => v.code)).toEqual(["<svg>1</svg>", "<svg>2</svg>"]);
+});
+
+test("a modify note does not pull in a different kind", () => {
+  const artifacts = collectArtifacts([
+    msg("m1", "```html\n<p>1</p>\n```"),
+    msg("m2", claim("svg", "svg-ab12cd34")),
+    msg("m3", "```svg id=svg-ab12cd34\n<svg></svg>\n```"),
+  ]);
+  expect(artifacts.map((a) => a.id)).toEqual(["solo-1", "svg-ab12cd34"]);
+  expect(artifacts[0].explicit).toBe(false);
+  expect(artifacts[1].versions).toHaveLength(1);
+});
+
 test("locateVersion opens the copy the user tapped", () => {
   const artifacts = collectArtifacts([
     msg("m1", "```html id=dash\n<h1>1</h1>\n```"),
