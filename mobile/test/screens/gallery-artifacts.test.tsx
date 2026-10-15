@@ -13,6 +13,7 @@ import { router } from "expo-router";
 import { artifactStore } from "../../src/screens/viewer/artifactStore";
 import { toast } from "../../src/ui/components/Toast";
 import * as projectsApi from "../../src/projects/api";
+import { artifactUploadFileName } from "../../src/screens/gallery/galleryArtifacts";
 
 jest.mock("../../src/ui/components/Toast", () => ({
   toast: { show: jest.fn() },
@@ -86,6 +87,36 @@ function seedThread(key: string, messages: UIMessage[]) {
     },
   });
 }
+
+test("explicit chart artifact uploads as .vl", () => {
+  expect(
+    artifactUploadFileName({
+      id: "sales",
+      explicit: true,
+      versions: [{ kind: "chart", code: '{"data":{"values":[]},"mark":"bar"}' }],
+    }),
+  ).toBe("sales.vl");
+});
+
+test("explicit map artifact uploads as .geojson", () => {
+  expect(
+    artifactUploadFileName({
+      id: "places",
+      explicit: true,
+      versions: [{ kind: "map", code: '{"type":"FeatureCollection","features":[]}' }],
+    }),
+  ).toBe("places.geojson");
+});
+
+test("explicit react artifact uploads as .react", () => {
+  expect(
+    artifactUploadFileName({
+      id: "hello",
+      explicit: true,
+      versions: [{ kind: "react", code: "function App() { return <h1/>; }" }],
+    }),
+  ).toBe("hello.react");
+});
 
 describe("GalleryScreen artifacts tab", () => {
   test("two versions of one explicit artifact show one row with latest title and kind", async () => {

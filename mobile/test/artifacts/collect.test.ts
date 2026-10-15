@@ -11,6 +11,45 @@ test("parseFenceInfo reads the language, a safe id and a quoted title", () => {
   expect(parseFenceInfo("python")).toEqual({ lang: "python" });
   expect(parseFenceInfo('svg id="../etc" title="x"').id).toBeUndefined();
   expect(parseFenceInfo("mermaid id=a").id).toBeUndefined();
+  expect(parseFenceInfo("vega-lite id=sales").lang).toBe("chart");
+  expect(parseFenceInfo("vegalite").lang).toBe("chart");
+  expect(parseFenceInfo("geojson id=places").lang).toBe("map");
+  expect(parseFenceInfo("jsx id=hello").lang).toBe("react");
+  expect(parseFenceInfo("tsx").lang).toBe("react");
+});
+
+test("a geojson fence is collected as kind map", () => {
+  const spec = '{"type":"FeatureCollection","features":[]}';
+  const artifacts = collectArtifacts([msg("m1", `\`\`\`geojson id=places title="Luoghi"\n${spec}\n\`\`\``)]);
+  expect(artifacts).toHaveLength(1);
+  expect(artifacts[0].versions[0].kind).toBe("map");
+});
+
+test("jsx and tsx fences with the same id are two versions of one react artifact", () => {
+  const code1 = "function App() { return <h1>One</h1>; }";
+  const code2 = "function App() { return <h1>Two</h1>; }";
+  const artifacts = collectArtifacts([
+    msg("m1", `\`\`\`jsx id=hello title="One"\n${code1}\n\`\`\``),
+    msg("m2", `\`\`\`tsx id=hello title="Two"\n${code2}\n\`\`\``),
+  ]);
+  expect(artifacts.map((a) => a.id)).toEqual(["hello"]);
+  expect(artifacts[0].versions).toHaveLength(2);
+  expect(artifacts[0].versions.every((v) => v.kind === "react")).toBe(true);
+  expect(artifacts[0].versions.map((v) => v.code)).toEqual([code1, code2]);
+});
+
+test("chart and vega-lite fences with the same id are two versions of one chart artifact", () => {
+  const spec1 = '{"data":{"values":[{"x":1}]},"mark":"bar"}';
+  const spec2 = '{"data":{"values":[{"x":2}]},"mark":"line"}';
+  const artifacts = collectArtifacts([
+    msg("m1", `\`\`\`chart id=sales title="One"\n${spec1}\n\`\`\``),
+    msg("m2", "```python\nprint(1)\n```"),
+    msg("m3", `\`\`\`vega-lite id=sales title="Two"\n${spec2}\n\`\`\``),
+  ]);
+  expect(artifacts.map((a) => a.id)).toEqual(["sales"]);
+  expect(artifacts[0].versions).toHaveLength(2);
+  expect(artifacts[0].versions.every((v) => v.kind === "chart")).toBe(true);
+  expect(artifacts[0].versions.map((v) => v.code)).toEqual([spec1, spec2]);
 });
 
 test("the same id across messages is one artifact with versions in order", () => {

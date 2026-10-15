@@ -624,6 +624,18 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        from nanobot.ext.devices import dispatch_devices_get
+
+        response = dispatch_devices_get(self, request, got)
+        if response is not None:
+            return response
+
+        from nanobot.ext.kanban import dispatch_kanban_get
+
+        response = dispatch_kanban_get(self, request, got)
+        if response is not None:
+            return response
+
         # API 404 (never serve SPA for /api/ routes)
         if got.startswith("/api/"):
             return _http_error(404, "API route not found")
@@ -730,7 +742,10 @@ class GatewayHTTPHandler:
         if not is_proxy_authenticated:
             if secret:
                 if not _issue_route_secret_matches(request.headers, secret):
-                    return _http_error(401, "Unauthorized")
+                    from nanobot.ext.devices import header_is_live_device
+
+                    if not header_is_live_device(request.headers):
+                        return _http_error(401, "Unauthorized")
             elif not is_local_browser:
                 return _http_error(403, "bootstrap is localhost-only")
 

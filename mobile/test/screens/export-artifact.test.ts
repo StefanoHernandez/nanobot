@@ -36,7 +36,8 @@ test("an in-memory preview is written only for a safe preview name", () => {
   expect(written[0]).toEqual(["<svg></svg>"]);
   expect(writePreview("../preview.svg", "<svg></svg>")).toBeNull();
   expect(writePreview("preview.html", "")).toBeNull();
-  expect(written).toHaveLength(1);
+  expect(writePreview("preview.vl", '{"mark":"bar"}')).toBe("file:///cache/artifacts/preview.png");
+  expect(written).toHaveLength(2);
 });
 
 test("print wraps a fragment and leaves a full document alone", () => {

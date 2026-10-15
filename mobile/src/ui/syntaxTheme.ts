@@ -1,6 +1,6 @@
 export type SyntaxPalette = { comment: string; string: string; number: string; keyword: string };
 
 export const syntaxColors: Record<"light" | "dark", SyntaxPalette> = {
-  light: { comment: "#6a737d", string: "#0a7d3b", number: "#b45309", keyword: "#6d28d9" },
-  dark: { comment: "#8b949e", string: "#7ee787", number: "#ffa657", keyword: "#d2a8ff" },
+  light: { comment: "#6b5e78", string: "#8a5608", number: "#9a3412", keyword: "#4a2c72" },
+  dark: { comment: "#a898b8", string: "#f0b429", number: "#ffd59a", keyword: "#d7b6f5" },
 };

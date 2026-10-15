@@ -109,7 +109,10 @@
     "authError": "Segreto richiesto o errato (serve per accessi non da localhost)",
     "unreachable": "Server non raggiungibile — Tailscale attivo?",
     "deleteTitle": "Elimina server",
-    "deleteConfirm": "Eliminare {{name}}?"
+    "deleteConfirm": "Eliminare {{name}}?",
+    "scan": "Scansiona codice",
+    "scanFailed": "Codice non valido",
+    "pasteCode": "Incolla il codice"
   },
   "settings": {
     "title": "Impostazioni",
@@ -125,6 +128,13 @@
     "unlockReason": "Conferma per disattivare il blocco",
     "server": "Server",
     "changeServer": "Cambia server",
+    "pairPhone": "Collega un telefono",
+    "devices": "Telefoni collegati",
+    "devicesEmpty": "Nessun altro telefono.",
+    "deviceNever": "Mai visto",
+    "revokeDevice": "Revoca",
+    "revokeDeviceConfirm": "{{name}} non potrà più entrare.",
+    "pairHint": "Vale 5 minuti.",
     "about": "Informazioni",
     "appName": "nanobot mobile",
     "version": "Versione {{v}}",
@@ -356,7 +366,11 @@
     "openInBrowserTitle": "Aprire nel browser?",
     "open": "Apri",
     "cancel": "Annulla",
-    "lightPreview": "Anteprima leggera"
+    "lightPreview": "Anteprima leggera",
+    "openDocument": "Apri come documento",
+    "page": "Pagina {{current}} di {{total}}",
+    "prevPage": "Pagina precedente",
+    "nextPage": "Pagina successiva"
   },
   "models": {
     "title": "Ordine di chiamata",
@@ -612,6 +626,28 @@
     "skills": "Skills",
     "automations": "Automazioni",
     "comingSoon": "Presto"
+  },
+  "kanban": {
+    "title": "Lavagna",
+    "subtitle": "Schede e bot",
+    "unavailable": "Il server non ha ancora la lavagna.",
+    "add": "Nuova scheda",
+    "empty": "Nessuna scheda.",
+    "status": {
+      "triage": "Triage",
+      "todo": "Da fare",
+      "ready": "Pronta",
+      "running": "In corso",
+      "review": "Revisione",
+      "blocked": "Bloccata",
+      "done": "Fatto"
+    },
+    "priority": {
+      "low": "Bassa",
+      "medium": "Media",
+      "high": "Alta",
+      "urgent": "Urgente"
+    }
   },
   "memory": {
     "title": "Memoria",
