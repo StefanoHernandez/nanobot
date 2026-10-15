@@ -44,9 +44,10 @@ test("chart series read against the panel (3:1, non-text graphics) and differ fr
   }
 });
 
-test("the user's dark palette is used: Evergreen card, Vintage Grape bubble", () => {
-  expect(darkTheme.colors.card).toBe("#16302b");
-  expect(darkTheme.colors.userBubble).toBe("#694873");
+test("dark is black, purple, and gold, and surfaces step up", () => {
+  expect(darkTheme.colors.background).toBe("#0c0b10");
+  expect(darkTheme.colors.userBubble).toBe("#6b4589");
+  expect(darkTheme.colors.brand).toBe("#f0b429");
   expect(darkTheme.colors.background).not.toBe(darkTheme.colors.card);
   expect(lum(darkTheme.colors.background)).toBeLessThan(lum(darkTheme.colors.card));
   expect(lum(darkTheme.colors.card)).toBeLessThan(lum(darkTheme.colors.popover));
