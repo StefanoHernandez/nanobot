@@ -385,6 +385,7 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
           </View>
         ) : (
           <FlatList
+            key="gallery-images"
             data={images}
             keyExtractor={(item) => item.url}
             numColumns={numColumns}
@@ -428,6 +429,7 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
         </View>
       ) : (
         <FlatList
+          key="gallery-files"
           data={otherFiles}
           keyExtractor={(item) => item.url}
           contentContainerStyle={[styles.filesListContainer, { paddingBottom: insets.bottom + 16 }]}
@@ -456,17 +458,30 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
               <Text style={[styles.modalCounter, { color: th.colors.overlayForeground, fontFamily: th.font.medium }]}>
                 {viewerIndex + 1} / {images.length}
               </Text>
-              <IconButton
-                icon="close"
-                size={24}
-                color={th.colors.overlayForeground}
-                onPress={() => setViewerIndex(null)}
-                accessibilityLabel={t("common.cancel")}
-              />
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <IconButton
+                  icon="share-variant"
+                  size={24}
+                  color={th.colors.overlayForeground}
+                  onPress={() => {
+                    const item = images[viewerIndex];
+                    if (item) void handleShare(item);
+                  }}
+                  accessibilityLabel={t("gallery.share")}
+                />
+                <IconButton
+                  icon="close"
+                  size={24}
+                  color={th.colors.overlayForeground}
+                  onPress={() => setViewerIndex(null)}
+                  accessibilityLabel={t("common.cancel")}
+                />
+              </View>
             </View>
 
             {/* Paging viewer */}
             <FlatList
+              key="gallery-viewer"
               data={images}
               keyExtractor={(item) => item.url}
               horizontal

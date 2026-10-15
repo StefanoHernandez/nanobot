@@ -196,6 +196,49 @@ describe("GalleryScreen & ThreadScreen gallery button", () => {
     expect(screen.getByText("Images")).toBeTruthy();
     const thumbs = screen.getAllByTestId("gallery-thumbnail");
     expect(thumbs).toHaveLength(3);
+    await fireEvent.press(thumbs[0]);
+    expect(screen.getByLabelText("Share")).toBeTruthy();
+  });
+
+  test("switching to files lists the file instead of reusing the image grid", async () => {
+    const key = "websocket:c1";
+    sessionStore.setState({
+      profile: { baseUrl: "http://example.com" } as never,
+      session: null,
+      state: "none" as never,
+    });
+    threadStore.setState({
+      threads: {
+        [key]: {
+          messages: [
+            {
+              id: "m1",
+              role: "assistant",
+              content: "both",
+              createdAt: 100,
+              images: [{ url: "/img.png", name: "one.png" }],
+              media: [{ url: "/doc.pdf", name: "doc.pdf", kind: "file" }],
+            } as never,
+          ],
+          running: false,
+          model: null,
+          preset: null,
+          notices: [],
+          draft: "",
+          loaded: true,
+          stopped: false,
+          sendError: null,
+          uploading: false,
+          pendingFiles: [],
+          forkBoundary: null,
+          temporary: false,
+        },
+      },
+    });
+    await wrap(<GalleryScreen chatKey={key} />);
+    await fireEvent.press(screen.getByRole("tab", { name: "Files" }));
+    expect(screen.getByText("doc.pdf")).toBeTruthy();
+    expect(screen.queryByTestId("gallery-thumbnail")).toBeNull();
   });
 
   test("The gallery button in ThreadScreen is absent when thread has no images, and present when thread has images", async () => {

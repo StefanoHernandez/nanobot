@@ -17,8 +17,8 @@ import { File, Paths } from "expo-file-system";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, IconButton, TextField, toast } from "../../ui/components";
-import { artifactFixText } from "../../artifacts/fix";
-import { printDocument, writePng } from "./exportArtifact";
+import { artifactFixText, freshArtifactId } from "../../artifacts/fix";
+import { printDocument, writePng, writePreview } from "./exportArtifact";
 import { lockViewer } from "./orientation";
 import { isWritable } from "../../state/chatsStore";
 import { useSession } from "../../state/sessionStore";
@@ -219,7 +219,12 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const handleShare = async () => {
     if (!allowed) return;
     try {
-      await shareMedia(uri);
+      const local = uri || writePreview(name, activeVersion?.code ?? content);
+      if (!local) {
+        toast.show(t("media.shareFailed"));
+        return;
+      }
+      await shareMedia(local);
     } catch {
       toast.show(t("media.shareFailed"));
     }
@@ -244,9 +249,10 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
 
   const sendToChat = (request?: string) => {
     if (!canAsk || !session || sending.current) return;
+    const previewKind = activeVersion?.kind ?? (kind === "svg" || kind === "mermaid" || kind === "html" ? kind : "html");
     const text = artifactFixText({
-      id: opened?.id,
-      kind: activeVersion?.kind ?? (kind === "svg" || kind === "mermaid" || kind === "html" ? kind : "html"),
+      id: opened?.id || freshArtifactId(previewKind),
+      kind: previewKind,
       index: versions ? versionIndex : undefined,
       total: versions?.length,
       error: request ? undefined : fixError?.message,
