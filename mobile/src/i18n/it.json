@@ -282,6 +282,8 @@
     "cached": "Cache",
     "ofTotal": "di {{total}} ({{pct}}%)",
     "nearLimit": "Quasi al limite: a breve il bot compatterà i messaggi più vecchi.",
+    "compact": "Compatta",
+    "compactFailed": "Compattazione non riuscita",
     "recentRounds_one": "Ultimo scambio",
     "recentRounds_other": "Ultimi {{count}} scambi",
     "latestRound": "Ultimo scambio"
@@ -294,6 +296,7 @@
     "favorites": "Preferiti",
     "browse": "Sfoglia…",
     "useFolder": "Usa questa cartella",
+    "internalHidden": "Le cartelle interne del bot restano nascoste.",
     "error": "Impossibile cambiare il workspace"
   },
   "fork": {

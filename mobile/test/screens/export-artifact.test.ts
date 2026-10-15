@@ -10,7 +10,7 @@ jest.mock("expo-file-system", () => ({
   Paths: { cache: { uri: "file:///cache" } },
 }));
 
-import { pngBase64, printDocument, writePng } from "../../src/screens/viewer/exportArtifact";
+import { pngBase64, printDocument, writePng, writePreview } from "../../src/screens/viewer/exportArtifact";
 
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -27,6 +27,15 @@ test("a validated PNG is written into the cache and nothing else is", () => {
   expect(writePng(PNG)).toBe("file:///cache/artifacts/preview.png");
   expect(written[0]).toEqual(["iVBORw0KGgo=", { encoding: "base64" }]);
   expect(writePng("https://evil.example/x.png")).toBeNull();
+  expect(written).toHaveLength(1);
+});
+
+test("an in-memory preview is written only for a safe preview name", () => {
+  written.length = 0;
+  expect(writePreview("preview.svg", "<svg></svg>")).toBe("file:///cache/artifacts/preview.png");
+  expect(written[0]).toEqual(["<svg></svg>"]);
+  expect(writePreview("../preview.svg", "<svg></svg>")).toBeNull();
+  expect(writePreview("preview.html", "")).toBeNull();
   expect(written).toHaveLength(1);
 });
 

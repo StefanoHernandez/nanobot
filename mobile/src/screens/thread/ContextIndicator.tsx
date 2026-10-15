@@ -23,7 +23,7 @@ export function ContextIndicator({ chatKey }: { chatKey: string }) {
           <Text style={{ color: th.colors.foreground, fontSize: 10, fontFamily: th.font.medium }}>{`${pct}%`}</Text>
         </View>
       </Pressable>
-      <ContextPopover open={open} onClose={() => setOpen(false)} messages={messages} />
+      <ContextPopover open={open} onClose={() => setOpen(false)} messages={messages} chatKey={chatKey} />
     </>
   );
 }

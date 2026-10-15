@@ -4,6 +4,8 @@ export type PreviewKind = (typeof PREVIEW_KINDS)[number];
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])$/;
 const FENCE_RE = /(?:^|\n)[ ]{0,3}```([^\n]*)\n([\s\S]*?)[ ]{0,3}```/g;
 const ATTR_RE = /([A-Za-z][\w-]*)=(?:"([^"]*)"|'([^']*)'|([^\s"']+))/g;
+/** Matches the line artifactFixText sends. The next fence of that kind continues the artifact. */
+const CLAIM_RE = /Stessa prima riga, non un artefatto nuovo: `([a-z]+) id=([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9]))`/;
 
 export type FenceInfo = { lang: string; id?: string; title?: string };
 
@@ -55,27 +57,59 @@ export function isPreviewKind(lang: string): lang is PreviewKind {
 
 type Source = { id?: string; content?: string | null };
 
+function claimFrom(text: string): { kind: PreviewKind; id: string } | null {
+  const match = CLAIM_RE.exec(text);
+  if (!match || !isPreviewKind(match[1]) || !ID_RE.test(match[2])) return null;
+  return { kind: match[1], id: match[2] };
+}
+
 /** Walk chat messages in order. The same explicit id becomes the next version. */
 export function collectArtifacts(messages: readonly Source[]): Artifact[] {
   const byId = new Map<string, Artifact>();
   const order: Artifact[] = [];
   let solo = 0;
+  /** Set by a modify/fix note. The next fence of that kind continues this id. */
+  let pending: { kind: PreviewKind; id: string } | null = null;
+
+  const claimSolo = (kind: PreviewKind, id: string) => {
+    if (byId.has(id)) return;
+    for (let i = order.length - 1; i >= 0; i--) {
+      const artifact = order[i];
+      if (artifact.explicit || artifact.versions[0]?.kind !== kind) continue;
+      artifact.id = id;
+      artifact.explicit = true;
+      byId.set(id, artifact);
+      return;
+    }
+  };
+
   for (const message of messages) {
     const text = message.content ?? "";
+    const claim = claimFrom(text);
+    if (claim) {
+      claimSolo(claim.kind, claim.id);
+      pending = claim;
+    }
     for (const fence of text.matchAll(FENCE_RE)) {
       const info = parseFenceInfo(fence[1]);
       if (!isPreviewKind(info.lang)) continue;
+      let id = info.id;
+      if (!id && pending?.kind === info.lang) {
+        id = pending.id;
+        pending = null;
+      }
       const version: ArtifactVersion = {
         kind: info.lang,
         code: fenceCode(fence[2]),
         ...(info.title ? { title: info.title } : {}),
         ...(message.id ? { messageId: message.id } : {}),
       };
-      if (info.id) {
-        let artifact = byId.get(info.id);
+      if (id) {
+        if (pending?.id === id) pending = null;
+        let artifact = byId.get(id);
         if (!artifact) {
-          artifact = { id: info.id, explicit: true, title: info.title, versions: [] };
-          byId.set(info.id, artifact);
+          artifact = { id, explicit: true, title: info.title, versions: [] };
+          byId.set(id, artifact);
           order.push(artifact);
         }
         artifact.versions.push(version);

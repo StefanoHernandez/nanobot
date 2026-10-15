@@ -671,6 +671,7 @@ test("Fix and ask send a short note to the source chat, never the artifact sourc
     });
     fireEvent.press(screen.getByRole("button", { name: "Ask for a change" }));
     expect(sendMessage.mock.calls[0][1]).toContain("Modifica l'artefatto `sales-dashboard` (html)");
+    expect(sendMessage.mock.calls[0][1]).toContain("Stessa prima riga, non un artefatto nuovo: `html id=sales-dashboard`");
     expect(sendMessage.mock.calls[0][1]).toContain("Richiesta: titolo più grande");
     expect(sendMessage.mock.calls[0][1]).not.toContain("SECRET SOURCE");
   } finally {
@@ -708,7 +709,7 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
   const libs = {
     mermaid: "window.mermaid = 1;",
     pdfjs: "/*pdfjs*/",
-    pdfjsWorker: "worker<script>",
+    pdfjsWorker: "worker</script><script>alert(1)",
     jszip: "window.JSZip = 1;",
     pako: "window.pako = 1;",
     docxPreview: "window.docx = 1;",
@@ -734,8 +735,13 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
   expect(mermaid).toContain("<\\/script>");
   const pdf = buildShellHtml({ kind: "pdf", fileSize: 10, libs });
   expect(pdf).toContain("/*pdfjs*/");
-  expect(pdf).toContain("createObjectURL");
-  expect(pdf).not.toContain("worker<script>");
+  expect(pdf).toContain("worker<\\/script>");
+  expect(pdf).not.toContain("worker</script>");
+  expect(pdf).not.toContain("GlobalWorkerOptions.workerSrc");
+  const paper = buildShellHtml({ kind: "docx", fileSize: 10, isDark: true, bg: "#1c3a34", fg: "#e8f0ed", libs });
+  expect(paper).toContain("background-color: #ffffff");
+  expect(paper).not.toContain("#1c3a34");
+  expect(paper).not.toContain("#e8f0ed");
   const pins = readFileSync(path.join(__dirname, "../../scripts/fetch-viewer-libs.mjs"), "utf8");
   for (const version of Object.values(CDN_VERSIONS)) {
     expect(pins).toContain(version);

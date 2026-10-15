@@ -2,8 +2,11 @@ import React from "react";
 import { Text, View } from "react-native";
 import { useT } from "../../i18n";
 import type { UIMessage } from "@/lib/types";
+import { isWritable } from "../../state/chatsStore";
+import { useSession } from "../../state/sessionStore";
+import { useThreadSlice } from "../../state/threadStore";
 import { latestContextUsage, recentRoundUsage } from "../../state/usage";
-import { Sheet } from "../../ui/components";
+import { Button, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 
 /** 1234 -> "1.2k", 128000 -> "128k". */
@@ -17,9 +20,19 @@ export const CONTEXT_WARN_PCT = 80;
 
 const BAR_H = 88;
 
-export function ContextPopover({ open, onClose, messages }: { open: boolean; onClose: () => void; messages: UIMessage[] }) {
+export function ContextPopover({ open, onClose, messages, chatKey }: { open: boolean; onClose: () => void; messages: UIMessage[]; chatKey?: string }) {
   const t = useT();
   const th = useTheme();
+  const { session } = useSession();
+  const thread = useThreadSlice(chatKey ?? "");
+  const canCompact = !!chatKey && !!session && isWritable(chatKey);
+  const compactChat = () => {
+    if (!canCompact || !thread.send("/compact")) {
+      toast.show(t("context.compactFailed"));
+      return;
+    }
+    onClose();
+  };
   const c = th.colors;
   const u = latestContextUsage(messages);
   const rounds = recentRoundUsage(messages, 8).reverse(); // oldest on the left
@@ -37,6 +50,11 @@ export function ContextPopover({ open, onClose, messages }: { open: boolean; onC
 
   return (
     <Sheet open={open} onClose={onClose} title={t("context.title")}>
+      {canCompact ? (
+        <View style={{ marginBottom: 16 }}>
+          <Button title={t("context.compact")} variant="secondary" onPress={compactChat} />
+        </View>
+      ) : null}
       {u?.contextWindowTokens && fill !== null ? (
         <View style={{ marginBottom: 20 }}>
           <View accessible accessibilityLabel={t("context.summary", { used: compact(u.contextTokens), total: compact(u.contextWindowTokens), pct: fill })} style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>

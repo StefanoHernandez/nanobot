@@ -65,6 +65,17 @@ test("absoluteMediaUrl", () => {
   expect(absoluteMediaUrl(BASE, "data:image/png;base64,AA")).toBe("data:image/png;base64,AA");
 });
 
+test("an open image can be shared", async () => {
+  await mount([{ kind: "image", url: "/api/media/s/a.png", name: "a.png" }]);
+  await fireEvent.press(screen.getByLabelText("a.png"));
+  await fireEvent.press(screen.getByLabelText("Condividi"));
+  await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalled());
+  const shared = (Sharing.shareAsync as jest.Mock).mock.calls[0][0] as string;
+  expect(shared.startsWith("file://")).toBe(true);
+  expect(shared).not.toContain("SECRET");
+  expect(shared).not.toContain("http");
+});
+
 test("renders image, audio and file card", async () => {
   await mount([
     { kind: "image", url: "/api/media/s/a.png", name: "a.png" },

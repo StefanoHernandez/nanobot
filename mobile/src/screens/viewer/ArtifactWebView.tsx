@@ -8,7 +8,6 @@ import { useTheme } from "../../ui/ThemeProvider";
 import { Dialog } from "../../ui/components";
 import {
   inlineScript,
-  jsStringLiteral,
   loadViewerLibs,
   takeCached,
   type ViewerLibMap,
@@ -560,16 +559,22 @@ ${lightHead}
 export function buildShellHtml({
   kind,
   html = "",
-  isDark = false,
-  bg = "#ffffff",
-  fg = "#000000",
+  isDark: themeDark = false,
+  bg: themeBg = "#ffffff",
+  fg: themeFg = "#000000",
   accent = "#2f3389",
-  border = "#d3d7f3",
+  border: themeBorder = "#d3d7f3",
   fileSize = 0,
   isLightPreview = false,
   i18n = {},
   libs,
 }: BuildShellHtmlOptions): string {
+  // Documents are paper. HTML, SVG and Mermaid keep the app theme.
+  const documentPaper = kind === "pdf" || kind === "docx" || kind === "pptx" || kind === "xlsx";
+  const isDark = documentPaper ? false : themeDark;
+  const bg = documentPaper ? "#ffffff" : themeBg;
+  const fg = documentPaper ? "#1c1c1c" : themeFg;
+  const border = documentPaper ? "#dddddd" : themeBorder;
   const loadingLabel = i18n.loading || "Caricamento...";
   const progressTpl = i18n.loadingProgress || "Caricamento {{loaded}}/{{total}} MB";
   const showMoreRowsLabel = i18n.showMoreRows || "Mostra altre righe";
@@ -907,9 +912,11 @@ ${commonHead}
 <body>
   <div id="container" style="display:flex;flex-direction:column;align-items:center;padding:16px;"></div>
   ${inlineScript(libs?.pdfjs)}
+  ${inlineScript(libs?.pdfjsWorker)}
   <script>
     try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([${jsStringLiteral(libs?.pdfjsWorker ?? "")}], { type: "text/javascript" }));
+      // The worker script above sets globalThis.pdfjsWorker, so pdf.js stays on this thread.
+      // A blob Worker fails in the Android WebView and the preview falls back.
       var totalSize = ${fileSize};
 
       class RangeTransport extends pdfjsLib.PDFDataRangeTransport {

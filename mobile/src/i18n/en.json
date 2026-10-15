@@ -282,6 +282,8 @@
     "cached": "Cached",
     "ofTotal": "of {{total}} ({{pct}}%)",
     "nearLimit": "Close to the limit: the bot will compact older messages soon.",
+    "compact": "Compact",
+    "compactFailed": "Could not compact",
     "recentRounds_one": "Last exchange",
     "recentRounds_other": "Last {{count}} exchanges",
     "latestRound": "Latest exchange"
@@ -294,6 +296,7 @@
     "favorites": "Favorites",
     "browse": "Browse…",
     "useFolder": "Use this folder",
+    "internalHidden": "The bot's own folders stay hidden.",
     "error": "Could not change the workspace"
   },
   "fork": {
