@@ -7,6 +7,7 @@ import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { ListItem } from "../../ui/components";
 import { outboxStore } from "../../extras/outbox";
+import { useProjects } from "../../projects/store";
 
 export type ChatRowProps = {
   chat: ChatSummary;
@@ -23,6 +24,13 @@ export function ChatRow({ chat, active, onPress, onLongPress }: ChatRowProps) {
   const running = !!chat.runStartedAt;
   const readOnly = !isWritable(chat.key);
   const pendingCount = useStore(outboxStore, (s) => (s.activeProfileId ? (s.queues[chat.key]?.length ?? 0) : 0));
+  const project = useProjects((s) =>
+    chat.workspaceScope?.project_path
+      ? typeof s.byPath === "function"
+        ? s.byPath(chat.workspaceScope.project_path)
+        : s.byPath[chat.workspaceScope.project_path]
+      : null
+  );
 
   return (
     <View style={{ backgroundColor: active ? th.colors.card : "transparent", borderRadius: th.radius.md, marginHorizontal: 8, overflow: "hidden" }}>
@@ -32,8 +40,25 @@ export function ChatRow({ chat, active, onPress, onLongPress }: ChatRowProps) {
         onPress={onPress}
         onLongPress={onLongPress}
         right={
-          running || readOnly || pendingCount > 0 ? (
+          project || running || readOnly || pendingCount > 0 ? (
             <View style={styles.right}>
+              {project ? (
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: th.colors.brandSoftForeground,
+                    backgroundColor: th.colors.brandSoft,
+                    borderRadius: th.radius.sm,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    fontSize: 11,
+                    fontFamily: th.font.medium,
+                    maxWidth: 100,
+                  }}
+                >
+                  {project.name}
+                </Text>
+              ) : null}
               {pendingCount > 0 ? (
                 <Text
                   style={{
