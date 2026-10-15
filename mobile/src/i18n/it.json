@@ -647,7 +647,22 @@
       "medium": "Media",
       "high": "Alta",
       "urgent": "Urgente"
-    }
+    },
+    "tab": {
+      "board": "Lavagna",
+      "chat": "Chat",
+      "bots": "Bot"
+    },
+    "send": "Invia",
+    "approve": "Approva",
+    "requestChanges": "Richiedi modifiche",
+    "feedback": "Modifiche",
+    "botName": "Nome",
+    "botIcon": "Icona",
+    "botPrompt": "Ruolo",
+    "addBot": "Nuovo bot",
+    "deleteBot": "Elimina bot",
+    "deleteBotConfirm": "{{name}} viene tolto dalla lavagna."
   },
   "memory": {
     "title": "Memoria",
