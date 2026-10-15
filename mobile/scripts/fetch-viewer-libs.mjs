@@ -28,6 +28,10 @@ const files = {
     "https://cdn.jsdelivr.net/npm/vega-lite@6.5.0/build/vega-lite.min.js",
   "vega-embed.min.vendorjs":
     "https://cdn.jsdelivr.net/npm/vega-embed@7.3.0/build/vega-embed.min.js",
+  "leaflet.vendorjs":
+    "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js",
+  "leaflet.css.vendorjs":
+    "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
 };
 
 for (const [name, url] of Object.entries(files)) {

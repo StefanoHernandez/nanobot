@@ -74,6 +74,7 @@ describe("formats helpers", () => {
     expect(viewerKind("app.tsx")).toBe("code");
     expect(viewerKind("data.json")).toBe("json");
     expect(viewerKind("preview.vl")).toBe("chart");
+    expect(viewerKind("preview.geojson")).toBe("map");
     expect(viewerKind("t.tsv")).toBe("csv");
     expect(viewerKind("table.csv")).toBe("csv");
     expect(viewerKind("log.txt")).toBe("text");

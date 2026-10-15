@@ -1,11 +1,11 @@
 ---
 name: artifacts
-description: Give HTML, SVG, Mermaid, and chart fences a stable id so a revision becomes the next version in the phone preview.
+description: Give HTML, SVG, Mermaid, chart, and geojson map fences a stable id so a revision becomes the next version in the phone preview.
 ---
 
 # Artifacts
 
-When you write a fenced block the user can preview (`html`, `svg`, `mermaid`, or `chart`), put an id and a short title on the info line:
+When you write a fenced block the user can preview (`html`, `svg`, `mermaid`, `chart`, or `geojson`), put an id and a short title on the info line:
 
 ~~~
 ```html id=sales-dashboard title="Vendite"
@@ -35,6 +35,22 @@ Use a `chart` fence (or `vega-lite` / `vegalite`; same artifact kind). The body 
     "x": { "field": "month", "type": "ordinal" },
     "y": { "field": "sales", "type": "quantitative" }
   }
+}
+```
+
+A later block with the same id is the next version.
+
+## Map (GeoJSON)
+
+Use a `geojson` fence. The body is one GeoJSON object (`Feature`, `FeatureCollection`, or a geometry type). Coordinates and properties are inline. No `url` or `href` fields. Map tiles load only after the user allows network for that preview.
+
+```geojson id=places title="Luoghi"
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [12.5, 41.9] }, "properties": { "name": "Roma" } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [9.19, 45.46] }, "properties": { "name": "Milano" } }
+  ]
 }
 ```
 

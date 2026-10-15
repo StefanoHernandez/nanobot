@@ -98,6 +98,16 @@ test("explicit chart artifact uploads as .vl", () => {
   ).toBe("sales.vl");
 });
 
+test("explicit map artifact uploads as .geojson", () => {
+  expect(
+    artifactUploadFileName({
+      id: "places",
+      explicit: true,
+      versions: [{ kind: "map", code: '{"type":"FeatureCollection","features":[]}' }],
+    }),
+  ).toBe("places.geojson");
+});
+
 describe("GalleryScreen artifacts tab", () => {
   test("two versions of one explicit artifact show one row with latest title and kind", async () => {
     const key = "websocket:c1";

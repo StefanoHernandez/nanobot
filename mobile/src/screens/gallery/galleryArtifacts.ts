@@ -17,6 +17,7 @@ export function artifactRowTitle(artifact: Artifact): string {
 function uploadExtForKind(kind: PreviewKind): string {
   if (kind === "mermaid") return "mmd";
   if (kind === "chart") return "vl";
+  if (kind === "map") return "geojson";
   return kind;
 }
 
@@ -27,6 +28,7 @@ export function previewNameForKind(kind: PreviewKind): string {
 export function mimeForArtifactKind(kind: PreviewKind): string {
   if (kind === "svg") return "image/svg+xml";
   if (kind === "html") return "text/html";
+  if (kind === "map") return "application/geo+json";
   return "text/plain";
 }
 

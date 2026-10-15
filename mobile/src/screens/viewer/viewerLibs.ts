@@ -12,6 +12,8 @@ import xlsx from "../../../assets/viewers/xlsx.full.min.vendorjs";
 import vega from "../../../assets/viewers/vega.min.vendorjs";
 import vegaLite from "../../../assets/viewers/vega-lite.min.vendorjs";
 import vegaEmbed from "../../../assets/viewers/vega-embed.min.vendorjs";
+import leaflet from "../../../assets/viewers/leaflet.vendorjs";
+import leafletCss from "../../../assets/viewers/leaflet.css.vendorjs";
 
 /** Pinned copies of the preview libraries. Bytes live in mobile/assets/viewers. */
 export const VIEWER_LIB_NAMES = [
@@ -26,6 +28,8 @@ export const VIEWER_LIB_NAMES = [
   "vega",
   "vegaLite",
   "vegaEmbed",
+  "leaflet",
+  "leafletCss",
 ] as const;
 
 export type ViewerLibName = (typeof VIEWER_LIB_NAMES)[number];
@@ -43,6 +47,8 @@ const MODULES: Record<ViewerLibName, number> = {
   vega,
   vegaLite,
   vegaEmbed,
+  leaflet,
+  leafletCss,
 };
 
 const memory = new Map<ViewerLibName, string>();
