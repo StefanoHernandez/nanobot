@@ -5,12 +5,16 @@ from __future__ import annotations
 import io
 import json
 import sqlite3
+import sys
 import tarfile
 from types import SimpleNamespace
 
 import pytest
 
 from nanobot.ext import backup as bk
+
+# The server is Linux (Arduino UNO Q); Windows cannot rename a home holding open files.
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only backups")
 
 
 @pytest.fixture
