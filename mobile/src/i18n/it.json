@@ -460,8 +460,15 @@
     "truncated": "Diff troncato"
   },
   "gallery": {
-    "title": "Immagini",
-    "open": "Galleria immagini"
+    "title": "Media e file",
+    "open": "Media e file",
+    "tabImages": "Immagini",
+    "tabFiles": "File",
+    "sentByUser": "Inviato da te",
+    "sentByBot": "Dal bot",
+    "emptyImages": "Nessuna immagine in questa chat",
+    "emptyFiles": "Nessun file in questa chat",
+    "share": "Condividi"
   },
   "system": {
     "fields": {
