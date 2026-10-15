@@ -86,17 +86,20 @@ export function paginateMarkdown(text: string): string[] {
 }
 
 function stripDangerousHtml(html: string): string {
-  let out = html;
-  out = out.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
+  // Attribute filters run only inside real tags: marked escapes code blocks,
+  // so `&lt;a onclick=...&gt;` samples are left alone.
+  let out = html.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
   out = out.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*\/?>/gi, "");
-  out = out.replace(/\s(on[a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-  out = out.replace(/\s(href|src)\s*=\s*("|')?\s*(javascript:|data:)[^"'>\s]*/gi, ' $1="#"');
-  return out;
+  return out.replace(/<[a-z][^>]*>/gi, (tag) =>
+    tag
+      .replace(/[\s/]+(on[a-z0-9_-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(/\s(href|src)\s*=\s*("|')?\s*(javascript:|data:)[^"'>\s]*/gi, ' $1="#"'),
+  );
 }
 
 /** Full-document markdown as a sanitized HTML print payload for expo-print. */
 export function markdownToPrintHtml(text: string): string {
   const raw = marked.parse(text, { async: false }) as string;
   const safe = stripDangerousHtml(raw);
-  return printDocument(safe);
+  return printDocument(safe, { scripts: false });
 }

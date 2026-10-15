@@ -25,9 +25,10 @@ import {
   openGalleryArtifactPreview,
   writeGalleryArtifactUpload,
 } from "./galleryArtifacts";
-import { IconButton, Sheet, toast } from "../../ui/components";
+import { Dialog, IconButton, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { withAlpha } from "../../ui/theme";
+import { artifactStore } from "../viewer/artifactStore";
 import {
   absoluteMediaUrl,
   classify,
@@ -309,6 +310,10 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
   const [saveProjects, setSaveProjects] = useState<Project[]>([]);
   const [saveProjectsLoading, setSaveProjectsLoading] = useState(false);
   const [saveUploadBusy, setSaveUploadBusy] = useState(false);
+  const [conflictTarget, setConflictTarget] = useState<{
+    project: Project;
+    local: { uri: string; name: string; mime: string };
+  } | null>(null);
 
   useEffect(() => {
     if (!saveArtifact || !session) {
@@ -379,9 +384,25 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
     setSaveArtifact(item);
   };
 
+  const resolveArtifactForUpload = (artifact: Artifact): Artifact => {
+    const opened = artifactStore.get();
+    if (
+      opened &&
+      opened.id &&
+      opened.id === artifact.id &&
+      opened.index != null &&
+      artifact.versions[opened.index]
+    ) {
+      return { ...artifact, versions: [artifact.versions[opened.index]] };
+    }
+    const latest = latestArtifactVersion(artifact);
+    return latest ? { ...artifact, versions: [latest] } : artifact;
+  };
+
   const handleConfirmSaveToProject = async (project: Project) => {
     if (!session || !saveArtifact || saveUploadBusy) return;
-    const local = writeGalleryArtifactUpload(saveArtifact);
+    const targetArtifact = resolveArtifactForUpload(saveArtifact);
+    const local = writeGalleryArtifactUpload(targetArtifact);
     if (!local) {
       toast.show(t("gallery.saveFailed"));
       return;
@@ -389,6 +410,27 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
     setSaveUploadBusy(true);
     try {
       await uploadProjectFile(session, project.id, local.name, local);
+      toast.show(t("gallery.saved"));
+      setSaveArtifact(null);
+      setConflictTarget(null);
+    } catch (e: any) {
+      if (e?.message === "file_exists") {
+        setConflictTarget({ project, local });
+      } else {
+        toast.show(t("gallery.saveFailed"));
+      }
+    } finally {
+      setSaveUploadBusy(false);
+    }
+  };
+
+  const handleConfirmOverwrite = async () => {
+    if (!conflictTarget || !session) return;
+    const { project, local } = conflictTarget;
+    setConflictTarget(null);
+    setSaveUploadBusy(true);
+    try {
+      await uploadProjectFile(session, project.id, local.name, local, true);
       toast.show(t("gallery.saved"));
       setSaveArtifact(null);
     } catch {
@@ -683,6 +725,16 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
           ))
         )}
       </Sheet>
+
+      <Dialog
+        open={!!conflictTarget}
+        title={t("gallery.fileExistsConfirm")}
+        message={conflictTarget?.local.name}
+        confirmLabel={t("gallery.overwrite")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void handleConfirmOverwrite()}
+        onCancel={() => setConflictTarget(null)}
+      />
 
       {viewerIndex !== null ? (
         <Modal

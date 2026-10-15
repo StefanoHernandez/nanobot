@@ -133,7 +133,19 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   useEffect(() => {
     setNetwork(false);
     setAskNetwork(false);
-  }, [name, opened?.id]);
+    setFixError(null);
+  }, [name, opened?.id, versionIndex]);
+
+  // Synchronize the viewed version index in artifactStore so that saving this artifact
+  // from Gallery uploads the version the user was actively viewing.
+  useEffect(() => {
+    if (opened && opened.id && opened.index !== versionIndex) {
+      artifactStore.set(opened.content, opened.name, {
+        ...opened,
+        index: versionIndex,
+      });
+    }
+  }, [opened, versionIndex]);
 
   useEffect(() => {
     setPageIndex(0);
@@ -343,7 +355,8 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     const body = activeVersion?.code ?? content;
     if (!body.trim()) return;
     setPdfBusy(true);
-    const html = isReadingView ? markdownToPrintHtml(content) : printDocument(body);
+    // Full HTML artifacts keep their scripts (charts need them) but stay without network, as today.
+    const html = isReadingView ? markdownToPrintHtml(content) : printDocument(body, { scripts: true });
     void Print.printToFileAsync({ html })
       .then((result) => {
         const out = result.uri;

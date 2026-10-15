@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from "expo-file-system";
+import { viewerCsp } from "./ArtifactWebView";
 
 const PNG_PREFIX = "data:image/png;base64,";
 /** About 6 MB of PNG bytes. Larger snapshots are refused. */
@@ -14,11 +15,58 @@ export function pngBase64(dataUrl: string): string | null {
   return body;
 }
 
-/** A print document for the artifact markup. A full HTML document is left as the author wrote it. */
-export function printDocument(body: string): string {
+/**
+ * Content Security Policy for print/PDF export.
+ * Full HTML artifacts keep their scripts (charts need them) but stay without network, as today.
+ * Markdown-to-PDF disables scripts entirely (script-src 'none').
+ */
+function printCsp(scripts = true): string {
+  const policy = [
+    "default-src 'none'",
+    scripts ? "script-src 'unsafe-inline' 'unsafe-eval'" : "script-src 'none'",
+    "style-src 'unsafe-inline'",
+    "font-src data:",
+    "img-src data: blob:",
+    "media-src data: blob:",
+    "worker-src blob:",
+    "connect-src 'none'",
+    "frame-src 'none'",
+    "form-action 'none'",
+    "base-uri 'none'",
+  ].join("; ");
+  return `<meta http-equiv="Content-Security-Policy" content="${policy}">`;
+}
+
+export type PrintDocumentOptions = {
+  scripts?: boolean;
+};
+
+/**
+ * A print document for the artifact markup. Injects strict CSP into head, wrapping in head if missing.
+ * Full HTML artifacts keep their scripts (charts need them) but stay without network, as today.
+ */
+export function printDocument(body: string, options?: PrintDocumentOptions): string {
+  const scripts = options?.scripts ?? true;
+  const csp = printCsp(scripts);
+
+  // Inject the CSP into the first real <head> only: parse with the first match of <head\b that comes before <body. Otherwise wrap.
+  const headMatch = /<head\b[^>]*>/i.exec(body);
+  const bodyMatch = /<body\b[^>]*>/i.exec(body);
+  const headBeforeBody = headMatch && (!bodyMatch || headMatch.index < bodyMatch.index);
+
+  if (headBeforeBody) {
+    const idx = headMatch.index + headMatch[0].length;
+    return body.slice(0, idx) + csp + body.slice(idx);
+  }
+  if (/<html\b[^>]*>/i.test(body)) {
+    if (bodyMatch) {
+      return body.slice(0, bodyMatch.index) + `<head>${csp}</head>` + body.slice(bodyMatch.index);
+    }
+    return body.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${csp}</head>`);
+  }
   const trimmed = body.trimStart();
-  if (/^<!doctype html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) return body;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body>${body}</body></html>`;
+  const withoutDocType = trimmed.replace(/^<!doctype html[^>]*>/i, "").trimStart();
+  return `<!DOCTYPE html><html><head>${csp}<meta charset="utf-8"><style>body{margin:0}</style></head><body>${withoutDocType}</body></html>`;
 }
 
 const PREVIEW_NAME = /^preview\.(html|svg|mmd|vl|geojson|react)$/;

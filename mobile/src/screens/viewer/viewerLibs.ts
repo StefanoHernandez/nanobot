@@ -69,6 +69,19 @@ if (typeof jest !== "undefined") {
   for (const name of VIEWER_LIB_NAMES) memory.set(name, "");
 }
 
+/** Test hook: override a cached library content. */
+export function setViewerLibForTest(name: ViewerLibName, content: string): void {
+  memory.set(name, content);
+}
+
+/** Test hook: reset cached libraries to test defaults. */
+export function clearViewerLibsForTest(): void {
+  memory.clear();
+  if (typeof jest !== "undefined") {
+    for (const name of VIEWER_LIB_NAMES) memory.set(name, "");
+  }
+}
+
 /** Libraries already read this session, or null if any name is still on disk. */
 export function takeCached(names: readonly ViewerLibName[]): ViewerLibMap | null {
   const out: ViewerLibMap = {};

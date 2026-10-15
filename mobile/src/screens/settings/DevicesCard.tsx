@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import type { NanobotSession } from "../../core/session";
 import { listDevices, revokeDevice, type PairedDevice } from "../../core/pairing";
@@ -6,6 +6,8 @@ import { i18n, useT } from "../../i18n";
 import { Button, Dialog, ListItem, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Head } from "./common";
+import { sessionStore } from "../../state/sessionStore";
+import { pairedDevice } from "../../core/pairing";
 
 function formatLastSeen(secs: number | null, lang: string, neverLabel: string): string {
   if (secs == null) return neverLabel;
@@ -19,13 +21,29 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   const [devices, setDevices] = useState<PairedDevice[]>([]);
   const [revokeTarget, setRevokeTarget] = useState<PairedDevice | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
+  const genRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      genRef.current++;
+    };
+  }, []);
 
   const load = useCallback(async () => {
+    const currentGen = ++genRef.current;
+    const profileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
     try {
       const list = await listDevices(session);
+      if (!mountedRef.current || currentGen !== genRef.current) return;
+      if (sessionStore?.getState && sessionStore.getState()?.profile?.id !== profileId) return;
       setDevices(list);
       setPhase("ok");
     } catch (e) {
+      if (!mountedRef.current || currentGen !== genRef.current) return;
+      if (sessionStore?.getState && sessionStore.getState()?.profile?.id !== profileId) return;
       const status = (e as Error & { status?: number }).status;
       if (status === 404) setPhase("404");
       else setPhase("error");
@@ -53,6 +71,9 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   if (phase === "404" || phase === "loading") return null;
 
   const live = devices.filter((d) => d.revoked !== true);
+  const activeProfileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
+  const storedId = activeProfileId ? pairedDevice.get(activeProfileId) : null;
+  const isRevokingSelf = Boolean(storedId && revokeTarget && revokeTarget.id === storedId);
 
   return (
     <>
@@ -85,7 +106,13 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
         open={!!revokeTarget}
         destructive
         title={t("settings.revokeDevice")}
-        message={revokeTarget ? t("settings.revokeDeviceConfirm", { name: revokeTarget.name }) : undefined}
+        message={
+          revokeTarget
+            ? isRevokingSelf
+              ? `${t("settings.revokeDeviceConfirm", { name: revokeTarget.name })}\n\n${t("devices.revokeSelf")}`
+              : t("settings.revokeDeviceConfirm", { name: revokeTarget.name })
+            : undefined
+        }
         confirmLabel={t("settings.revokeDevice")}
         cancelLabel={t("common.cancel")}
         onConfirm={() => void onRevokeConfirm()}

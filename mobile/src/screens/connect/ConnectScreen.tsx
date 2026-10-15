@@ -3,7 +3,7 @@ import React, { useRef, useState } from "react";
 import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { claimDevice, pairingDeviceName, parsePairingQr } from "../../core/pairing";
+import { claimDevice, pairedDevice, pairingDeviceName, parsePairingQr } from "../../core/pairing";
 import { normalizeBaseUrl, profiles, testConnection, type Profile } from "../../core/profiles";
 import { PairScanModal, toastInvalidScan } from "./PairScanModal";
 import { sessionStore } from "../../state/sessionStore";
@@ -37,7 +37,7 @@ export function ConnectScreen() {
     router.replace("/");
   };
 
-  const finishPair = async (baseUrl: string, deviceToken: string) => {
+  const finishPair = async (baseUrl: string, deviceToken: string, deviceId: string | null) => {
     setUrlError(undefined);
     setSecretError(undefined);
     const existing = list.find((p) => p.baseUrl === baseUrl);
@@ -51,6 +51,8 @@ export function ConnectScreen() {
     const id = existing?.id ?? crypto.randomUUID();
     const name = values.name.trim() || existing?.name || new URL(baseUrl).host;
     await profiles.save({ id, name, baseUrl }, deviceToken);
+    if (deviceId) pairedDevice.set(id, deviceId);
+    else pairedDevice.clear(id);
     open(id);
   };
 
@@ -67,8 +69,8 @@ export function ConnectScreen() {
     setValues((v) => ({ ...v, url: parsed.url }));
     try {
       const name = pairingDeviceName(values.name);
-      const { device_token } = await claimDevice(parsed.url, parsed.code, name);
-      await finishPair(parsed.url, device_token);
+      const { device_token, id: deviceId } = await claimDevice(parsed.url, parsed.code, name);
+      await finishPair(parsed.url, device_token, deviceId);
     } catch {
       toast.show(t("common.error"));
     } finally {
@@ -113,6 +115,7 @@ export function ConnectScreen() {
     if (!toDelete) return;
     const wasActive = profiles.activeId() === toDelete.id;
     await profiles.remove(toDelete.id);
+    pairedDevice.clear(toDelete.id);
     if (wasActive) sessionStore.getState().close(); // don't keep a live session (and its secret) for a deleted server
     setToDelete(null);
     setList(profiles.list());
