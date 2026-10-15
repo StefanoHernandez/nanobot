@@ -55,6 +55,7 @@
     "unlock": "Unlock",
     "unlockPrompt": "Unlock nanobot",
     "shareFailed": "Could not create the chat",
+    "shareTooLarge": "File too large: {{name}}",
     "replyReady": "Reply ready",
     "offlineBanner": "Unreachable — is Tailscale on?",
     "reasoning": "Reasoning",
@@ -748,7 +749,11 @@
     "pending": "Pending",
     "paused": "Pending — tap to send",
     "cancel": "Cancel",
-    "sendNow": "Send now"
+    "sendNow": "Send now",
+    "pendingCount": "{{count}} queued",
+    "otherChats": "Queued messages in {{count}} chats",
+    "otherChats_one": "Queued messages in 1 chat",
+    "otherChats_other": "Queued messages in {{count}} chats"
   },
   "speech": {
     "listen": "Listen",
@@ -756,7 +761,8 @@
   },
   "widget": {
     "openingNewChat": "Opening new chat…",
-    "newChat": "New chat"
+    "newChat": "New chat",
+    "offline": "Offline: try again when nanobot is reachable"
   },
   "home": {
     "hello": "Hi, I'm {{name}}"
