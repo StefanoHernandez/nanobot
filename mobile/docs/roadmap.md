@@ -174,3 +174,20 @@ Docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban
 - **Offline outbox (`P5-O1`) vs stream resumption:** On reconnect, `threadStore.hydrate` may keep an unfinished assistant bubble open. The outbox flush must wait until `hydrate` finishes **and** `runStatus` for that chat is `idle` before sending queued messages.
 - **QR device pairing (`Phase 5b`) vs in-memory gateway tokens:** `GatewayTokenStore` (`nanobot/webui/gateway_tokens.py`) stores session/API tokens in RAM only (`time.monotonic()`), so gateway restarts wipe them. In Phase 5b, `/webui/bootstrap` must accept the persistent `device_token` (validated against SHA-256 hashes in SQLite/JSON on disk) to mint fresh short-lived WS/API tokens seamlessly across luffy restarts.
 
+
+## Next features (user list, 2026-10-15), one at a time
+1. **Approvals from the phone:** Allow/Deny for shell commands, deletions and large spends. Upstream has no hook for this yet, so it needs a fork module and a thin hook in the tool-execution path.
+2. **Machine dashboard:** CPU, RAM, temperature, disk, uptime, log errors, restart.
+3. **Costs:** daily spend per model, a cap and an alert.
+4. **Prompt library**, also per project.
+5. **Backup:** a chat or a project as Markdown or PDF, plus a copy of `~/.nanobot`.
+6. **Continuous voice:** dictate, the reply is read aloud, and it listens again.
+
+**Deliberately out:**
+- vector memory;
+- iOS;
+- kanban worktrees;
+- webhooks;
+- checkpoints.
+
+Widget, notifications and share stay Android-only.
