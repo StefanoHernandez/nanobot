@@ -1,4 +1,7 @@
-"""Kanban agent tools (store-only; no dispatcher)."""
+"""Kanban agent tool (store-only; no dispatcher).
+
+One tool with an ``action`` instead of five: every tool schema rides in every prompt.
+"""
 
 # pyright: reportIncompatibleMethodOverride=false
 
@@ -51,211 +54,92 @@ def _kanban_error(exc: KanbanError) -> ToolResult:
     return ToolResult.error(f"kanban error: {exc.code}")
 
 
+def _artifacts(raw: Any) -> list[str] | None | ToolResult:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return ToolResult.error("artifacts must be a JSON array")
+    if not isinstance(raw, list):
+        return ToolResult.error("artifacts must be a JSON array")
+    return [str(a) for a in cast(list[Any], raw)]
+
+
+ACTIONS = ("show", "complete", "request_review", "verdict", "block")
+
+
 @tool_parameters(
     tool_parameters_schema(
+        action=StringSchema(
+            "show: task detail. complete / request_review: finish your run (summary, artifacts). "
+            "verdict: approve or reject a task you review (approved, feedback). block: stop with a reason.",
+            enum=ACTIONS,
+        ),
         task_id=StringSchema("Kanban task id"),
-        required=["task_id"],
+        summary=StringSchema("complete / request_review: outcome summary"),
+        artifacts=StringSchema("complete / request_review: JSON array of artifact paths or URLs"),
+        approved=BooleanSchema(description="verdict: whether the review is approved"),
+        feedback=StringSchema("verdict: feedback when not approved"),
+        reason=StringSchema("block: why the task is blocked"),
+        required=["action", "task_id"],
     )
 )
-class KanbanShowTool(Tool):
-    """Show kanban task detail including parents, runs, and messages."""
+class KanbanTool(Tool):
+    """Read and move kanban tasks from a kanban run."""
 
     _scopes = _SCOPES
 
     @property
     def name(self) -> str:
-        return "kanban_show"
+        return "kanban"
 
     @property
     def description(self) -> str:
-        return "Return full kanban task detail (parents, runs, messages)."
-
-    @property
-    def read_only(self) -> bool:
-        return True
+        return "Kanban board: show a task, or complete / request review / give a verdict / block your own task run."
 
     @classmethod
     def create(cls, ctx: ToolContext) -> Tool:
         return cls()
 
     async def execute(self, **kwargs: Any) -> Any:
+        action = kwargs.get("action")
         task_id = kwargs.get("task_id")
+        if action not in ACTIONS:
+            return ToolResult.error(f"action must be one of: {', '.join(ACTIONS)}")
         if not isinstance(task_id, str) or not task_id.strip():
             return ToolResult.error("task_id is required")
+        task_id = task_id.strip()
+        store = _store()
         try:
-            detail = _store().get_task_detail(task_id.strip())
-        except KanbanError as exc:
-            return _kanban_error(exc)
-        return _json_payload(detail)
-
-
-@tool_parameters(
-    tool_parameters_schema(
-        task_id=StringSchema("Kanban task id"),
-        summary=StringSchema("Completion summary"),
-        artifacts=StringSchema("JSON array of artifact strings"),
-        required=["task_id", "summary"],
-    )
-)
-class KanbanCompleteTool(Tool):
-    _scopes = _SCOPES
-
-    @property
-    def name(self) -> str:
-        return "kanban_complete"
-
-    @property
-    def description(self) -> str:
-        return "Mark the active kanban task run complete."
-
-    @classmethod
-    def create(cls, ctx: ToolContext) -> Tool:
-        return cls()
-
-    async def execute(self, **kwargs: Any) -> Any:
-        task_id = kwargs.get("task_id")
-        summary = kwargs.get("summary")
-        if not isinstance(task_id, str) or not isinstance(summary, str):
-            return ToolResult.error("task_id and summary are required")
-        artifacts_raw = kwargs.get("artifacts")
-        artifacts: list[str] | None = None
-        if artifacts_raw is not None:
-            if isinstance(artifacts_raw, str):
-                try:
-                    parsed = json.loads(artifacts_raw)
-                except ValueError:
-                    return ToolResult.error("artifacts must be a JSON array")
-                artifacts = cast(list[str], parsed) if isinstance(parsed, list) else None
-            elif isinstance(artifacts_raw, list):
-                artifacts = cast(list[str], artifacts_raw)
-            if artifacts is None:
-                return ToolResult.error("artifacts must be a JSON array")
-        if (denied := _guard(task_id.strip())) is not None:
-            return denied
-        try:
-            task = _store().complete_task(task_id.strip(), summary, artifacts)
-        except KanbanError as exc:
-            return _kanban_error(exc)
-        return _json_payload({"task_id": task["id"], "status": task["status"]})
-
-
-@tool_parameters(
-    tool_parameters_schema(
-        task_id=StringSchema("Kanban task id"),
-        summary=StringSchema("Summary for review"),
-        artifacts=StringSchema("JSON array of artifact strings"),
-        required=["task_id", "summary"],
-    )
-)
-class KanbanRequestReviewTool(Tool):
-    _scopes = _SCOPES
-
-    @property
-    def name(self) -> str:
-        return "kanban_request_review"
-
-    @property
-    def description(self) -> str:
-        return "Move a kanban task to review with summary and artifacts."
-
-    @classmethod
-    def create(cls, ctx: ToolContext) -> Tool:
-        return cls()
-
-    async def execute(self, **kwargs: Any) -> Any:
-        task_id = kwargs.get("task_id")
-        summary = kwargs.get("summary")
-        if not isinstance(task_id, str) or not isinstance(summary, str):
-            return ToolResult.error("task_id and summary are required")
-        artifacts: list[str] | None = None
-        artifacts_raw = kwargs.get("artifacts")
-        if isinstance(artifacts_raw, str):
-            try:
-                parsed = json.loads(artifacts_raw)
-                if isinstance(parsed, list):
-                    artifacts = cast(list[str], parsed)
-            except ValueError:
-                return ToolResult.error("artifacts must be a JSON array")
-        elif isinstance(artifacts_raw, list):
-            artifacts = cast(list[str], artifacts_raw)
-        if (denied := _guard(task_id.strip())) is not None:
-            return denied
-        try:
-            task = _store().request_review(task_id.strip(), summary, artifacts)
-        except KanbanError as exc:
-            return _kanban_error(exc)
-        return _json_payload({"task_id": task["id"], "status": task["status"]})
-
-
-@tool_parameters(
-    tool_parameters_schema(
-        task_id=StringSchema("Kanban task id"),
-        approved=BooleanSchema(description="Whether the review is approved"),
-        feedback=StringSchema("Optional review feedback when not approved"),
-        required=["task_id", "approved"],
-    )
-)
-class KanbanReviewVerdictTool(Tool):
-    _scopes = _SCOPES
-
-    @property
-    def name(self) -> str:
-        return "kanban_review_verdict"
-
-    @property
-    def description(self) -> str:
-        return "Approve or reject a kanban task in review."
-
-    @classmethod
-    def create(cls, ctx: ToolContext) -> Tool:
-        return cls()
-
-    async def execute(self, **kwargs: Any) -> Any:
-        task_id = kwargs.get("task_id")
-        approved = kwargs.get("approved")
-        if not isinstance(task_id, str) or not isinstance(approved, bool):
-            return ToolResult.error("task_id and approved are required")
-        feedback = str(kwargs.get("feedback") or "")
-        if (denied := _guard(task_id.strip(), verdict=True)) is not None:
-            return denied
-        try:
-            task = _store().review_verdict(task_id.strip(), approved, feedback)
-        except KanbanError as exc:
-            return _kanban_error(exc)
-        return _json_payload({"task_id": task["id"], "status": task["status"]})
-
-
-@tool_parameters(
-    tool_parameters_schema(
-        task_id=StringSchema("Kanban task id"),
-        reason=StringSchema("Block reason"),
-        required=["task_id", "reason"],
-    )
-)
-class KanbanBlockTool(Tool):
-    _scopes = _SCOPES
-
-    @property
-    def name(self) -> str:
-        return "kanban_block"
-
-    @property
-    def description(self) -> str:
-        return "Block a kanban task with a reason."
-
-    @classmethod
-    def create(cls, ctx: ToolContext) -> Tool:
-        return cls()
-
-    async def execute(self, **kwargs: Any) -> Any:
-        task_id = kwargs.get("task_id")
-        reason = kwargs.get("reason")
-        if not isinstance(task_id, str) or not isinstance(reason, str):
-            return ToolResult.error("task_id and reason are required")
-        if (denied := _guard(task_id.strip())) is not None:
-            return denied
-        try:
-            task = _store().block_task(task_id.strip(), reason)
+            if action == "show":
+                return _json_payload(store.get_task_detail(task_id))
+            if action in ("complete", "request_review"):
+                summary = kwargs.get("summary")
+                if not isinstance(summary, str):
+                    return ToolResult.error("summary is required")
+                artifacts = _artifacts(kwargs.get("artifacts"))
+                if isinstance(artifacts, ToolResult):
+                    return artifacts
+                if (denied := _guard(task_id)) is not None:
+                    return denied
+                move = store.complete_task if action == "complete" else store.request_review
+                task = move(task_id, summary, artifacts)
+            elif action == "verdict":
+                approved = kwargs.get("approved")
+                if not isinstance(approved, bool):
+                    return ToolResult.error("approved is required")
+                if (denied := _guard(task_id, verdict=True)) is not None:
+                    return denied
+                task = store.review_verdict(task_id, approved, str(kwargs.get("feedback") or ""))
+            else:
+                reason = kwargs.get("reason")
+                if not isinstance(reason, str):
+                    return ToolResult.error("reason is required")
+                if (denied := _guard(task_id)) is not None:
+                    return denied
+                task = store.block_task(task_id, reason)
         except KanbanError as exc:
             return _kanban_error(exc)
         return _json_payload({"task_id": task["id"], "status": task["status"]})

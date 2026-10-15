@@ -33,19 +33,32 @@ async def _as(session_key: str, tool, **kwargs):
 
 
 async def test_kanban_tools_refuse_outside_kanban_task_sessions(store):
-    out = await _as("websocket:abc", kt.KanbanBlockTool(), task_id="t1", reason="nope")
+    out = await _as("websocket:abc", kt.KanbanTool(), action="block", task_id="t1", reason="nope")
     assert "not_your_task" in str(out)
 
 
 async def test_a_bot_cannot_touch_another_task(store):
-    out = await _as("kanban:t1:coder", kt.KanbanBlockTool(), task_id="t2", reason="nope")
+    out = await _as("kanban:t1:coder", kt.KanbanTool(), action="block", task_id="t2", reason="nope")
     assert "not_your_task" in str(out)
-    out = await _as("kanban:wake:w1:coder", kt.KanbanBlockTool(), task_id="t1", reason="nope")
+    out = await _as("kanban:wake:w1:coder", kt.KanbanTool(), action="block", task_id="t1", reason="nope")
     assert "not_your_task" in str(out)
 
 
 async def test_assignee_cannot_approve_its_own_review(store):
-    out = await _as("kanban:t1:coder", kt.KanbanReviewVerdictTool(), task_id="t1", approved=True)
+    out = await _as("kanban:t1:coder", kt.KanbanTool(), action="verdict", task_id="t1", approved=True)
     assert "not_reviewer" in str(out)
-    out = await _as("kanban:t1:reviewer", kt.KanbanReviewVerdictTool(), task_id="t1", approved=True)
+    out = await _as("kanban:t1:reviewer", kt.KanbanTool(), action="verdict", task_id="t1", approved=True)
     assert "not_reviewer" not in str(out) and "not_your_task" not in str(out)
+
+
+async def test_one_tool_covers_every_action(store):
+    tool = kt.KanbanTool()
+    assert tool.name == "kanban"
+    shown = await _as("websocket:abc", tool, action="show", task_id="t1")  # read is open to any session
+    assert '"id":"t1"' in str(shown)
+    assert "action must be" in str(await _as("kanban:t1:coder", tool, action="delete", task_id="t1"))
+    assert "artifacts must be" in str(
+        await _as("kanban:t1:coder", tool, action="complete", task_id="t1", summary="s", artifacts="{")
+    )
+    blocked = await _as("kanban:t1:coder", tool, action="block", task_id="t1", reason="waiting")
+    assert '"status":"blocked"' in str(blocked)
