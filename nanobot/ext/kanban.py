@@ -60,6 +60,10 @@ class KanbanError(Exception):
         self.code = code
 
 
+MAX_MENTIONS_PER_MESSAGE = 3
+MAX_PENDING_WAKES = 50
+
+
 def kanban_db_path() -> Path:
     raw = os.environ.get("NANOBOT_KANBAN_DB", "").strip()
     if raw:
@@ -1114,6 +1118,11 @@ class KanbanStore:
                 if str(task["board_id"]) != board_id:
                     raise KanbanError(400, "invalid_task")
             triggered = self._resolve_mentions(conn, content) if hop_count < 3 else []
+            # Bound LLM fan-out: a bot never wakes itself, a message wakes few bots, the queue stays small.
+            if author_type == "bot":
+                triggered = [b for b in triggered if b != author_id]
+            pending = conn.execute("SELECT COUNT(*) FROM wakes").fetchone()[0]
+            triggered = triggered[: max(0, min(MAX_MENTIONS_PER_MESSAGE, MAX_PENDING_WAKES - pending))]
             now = _now_ms()
             msg_id = _new_id(None)
             conn.execute(

@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from loguru import logger
 
 from nanobot.bus.events import InboundMessage
-from nanobot.ext.kanban import KanbanStore
+from nanobot.ext.kanban import KanbanStore, kanban_db_path
 from nanobot.triggers.local_session_turns import LOCAL_TRIGGER_META
 
 _TASK_FOOTER = (
@@ -18,6 +18,8 @@ _TASK_FOOTER = (
 _WAKE_PREFIX = "Board message for you:\n"
 _WAKE_FAILURE_MESSAGE = "Non sono riuscito a rispondere."
 _TURN_FAILURE = "turn failed"
+# A hung provider or tool must not freeze the single dispatcher (and its running task) forever.
+TURN_TIMEOUT_S = 600
 
 
 def _safe_prose(text: str, limit: int, *, fallback: str) -> str:
@@ -58,7 +60,7 @@ async def dispatch_once(
         ctx = claimed["runtime_context"]
         content = f"{ctx.content}\n{_TASK_FOOTER}"
         try:
-            reply = await run_turn(session_key, content)
+            reply = await asyncio.wait_for(run_turn(session_key, content), TURN_TIMEOUT_S)
         except Exception:
             _fail_running_task(store, task_id)
             return
@@ -80,7 +82,7 @@ async def dispatch_once(
     session_key = f"kanban:wake:{wake_id}:{bot_id}"
     content = f"{_WAKE_PREFIX}{wake['content']}"
     try:
-        reply = await run_turn(session_key, content)
+        reply = await asyncio.wait_for(run_turn(session_key, content), TURN_TIMEOUT_S)
     except Exception:
         _fail_wake(store, wake, bot_id, board_id)
         return
@@ -132,11 +134,19 @@ async def kanban_dispatch_loop(
     *,
     interval_s: float = 30,
     stop: asyncio.Event,
+    enabled: Callable[[], bool] = lambda: True,
 ) -> None:
-    store = KanbanStore()
+    """Run one task or mention per tick.
+
+    Idle (no DB, no seeding) until the board exists, i.e. the user opened Kanban once,
+    and while ``agents.defaults.kanban_dispatch`` is off.
+    """
+    store: KanbanStore | None = None
     while not stop.is_set():
         try:
-            await dispatch_once(store, run_turn)
+            if enabled() and (store is not None or kanban_db_path().exists()):
+                store = store or KanbanStore()
+                await dispatch_once(store, run_turn)
         except Exception:
             logger.error("kanban dispatch failed")
         if stop.is_set():
