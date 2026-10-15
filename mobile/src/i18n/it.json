@@ -18,6 +18,9 @@
     "keep": "Mantieni",
     "operationFailed": "Operazione non riuscita"
   },
+  "devices": {
+    "revokeSelf": "È questo telefono: verrai disconnesso"
+  },
   "thread": {
     "reasoning": "Ragionamento",
     "activityWorkingFor": "Sto lavorando da {{duration}}",
@@ -537,6 +540,8 @@
     "saveToProject": "Salva nel progetto",
     "saved": "Salvato nel progetto",
     "saveFailed": "Salvataggio non riuscito",
+    "fileExistsConfirm": "Il file esiste già: sovrascrivere?",
+    "overwrite": "Sovrascrivi",
     "share": "Condividi"
   },
   "system": {
