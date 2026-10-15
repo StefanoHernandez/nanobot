@@ -65,7 +65,8 @@ export function usePolling(o: PollingOpts): void {
     const startTimer = () => {
       if (id) clearInterval(id);
       if (stopped) return;
-      const ms = !active && ref.current.background ? 15_000 : ref.current.intervalMs;
+      // In background: at most one tick per 15 s, never faster than asked.
+      const ms = !active && ref.current.background ? Math.max(ref.current.intervalMs, 15_000) : ref.current.intervalMs;
       id = setInterval(async () => {
         if (stopped || busy) return;
         if (expired()) {
