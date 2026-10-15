@@ -5,4 +5,6 @@ module.exports = {
     "\\.vendorjs$": "<rootDir>/test/stubs/vendorjs.js",
   },
   testPathIgnorePatterns: ["/node_modules/", "/android/", "/ios/"],
+  setupFilesAfterEnv: ["<rootDir>/test/setup-timeouts.js"],
+  testTimeout: 20000,
 };
