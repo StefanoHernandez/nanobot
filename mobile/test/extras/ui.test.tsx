@@ -341,3 +341,15 @@ describe("OfflineBanner", () => {
     expect(screen.queryByText(/Unreachable/)).toBeNull();
   });
 });
+
+describe("effort notches", () => {
+  const { effortNotches } = require("../../src/extras/EffortPill");
+  test("levels fill 0-3 notches", () => {
+    const levels = ["none", "low", "medium", "high"];
+    expect(levels.map((l: string) => effortNotches(l, levels))).toEqual([0, 1, 2, 3]);
+    const six = ["none", "low", "medium", "high", "xhigh", "max"];
+    expect(six.map((l: string) => effortNotches(l, six))).toEqual([0, 1, 2, 2, 3, 3]);
+    expect(effortNotches("adaptive", ["low", "adaptive"])).toBe(2);
+    expect(effortNotches("unknown", ["low"])).toBe(1);
+  });
+});

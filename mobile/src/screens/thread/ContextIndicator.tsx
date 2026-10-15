@@ -4,7 +4,7 @@ import { useT } from "../../i18n";
 import { latestContextUsage } from "../../state/usage";
 import { useThreadSlice } from "../../state/threadStore";
 import { useTheme } from "../../ui/ThemeProvider";
-import { ContextPopover, pct as pctOf } from "./ContextPopover";
+import { CONTEXT_WARN_PCT, ContextPopover, pct as pctOf } from "./ContextPopover";
 
 /** Small ring with the context fill %; hidden without usage or a known window. */
 export function ContextIndicator({ chatKey }: { chatKey: string }) {
@@ -15,7 +15,7 @@ export function ContextIndicator({ chatKey }: { chatKey: string }) {
   const u = latestContextUsage(messages);
   if (!u || !u.contextWindowTokens) return null;
   const pct = pctOf(u.contextTokens, u.contextWindowTokens);
-  const color = pct >= 80 ? th.colors.destructive : th.colors.primary;
+  const color = pct >= CONTEXT_WARN_PCT ? th.colors.chartWarn : th.colors.chartInput;
   return (
     <>
       <Pressable accessibilityRole="button" accessibilityLabel={t("context.title")} onPress={() => setOpen(true)} hitSlop={4} style={{ minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center" }}>

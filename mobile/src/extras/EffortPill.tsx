@@ -1,9 +1,35 @@
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useT } from "../i18n";
+import { withAlpha } from "../ui/theme";
 import { useTheme } from "../ui/ThemeProvider";
 import { useEffort } from "./effort";
 import { EffortSheet } from "./EffortSheet";
+
+/** How many of the 3 notches a level fills: none = 0, then spread over the ranked levels; adaptive sits in the middle. */
+export function effortNotches(level: string, levels: string[]): number {
+  if (level === "none") return 0;
+  if (level === "adaptive") return 2;
+  const ranked = levels.filter((l) => l !== "none" && l !== "adaptive");
+  const i = ranked.indexOf(level);
+  if (i < 0 || ranked.length === 0) return 1;
+  return Math.max(1, Math.ceil((3 * (i + 1)) / ranked.length));
+}
+
+function Notches({ filled }: { filled: number }) {
+  const th = useTheme();
+  return (
+    <View testID="effort-notches" style={styles.notches} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {[6, 9, 12].map((h, i) => (
+        <View
+          key={h}
+          testID={i < filled ? "notch-on" : "notch-off"}
+          style={{ width: 3, height: h, borderRadius: 1.5, backgroundColor: i < filled ? th.colors.foreground : withAlpha(th.colors.mutedForeground, 0.4) }}
+        />
+      ))}
+    </View>
+  );
+}
 
 export function EffortPill({ chatKey }: { chatKey: string }) {
   const t = useT();
@@ -34,6 +60,7 @@ export function EffortPill({ chatKey }: { chatKey: string }) {
             },
           ]}
         >
+          <Notches filled={effortNotches(level, state.levels)} />
           <Text
             style={[
               styles.pillText,
@@ -43,7 +70,7 @@ export function EffortPill({ chatKey }: { chatKey: string }) {
               },
             ]}
           >
-            ⚡ {label}
+            {label}
           </Text>
         </View>
       </Pressable>
@@ -67,8 +94,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
+  },
+  notches: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 2,
+    height: 12,
   },
   pillText: {
     fontSize: 12,

@@ -47,3 +47,30 @@ It lives in the thread header next to the bot name, with a one-line status under
 - Lists are white cards on the mist background, rounded `md`, grouped with Bricolage section titles (sentence case).
 - At most one primary button per screen; the others are secondary or ghost.
 - Touch targets ≥ 48dp. Keep every function: this is a visual redesign only.
+
+## Dark scheme (2026-10-15, from the user's palette)
+The palette is Evergreen `#16302b`, Vintage Grape `#694873` and Dusty Mauve `#8b728e`. Surfaces step up in lightness, as in Material tonal elevation.
+
+| Role | Hex |
+|---|---|
+| background | `#0e221e` |
+| card | `#16302b` |
+| popover | `#1c3a34` |
+| text | `#e8f0ed` |
+| secondary text | `#b9a8bd` (lightened mauve: the original reaches only 3.2:1) |
+| primary button | `#c9a7d2` with `#2a1a30` text |
+| user bubble | `#694873` (Vintage Grape) |
+| bot | sunflower `#f4b63f` (unchanged) |
+
+You are grape; the bot stays sunflower.
+
+**Chart series** (context panel):
+
+| Scheme | input | output | cached | warn |
+|---|---|---|---|---|
+| light | `#2f3389` | `#b8780a` | `#7f84cf` | `#c2413b` |
+| dark | `#e4d4ec` | `#f4b63f` | `#9d7fa3` | `#ff9a94` |
+
+The series differ in lightness as well as hue (colour-blind safe), and each reaches at least 3:1 on the panel. Both rules are enforced in `test/ui/theme.test.ts`.
+
+**Reasoning pill:** a 3-notch scale (`effortNotches`) replaces the lightning icon.
