@@ -70,3 +70,17 @@ def test_spa_fallback_uses_precompressed_index_without_long_term_cache(tmp_path)
     assert response.headers["Content-Encoding"] == "gzip"
     assert response.headers["Cache-Control"] == "no-cache"
     assert gzip.decompress(response.body) == source
+
+
+def test_exported_app_gets_hardening_headers_only_when_enabled(tmp_path, monkeypatch) -> None:
+    from nanobot.ext.webapp import APP_CSP, harden
+
+    (tmp_path / "index.html").write_text("<!doctype html>")
+    monkeypatch.delenv("NANOBOT_APP_DIST", raising=False)
+    plain = harden(_handler(tmp_path)._serve_static("/index.html"))
+    assert "Content-Security-Policy" not in plain.headers
+
+    monkeypatch.setenv("NANOBOT_APP_DIST", str(tmp_path))
+    app = harden(_handler(tmp_path)._serve_static("/index.html"))
+    assert app.headers["Content-Security-Policy"] == APP_CSP
+    assert "script-src" not in APP_CSP  # srcdoc previews inherit it; scripts must stay allowed

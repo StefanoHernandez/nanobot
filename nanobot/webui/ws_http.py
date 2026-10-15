@@ -678,7 +678,9 @@ class GatewayHTTPHandler:
                 accept_encoding=_combined_list_header(request.headers, "Accept-Encoding"),
             )
             if response is not None:
-                return response
+                from nanobot.ext.webapp import harden
+
+                return harden(response)
 
         return connection.respond(404, "Not Found")
 
