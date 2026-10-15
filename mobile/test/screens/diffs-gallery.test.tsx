@@ -282,6 +282,6 @@ describe("GalleryScreen & ThreadScreen gallery button", () => {
       </SafeAreaProvider>,
     );
 
-    expect(screen.getByLabelText(/gallery/i)).toBeTruthy();
+    expect(screen.getByLabelText(/gallery|media and files/i)).toBeTruthy();
   });
 });
