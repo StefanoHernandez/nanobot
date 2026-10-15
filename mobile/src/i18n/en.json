@@ -608,6 +608,19 @@
     "automations": "Automations",
     "comingSoon": "Coming soon"
   },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "What Dream remembers",
+    "profile": "Profile",
+    "notes": "Notes",
+    "voice": "Voice",
+    "dreamOn": "Dream on",
+    "dreamOff": "Dream off",
+    "everyHours": "Every {{count}} hours",
+    "empty": "Still empty",
+    "truncated": "Text shortened",
+    "latest": "Latest change"
+  },
   "channels": {
     "title": "Channels",
     "restartRequired": "Restart required",
