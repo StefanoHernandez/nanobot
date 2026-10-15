@@ -636,6 +636,12 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        from nanobot.ext.system import dispatch_system_get
+
+        response = dispatch_system_get(self, request, got)
+        if response is not None:
+            return response
+
         # API 404 (never serve SPA for /api/ routes)
         if got.startswith("/api/"):
             return _http_error(404, "API route not found")
