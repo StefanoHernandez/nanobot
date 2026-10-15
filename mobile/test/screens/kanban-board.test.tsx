@@ -36,7 +36,7 @@ beforeEach(async () => {
 const snapshot = {
   boards: [{ id: "main", title: "Main" }],
   active_board: { id: "main", title: "Main" },
-  bots: [{ id: "bot1", name: "Helper" }],
+  bots: [{ id: "bot1", name: "Helper", icon: "🤖", role_prompt: "Helps out", model_preset: "", max_concurrent: 1 }],
   tasks: [
     {
       id: "t1",
@@ -124,4 +124,146 @@ test("GET 404 shows the unavailable text and no add button", async () => {
 
   await waitFor(() => expect(screen.getByText("This server has no board yet.")).toBeTruthy());
   expect(screen.queryByRole("button", { name: "New task" })).toBeNull();
+});
+
+test("chat shows a message and Send POSTs mention after tapping bot chip", async () => {
+  mockGet.mockResolvedValue({
+    ...snapshot,
+    messages: [{ id: "m1", author_name: "You", content: "Hello board" }],
+  });
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Ship feature")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByRole("tab", { name: "Chat" }));
+  });
+  await waitFor(() => expect(screen.getByText("Hello board")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("@Helper"));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByText("Send"));
+  });
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  expect(fetchMock).toHaveBeenCalledWith(
+    "https://srv.test/api/ext/kanban/messages/post",
+    expect.objectContaining({
+      method: "POST",
+      credentials: "omit",
+      headers: expect.objectContaining({ Authorization: "Bearer api-token-secret" }),
+    }),
+  );
+  const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+    board_id: string;
+    content: string;
+    token?: string;
+  };
+  expect(body.board_id).toBe("main");
+  expect(body.content).toContain("@bot1");
+  expect(body.token).toBeUndefined();
+});
+
+test("review task approve and request changes POST with boolean approved", async () => {
+  const reviewSnapshot = {
+    ...snapshot,
+    tasks: [
+      ...snapshot.tasks,
+      {
+        id: "t-review",
+        title: "Needs review",
+        status: "review",
+        priority: "medium",
+        assignee_bot_id: null,
+        description: "",
+      },
+    ],
+  };
+  mockGet.mockResolvedValue(reviewSnapshot);
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Needs review")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("Needs review"));
+  });
+
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Changes"), "Please fix tests");
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByText("Request changes"));
+  });
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  let body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+    id: string;
+    approved: boolean;
+    feedback?: string;
+  };
+  expect(fetchMock.mock.calls[0][0]).toBe("https://srv.test/api/ext/kanban/tasks/review");
+  expect(body.id).toBe("t-review");
+  expect(body.approved).toBe(false);
+  expect(typeof body.approved).toBe("boolean");
+  expect(body.feedback).toBe("Please fix tests");
+
+  fetchMock.mockClear();
+  mockGet.mockResolvedValue(reviewSnapshot);
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("Needs review"));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByText("Approve"));
+  });
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+    id: string;
+    approved: boolean;
+    feedback?: string;
+  };
+  expect(body.approved).toBe(true);
+  expect(typeof body.approved).toBe("boolean");
+  expect(body.feedback).toBeUndefined();
+});
+
+test("bot delete opens confirm and POSTs id only after confirm", async () => {
+  mockGet.mockResolvedValue(snapshot);
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Helper")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByRole("tab", { name: "Bots" }));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByText("Helper"));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByText("Delete bot"));
+  });
+
+  expect(fetchMock).not.toHaveBeenCalled();
+
+  await act(async () => {
+    fireEvent.press(screen.getAllByText("Delete bot")[1]);
+  });
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  expect(fetchMock).toHaveBeenCalledWith(
+    "https://srv.test/api/ext/kanban/bots/delete",
+    expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ Authorization: "Bearer api-token-secret" }),
+      body: JSON.stringify({ id: "bot1" }),
+    }),
+  );
+  const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as Record<string, unknown>;
+  expect(Object.keys(body)).toEqual(["id"]);
 });

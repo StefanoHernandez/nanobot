@@ -257,3 +257,30 @@ async def test_review_requires_a_real_boolean(store_path):
 
 async def _fail_fallback(_request):
     raise AssertionError("fallback should not run")
+
+
+def test_mention_fan_out_is_capped(store_path):
+    store = _store(store_path)
+    _board(store)
+    for name in ("a1", "a2", "a3", "a4", "a5"):
+        _bot(store, name)
+    msg = store.post_message("main", "@a1 @a2 @a3 @a4 @a5 all of you")
+    assert len(msg["triggered_bots"]) == kb.MAX_MENTIONS_PER_MESSAGE
+
+
+def test_bot_never_wakes_itself(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    msg = store.post_message("main", "@coder talking to myself", author_type="bot", author_id="coder", author_name="Coder")
+    assert msg["triggered_bots"] == []
+
+
+def test_pending_wakes_are_capped(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    monkeypatch.setattr(kb, "MAX_PENDING_WAKES", 2)
+    assert store.post_message("main", "@coder one")["triggered_bots"] == ["coder"]
+    assert store.post_message("main", "@coder two")["triggered_bots"] == ["coder"]
+    assert store.post_message("main", "@coder three")["triggered_bots"] == []

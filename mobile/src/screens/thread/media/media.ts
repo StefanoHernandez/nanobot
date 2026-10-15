@@ -1,14 +1,20 @@
 import { Directory, File, Paths } from "expo-file-system";
-import { getContentUriAsync } from "expo-file-system/legacy"; // only exists in /legacy on SDK 57
+import { getContentUriAsync } from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as Sharing from "expo-sharing";
-import type { UIMediaAttachment } from "@/lib/types";
+import {
+  absoluteMediaUrl,
+  classify,
+  extOf,
+  mediaName,
+  safeName,
+  type MediaClass,
+} from "./mediaCore";
+
+export { absoluteMediaUrl, classify, extOf, mediaName, safeName };
+export type { MediaClass };
 
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
-
-export type MediaClass = "image" | "video" | "audio" | "file";
-
-const AUDIO = ["mp3", "m4a", "ogg", "opus", "wav", "aac", "flac", "amr", "weba"];
 const MIME: Record<string, string> = {
   pdf: "application/pdf",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -34,40 +40,11 @@ const MIME: Record<string, string> = {
   jpeg: "image/jpeg",
 };
 
-/** File name for display; falls back to the last url path segment (query/hash stripped). */
-export function mediaName(m: UIMediaAttachment): string {
-  if (m.name) return m.name;
-  const seg = (m.url ?? "").split(/[?#]/)[0].split("/").pop() ?? "";
-  try { return decodeURIComponent(seg); } catch { return seg; }
-}
-
-export const extOf = (m: UIMediaAttachment): string => {
-  const n = m.name ?? mediaName(m);
-  const i = n.lastIndexOf(".");
-  return i < 0 ? "" : n.slice(i + 1).toLowerCase();
-};
-
-export function classify(m: UIMediaAttachment): MediaClass {
-  if (m.kind === "file" && AUDIO.includes(extOf(m))) return "audio";
-  return m.kind;
-}
-
-export function absoluteMediaUrl(baseUrl: string, url: string): string {
-  if (/^(https?:|data:|file:|content:)/i.test(url)) return url;
-  return baseUrl.replace(/\/+$/, "") + "/" + url.replace(/^\/+/, "");
-}
-
 const hash = (s: string) => {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 };
-
-/** Safe single path segment: no separators, never "", "." or "..". Keeps the extension. */
-export function safeName(name: string): string {
-  const n = name.replace(/[\\/]/g, "_").trim();
-  return /^\.*$/.test(n) ? "file" : n;
-}
 
 /** Download to cache/media/<hash>/<name>, reusing a previous complete download. Returns the local file uri.
  * Downloads go to <name>.part and are moved into place only on success (Android may leave a partial file). */
@@ -79,7 +56,7 @@ export async function downloadMedia(url: string, name: string): Promise<string> 
   if (target.exists) return target.uri;
   const part = new File(dir, n + ".part");
   try {
-    await File.downloadFileAsync(url, part, { idempotent: true }); // rejects on non-2xx (SDK 57 docs)
+    await File.downloadFileAsync(url, part, { idempotent: true });
     await part.move(target, { overwrite: true });
   } catch (e) {
     try { if (part.exists) part.delete(); } catch { /* best effort */ }

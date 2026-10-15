@@ -60,6 +60,10 @@ class KanbanError(Exception):
         self.code = code
 
 
+MAX_MENTIONS_PER_MESSAGE = 3
+MAX_PENDING_WAKES = 50
+
+
 def kanban_db_path() -> Path:
     raw = os.environ.get("NANOBOT_KANBAN_DB", "").strip()
     if raw:
@@ -289,6 +293,16 @@ class KanbanStore:
                         author_name TEXT NOT NULL,
                         content TEXT NOT NULL,
                         hop_count INTEGER NOT NULL DEFAULT 0,
+                        created_at_ms INTEGER NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS wakes (
+                        id TEXT PRIMARY KEY,
+                        bot_id TEXT NOT NULL,
+                        board_id TEXT NOT NULL,
+                        message_id TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        hop_count INTEGER NOT NULL,
+                        attempts INTEGER NOT NULL DEFAULT 0,
                         created_at_ms INTEGER NOT NULL
                     );
                     """
@@ -799,80 +813,101 @@ class KanbanStore:
                 lines.append(f"Parent artifacts: {', '.join(artifacts)}")
         return "\n".join(lines)
 
-    def claim_ready_tasks(self, now_ms: int | None = None) -> list[dict[str, Any]]:
-        now = now_ms if now_ms is not None else _now_ms()
-        claimed: list[dict[str, Any]] = []
-        with self._lock, self._connect() as conn:
-            boards = conn.execute("SELECT * FROM boards").fetchall()
-            board_running: dict[str, int] = {}
-            bot_running: dict[str, int] = {}
-            for board in boards:
-                board_id = board["id"]
-                board_max = int(board["max_concurrent"])
+    def _claim_one_ready_task_locked(
+        self,
+        conn: sqlite3.Connection,
+        now: int,
+        board_running: dict[str, int],
+        bot_running: dict[str, int],
+    ) -> dict[str, Any] | None:
+        boards = conn.execute("SELECT * FROM boards ORDER BY created_at_ms").fetchall()
+        for board in boards:
+            board_id = board["id"]
+            board_max = int(board["max_concurrent"])
+            if board_id not in board_running:
                 running = conn.execute(
                     "SELECT COUNT(*) FROM tasks WHERE board_id = ? AND status = 'running'",
                     (board_id,),
                 ).fetchone()[0]
                 board_running[board_id] = int(running)
-                ready_rows = conn.execute(
-                    """
-                    SELECT * FROM tasks
-                    WHERE board_id = ? AND status = 'ready'
-                      AND assignee_bot_id IS NOT NULL
-                      AND (scheduled_at_ms IS NULL OR scheduled_at_ms <= ?)
-                    ORDER BY created_at_ms
-                    """,
-                    (board_id, now),
-                ).fetchall()
-                for task in ready_rows:
-                    if board_running[board_id] >= board_max:
-                        break
-                    bot_id = str(task["assignee_bot_id"])
-                    bot = conn.execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
-                    if bot is None:
-                        continue
-                    bot_max = int(bot["max_concurrent"])
-                    bot_running.setdefault(bot_id, conn.execute(
+            ready_rows = conn.execute(
+                """
+                SELECT * FROM tasks
+                WHERE board_id = ? AND status = 'ready'
+                  AND assignee_bot_id IS NOT NULL
+                  AND (scheduled_at_ms IS NULL OR scheduled_at_ms <= ?)
+                ORDER BY created_at_ms
+                """,
+                (board_id, now),
+            ).fetchall()
+            for task in ready_rows:
+                if board_running[board_id] >= board_max:
+                    break
+                bot_id = str(task["assignee_bot_id"])
+                bot = conn.execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
+                if bot is None:
+                    continue
+                bot_max = int(bot["max_concurrent"])
+                if bot_id not in bot_running:
+                    bot_running[bot_id] = conn.execute(
                         "SELECT COUNT(*) FROM tasks WHERE assignee_bot_id = ? AND status = 'running'",
                         (bot_id,),
-                    ).fetchone()[0])
-                    if bot_running[bot_id] >= bot_max:
-                        continue
-                    session_key = f"kanban:{task['id']}:{bot_id}"
-                    open_run = conn.execute(
-                        """
-                        SELECT id FROM task_runs
-                        WHERE task_id = ? AND bot_id = ? AND status = 'running' AND finished_at_ms IS NULL
-                        ORDER BY started_at_ms DESC LIMIT 1
-                        """,
-                        (task["id"], bot_id),
-                    ).fetchone()
-                    if open_run is None:
-                        run_id = _new_id(None)
-                        conn.execute(
-                            """
-                            INSERT INTO task_runs (
-                                id, task_id, bot_id, session_key, status, started_at_ms
-                            ) VALUES (?, ?, ?, ?, 'running', ?)
-                            """,
-                            (run_id, task["id"], bot_id, session_key, now),
-                        )
+                    ).fetchone()[0]
+                if bot_running[bot_id] >= bot_max:
+                    continue
+                session_key = f"kanban:{task['id']}:{bot_id}"
+                open_run = conn.execute(
+                    """
+                    SELECT id FROM task_runs
+                    WHERE task_id = ? AND bot_id = ? AND status = 'running' AND finished_at_ms IS NULL
+                    ORDER BY started_at_ms DESC LIMIT 1
+                    """,
+                    (task["id"], bot_id),
+                ).fetchone()
+                if open_run is None:
+                    run_id = _new_id(None)
                     conn.execute(
-                        "UPDATE tasks SET status = 'running', updated_at_ms = ? WHERE id = ?",
-                        (now, task["id"]),
+                        """
+                        INSERT INTO task_runs (
+                            id, task_id, bot_id, session_key, status, started_at_ms
+                        ) VALUES (?, ?, ?, ?, 'running', ?)
+                        """,
+                        (run_id, task["id"], bot_id, session_key, now),
                     )
-                    board_running[board_id] += 1
-                    bot_running[bot_id] += 1
-                    content = self._build_context_content(conn, task, bot)
-                    claimed.append(
-                        {
-                            "task_id": task["id"],
-                            "board_id": task["board_id"],
-                            "bot_id": bot_id,
-                            "session_key": session_key,
-                            "runtime_context": RuntimeContextBlock(source="kanban", content=content),
-                        }
-                    )
+                conn.execute(
+                    "UPDATE tasks SET status = 'running', updated_at_ms = ? WHERE id = ?",
+                    (now, task["id"]),
+                )
+                board_running[board_id] += 1
+                bot_running[bot_id] += 1
+                content = self._build_context_content(conn, task, bot)
+                return {
+                    "task_id": task["id"],
+                    "board_id": task["board_id"],
+                    "bot_id": bot_id,
+                    "session_key": session_key,
+                    "runtime_context": RuntimeContextBlock(source="kanban", content=content),
+                }
+        return None
+
+    def claim_next_ready_task(self, now_ms: int | None = None) -> dict[str, Any] | None:
+        now = now_ms if now_ms is not None else _now_ms()
+        with self._lock, self._connect() as conn:
+            board_running: dict[str, int] = {}
+            bot_running: dict[str, int] = {}
+            return self._claim_one_ready_task_locked(conn, now, board_running, bot_running)
+
+    def claim_ready_tasks(self, now_ms: int | None = None) -> list[dict[str, Any]]:
+        now = now_ms if now_ms is not None else _now_ms()
+        claimed: list[dict[str, Any]] = []
+        with self._lock, self._connect() as conn:
+            board_running: dict[str, int] = {}
+            bot_running: dict[str, int] = {}
+            while True:
+                one = self._claim_one_ready_task_locked(conn, now, board_running, bot_running)
+                if one is None:
+                    break
+                claimed.append(one)
         return claimed
 
     def _finish_open_run(
@@ -1083,6 +1118,11 @@ class KanbanStore:
                 if str(task["board_id"]) != board_id:
                     raise KanbanError(400, "invalid_task")
             triggered = self._resolve_mentions(conn, content) if hop_count < 3 else []
+            # Bound LLM fan-out: a bot never wakes itself, a message wakes few bots, the queue stays small.
+            if author_type == "bot":
+                triggered = [b for b in triggered if b != author_id]
+            pending = conn.execute("SELECT COUNT(*) FROM wakes").fetchone()[0]
+            triggered = triggered[: max(0, min(MAX_MENTIONS_PER_MESSAGE, MAX_PENDING_WAKES - pending))]
             now = _now_ms()
             msg_id = _new_id(None)
             conn.execute(
@@ -1094,10 +1134,58 @@ class KanbanStore:
                 """,
                 (msg_id, board_id, task_id, author_type, author_id, author_name, content, hop_count, now),
             )
+            if triggered:
+                for bot_id in triggered:
+                    wake_id = _new_id(None)
+                    conn.execute(
+                        """
+                        INSERT INTO wakes (
+                            id, bot_id, board_id, message_id, content, hop_count,
+                            attempts, created_at_ms
+                        ) VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+                        """,
+                        (wake_id, bot_id, board_id, msg_id, content, hop_count, now),
+                    )
             row = conn.execute("SELECT * FROM board_messages WHERE id = ?", (msg_id,)).fetchone()
         message = _row_dict(row)
         message["triggered_bots"] = triggered
         return message
+
+    def take_wake(self) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM wakes ORDER BY created_at_ms ASC LIMIT 1"
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute("DELETE FROM wakes WHERE id = ?", (row["id"],))
+            return _row_dict(row)
+
+    def requeue_wake(self, wake: dict[str, Any], attempts: int) -> bool:
+        """Requeue a wake with updated attempts. Returns True if dropped (not requeued)."""
+        if attempts > 2:
+            return True
+        wake_id = str(wake["id"])
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO wakes (
+                    id, bot_id, board_id, message_id, content, hop_count,
+                    attempts, created_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    wake_id,
+                    wake["bot_id"],
+                    wake["board_id"],
+                    wake["message_id"],
+                    wake["content"],
+                    wake["hop_count"],
+                    attempts,
+                    wake["created_at_ms"],
+                ),
+            )
+        return False
 
     def board_snapshot(self, board_id: str) -> dict[str, Any]:
         with self._lock, self._connect() as conn:

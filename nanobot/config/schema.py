@@ -174,6 +174,7 @@ class AgentDefaults(Base):
     max_tool_iterations: int = 200
     max_concurrent_subagents: int = Field(default=4, ge=1)
     subagent_model_preset: str | None = None  # Fork (nanobot/ext/subagent_model.py): None = same model as the chat
+    kanban_dispatch: bool = True  # Fork (nanobot/ext/kanban_dispatch.py): False = the board never starts bot turns
     max_tool_result_chars: int = 16_000
     provider_retry_mode: Literal["standard", "persistent"] = "standard"
     tool_hint_max_length: int = Field(

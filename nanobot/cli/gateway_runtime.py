@@ -927,6 +927,22 @@ def _run_gateway(
         )
         try:
             await cron.start()
+
+            async def _run_kanban_dispatch() -> None:
+                from nanobot.ext.kanban_dispatch import kanban_dispatch_loop, kanban_turn_message
+
+                async def _kanban_run_turn(session_key: str, content: str) -> str:
+                    response = await agent.submit_local_trigger_turn(
+                        kanban_turn_message(session_key, content),
+                    )
+                    return response.content if response else ""
+
+                await kanban_dispatch_loop(
+                    _kanban_run_turn,
+                    stop=shutdown_event,
+                    enabled=lambda: config.agents.defaults.kanban_dispatch,
+                )
+
             # Re-read once on first admission to close the watcher subscription window.
             agent.runtime_resolver.invalidate()
             # Recovery must finish before WebSocket and other channels begin
@@ -966,6 +982,7 @@ def _run_gateway(
                     ),
                     name="nanobot-local-triggers",
                 ),
+                asyncio.create_task(_run_kanban_dispatch(), name="nanobot-kanban"),
                 asyncio.create_task(
                     _monitor_local_clients(),
                     name="nanobot-gateway-client-monitor",

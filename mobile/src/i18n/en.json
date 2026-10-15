@@ -647,7 +647,22 @@
       "medium": "Medium",
       "high": "High",
       "urgent": "Urgent"
-    }
+    },
+    "tab": {
+      "board": "Board",
+      "chat": "Chat",
+      "bots": "Bots"
+    },
+    "send": "Send",
+    "approve": "Approve",
+    "requestChanges": "Request changes",
+    "feedback": "Changes",
+    "botName": "Name",
+    "botIcon": "Icon",
+    "botPrompt": "Role",
+    "addBot": "New bot",
+    "deleteBot": "Delete bot",
+    "deleteBotConfirm": "{{name}} will be removed from the board."
   },
   "memory": {
     "title": "Memory",

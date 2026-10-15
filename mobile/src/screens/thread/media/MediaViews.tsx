@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, Text, View } from "react-native";
 import { AnyImage } from "../../../ui/AnyImage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer as ExpoPlayer } from "expo-audio";
@@ -154,7 +154,7 @@ export function FileCard({ url, name, ext }: { url: string; name: string; ext: s
       const local = await downloadMedia(url, name);
       if (share) {
         await shareMedia(local);
-      } else if (viewerKind(name) !== null) {
+      } else if (Platform.OS !== "web" && viewerKind(name) !== null) {
         router.push({ pathname: "/viewer", params: { uri: local, name } });
       } else {
         await openLocal(local, ext);

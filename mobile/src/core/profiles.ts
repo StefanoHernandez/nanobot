@@ -1,5 +1,5 @@
-import * as SecureStore from "expo-secure-store";
 import { BootstrapAuthRequiredError, fetchBootstrap } from "@/lib/bootstrap";
+import { secretStore } from "../platform/secretStore";
 import { kv } from "../platform/storage";
 
 export type Profile = { id: string; name: string; baseUrl: string; hasSecret: boolean };
@@ -34,19 +34,19 @@ function read(): Profile[] {
 export const profiles = {
   list: (): Profile[] => read(),
   async save(p: Omit<Profile, "hasSecret">, secret: string): Promise<void> {
-    if (secret) await SecureStore.setItemAsync(secretKey(p.id), secret);
-    else await SecureStore.deleteItemAsync(secretKey(p.id));
+    if (secret) await secretStore.set(secretKey(p.id), secret);
+    else await secretStore.del(secretKey(p.id));
     const next = read().filter((x) => x.id !== p.id);
     next.push({ ...p, hasSecret: !!secret });
     kv.set(LIST_KEY, JSON.stringify(next));
   },
   async remove(id: string): Promise<void> {
-    await SecureStore.deleteItemAsync(secretKey(id));
+    await secretStore.del(secretKey(id));
     kv.set(LIST_KEY, JSON.stringify(read().filter((x) => x.id !== id)));
     if (kv.get(ACTIVE_KEY) === id) kv.del(ACTIVE_KEY);
   },
   async getSecret(id: string): Promise<string> {
-    return (await SecureStore.getItemAsync(secretKey(id))) ?? "";
+    return (await secretStore.get(secretKey(id))) ?? "";
   },
   activeId: (): string | null => kv.get(ACTIVE_KEY),
   setActive: (id: string): void => kv.set(ACTIVE_KEY, id),
