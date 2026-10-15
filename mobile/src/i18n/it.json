@@ -109,7 +109,10 @@
     "authError": "Segreto richiesto o errato (serve per accessi non da localhost)",
     "unreachable": "Server non raggiungibile — Tailscale attivo?",
     "deleteTitle": "Elimina server",
-    "deleteConfirm": "Eliminare {{name}}?"
+    "deleteConfirm": "Eliminare {{name}}?",
+    "scan": "Scansiona codice",
+    "scanFailed": "Codice non valido",
+    "pasteCode": "Incolla il codice"
   },
   "settings": {
     "title": "Impostazioni",
@@ -125,6 +128,8 @@
     "unlockReason": "Conferma per disattivare il blocco",
     "server": "Server",
     "changeServer": "Cambia server",
+    "pairPhone": "Collega un telefono",
+    "pairHint": "Vale 5 minuti.",
     "about": "Informazioni",
     "appName": "nanobot mobile",
     "version": "Versione {{v}}",
