@@ -14,8 +14,14 @@ from nanobot.webui.settings_runtime import (
 )
 
 
+def _validate(data: dict) -> Config:
+    # Config() resolves the lazy tool-config refs first; bare model_validate depends on import order.
+    Config()
+    return Config.model_validate(data)
+
+
 def _config(**presets: str) -> Config:
-    return Config.model_validate(
+    return _validate(
         {
             "model_presets": {
                 name: {"model": model, "provider": "openai"} for name, model in presets.items()
@@ -51,7 +57,7 @@ def test_update_rejects_unknown_preset():
 
 def test_unknown_preset_in_config_file_is_rejected():
     with pytest.raises(ValueError):
-        Config.model_validate({"agents": {"defaults": {"subagent_model_preset": "ghost"}}})
+        _validate({"agents": {"defaults": {"subagent_model_preset": "ghost"}}})
 
 
 def test_preset_rename_and_delete_follow_the_choice():
@@ -70,7 +76,7 @@ def test_preset_rename_and_delete_follow_the_choice():
     settings_models.delete_model_configuration(config, {"name": ["fast"]})
     assert config.agents.defaults.subagent_model_preset is None
     assert config.agents.defaults.dream.model_override is None
-    Config.model_validate(config.model_dump(by_alias=True))  # still a valid config after delete
+    _validate(config.model_dump(by_alias=True))  # still a valid config after delete
 
 
 def test_runtime_pick():

@@ -937,7 +937,11 @@ def _run_gateway(
                     )
                     return response.content if response else ""
 
-                await kanban_dispatch_loop(_kanban_run_turn, stop=shutdown_event)
+                await kanban_dispatch_loop(
+                    _kanban_run_turn,
+                    stop=shutdown_event,
+                    enabled=lambda: config.agents.defaults.kanban_dispatch,
+                )
 
             # Re-read once on first admission to close the watcher subscription window.
             agent.runtime_resolver.invalidate()
