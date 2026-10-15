@@ -1152,40 +1152,36 @@ class KanbanStore:
         return message
 
     def take_wake(self) -> dict[str, Any] | None:
+        """Oldest pending wake. It stays queued until finish_wake: a crash mid-turn retries it."""
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM wakes ORDER BY created_at_ms ASC LIMIT 1"
             ).fetchone()
-            if row is None:
-                return None
-            conn.execute("DELETE FROM wakes WHERE id = ?", (row["id"],))
-            return _row_dict(row)
+            return _row_dict(row) if row is not None else None
+
+    def finish_wake(self, wake_id: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM wakes WHERE id = ?", (wake_id,))
 
     def requeue_wake(self, wake: dict[str, Any], attempts: int) -> bool:
-        """Requeue a wake with updated attempts. Returns True if dropped (not requeued)."""
-        if attempts > 2:
-            return True
-        wake_id = str(wake["id"])
+        """Retry a failed wake later (back of the queue). Returns True if dropped instead."""
         with self._lock, self._connect() as conn:
+            if attempts > 2:
+                conn.execute("DELETE FROM wakes WHERE id = ?", (wake["id"],))
+                return True
             conn.execute(
-                """
-                INSERT INTO wakes (
-                    id, bot_id, board_id, message_id, content, hop_count,
-                    attempts, created_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    wake_id,
-                    wake["bot_id"],
-                    wake["board_id"],
-                    wake["message_id"],
-                    wake["content"],
-                    wake["hop_count"],
-                    attempts,
-                    wake["created_at_ms"],
-                ),
+                "UPDATE wakes SET attempts = ?, created_at_ms = ? WHERE id = ?",
+                (attempts, _now_ms(), wake["id"]),
             )
         return False
+
+    def recover_interrupted(self) -> list[str]:
+        """After a gateway restart, no turn is running: count each 'running' task as a failed attempt."""
+        with self._lock, self._connect() as conn:
+            ids = [str(r["id"]) for r in conn.execute("SELECT id FROM tasks WHERE status = 'running'").fetchall()]
+        for task_id in ids:
+            self.record_failure(task_id, "interrupted by a gateway restart")
+        return ids
 
     def board_snapshot(self, board_id: str) -> dict[str, Any]:
         with self._lock, self._connect() as conn:

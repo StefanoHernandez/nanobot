@@ -99,6 +99,8 @@ async def dispatch_once(
         )
     except Exception:
         _fail_wake(store, wake, bot_id, board_id)
+        return
+    store.finish_wake(wake_id)
 
 
 def _fail_running_task(store: KanbanStore, task_id: str) -> None:
@@ -145,7 +147,10 @@ async def kanban_dispatch_loop(
     while not stop.is_set():
         try:
             if enabled() and (store is not None or kanban_db_path().exists()):
-                store = store or KanbanStore()
+                if store is None:
+                    store = KanbanStore()
+                    if recovered := store.recover_interrupted():
+                        logger.info("kanban: {} interrupted task(s) requeued after restart", len(recovered))
                 await dispatch_once(store, run_turn)
         except Exception:
             logger.error("kanban dispatch failed")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from nanobot.ext import kanban as kb
@@ -165,3 +167,33 @@ async def test_wake_dropped_after_three_failures(store_path):
         and m["content"] == "Non sono riuscito a rispondere."
     ]
     assert len(failure_msgs) == 1
+
+
+@pytest.mark.asyncio
+async def test_wake_survives_a_turn_cut_by_shutdown(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    store.post_message("main", "@coder hello")
+
+    async def run_turn(_session_key: str, _content: str) -> str:
+        raise asyncio.CancelledError  # gateway stopping mid-turn
+
+    with pytest.raises(asyncio.CancelledError):
+        await dispatch.dispatch_once(store, run_turn, now_ms=0)
+    assert _wake_count(store) == 1  # retried after restart, not lost
+
+
+def test_running_task_is_requeued_after_restart(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "t1", assignee="coder")
+    assert store.claim_next_ready_task(0) is not None
+    assert store.get_task_detail("t1")["task"]["status"] == "running"
+
+    restarted = _store(store_path)
+    assert restarted.recover_interrupted() == ["t1"]
+    task = restarted.get_task_detail("t1")["task"]
+    assert task["status"] == "ready"
+    assert task["retries"] == 1
