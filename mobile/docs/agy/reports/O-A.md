@@ -102,3 +102,103 @@ Ran all test suites.
 ```text
 (Clean exit with code 0 - no errors or warnings reported)
 ```
+
+---
+
+# O-A-fix1: Review Fixes (Print CSP, Revoke-Self, Gallery Version)
+
+- **Branch:** `agy/O-A` (built on Claude commit `0b885998`)
+- **Verification:**
+  - `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest`: PASS (85 test suites, 694 passed, 0 failed)
+  - `npx tsc --noEmit`: PASS (0 errors)
+- **Focused Test Suite:** `mobile/test/screens/o-a.test.tsx` (17 passed, 0 failed)
+
+## Files Touched
+1. `mobile/src/screens/viewer/exportArtifact.ts`:
+   - `printCsp`: helper generating CSP policy; when `scripts === false`, sets `script-src 'none'`; when `scripts === true`, keeps scripts without network (`connect-src 'none'`).
+   - `printDocument`: added `options?: PrintDocumentOptions` (`{ scripts?: boolean }`).
+   - Parses the first real `<head>` that occurs before `<body>`. If found, injects the CSP. If `<html` is present without a real `<head>` before `<body>`, inserts `<head>${csp}</head>` before `<body>` or after `<html>`. Otherwise wraps.
+2. `mobile/src/screens/viewer/readingPages.ts`:
+   - `markdownToPrintHtml`: removed pre-sanitization pass on raw markdown so that code fences and prose examples are preserved. Calls `printDocument(safe, { scripts: false })` where CSP acts as the real guard.
+   - `stripDangerousHtml`: extracts `<pre>` code blocks before tag stripping and restores them after, preserving code examples with `<script>` and `onclick=`.
+3. `mobile/src/screens/viewer/FileViewer.tsx`:
+   - Added comment explaining why `artifactStore.set` effect is kept with `opened.id` check.
+   - Added comment on full HTML artifacts keeping scripts without network, calling `printDocument(body, { scripts: true })`.
+4. `mobile/src/screens/settings/DevicesCard.tsx`:
+   - Removed `getStoredPhoneDeviceId` guess chain.
+   - Uses `pairedDevice.get(activeProfileId)` to identify current device and show `devices.revokeSelf`.
+5. `mobile/src/screens/connect/ConnectScreen.tsx`:
+   - `confirmDelete`: calls `pairedDevice.clear(toDelete.id)` on profile deletion.
+6. `mobile/src/screens/gallery/GalleryScreen.tsx`:
+   - `resolveArtifactForUpload`: strictly compares `opened.id === artifact.id`. If different or not matched, saves `latestArtifactVersion(artifact)`.
+7. `mobile/test/screens/o-a.test.tsx`:
+   - Added tests for markdown print CSP (`script-src 'none'`), fenced code block preservation with `<script>` and `onclick=`, HTML artifact print keeping `<script>` without network, first real `<head>` injection vs wrapping, `pairedDevice.get`/`set`/`clear` in `DevicesCard` and `ConnectScreen`, and gallery saving latest version when viewing a different artifact.
+
+## Mapping of Brief Items to Implementation
+
+| Item | Requirement | Implementation Details | File:Line |
+|---|---|---|---|
+| **1. Markdown → PDF CSP** | `printDocument(html, { scripts: false })` with `script-src 'none'` | `printCsp(false)` generates `script-src 'none'`; `markdownToPrintHtml` calls `printDocument(safe, { scripts: false })` | `mobile/src/screens/viewer/exportArtifact.ts:21-37,44-46`<br>`mobile/src/screens/viewer/readingPages.ts:105-109` |
+| **1. Remove raw markdown strip** | Remove `stripDangerousHtml(text)` before marked; preserve code fences | `markdownToPrintHtml` passes raw markdown directly to `marked.parse`; `stripDangerousHtml` stashes `<pre>` blocks before sanitizing HTML | `mobile/src/screens/viewer/readingPages.ts:88-109` |
+| **1. Full HTML artifacts** | Keep scripts, no network, with code comment | Comment added; `printDocument(body, { scripts: true })` called | `mobile/src/screens/viewer/FileViewer.tsx:357-358` |
+| **1. Inject CSP into first real `<head>`** | Parse `<head\b` before `<body\b`, otherwise wrap | `/<head\b[^>]*>/i.exec` compared against `/<body\b[^>]*>/i.exec` index before injecting; wraps if missing | `mobile/src/screens/viewer/exportArtifact.ts:48-70` |
+| **2. Revoke-self without guessing** | Delete guess chain; use `pairedDevice.get(activeProfileId)` | Deleted `getStoredPhoneDeviceId`; uses `pairedDevice.get(activeProfileId)` | `mobile/src/screens/settings/DevicesCard.tsx:10,60-63` |
+| **2. Clear paired device on profile delete** | `ConnectScreen.tsx` `confirmDelete` calls `pairedDevice.clear(id)` | Added `pairedDevice.clear(toDelete.id)` | `mobile/src/screens/connect/ConnectScreen.tsx:118` |
+| **3. Gallery viewed version strict match** | Strict `opened.id === artifact.id` comparison; fallback to latest version | Compares `opened.id === artifact.id`; falls back to `latestArtifactVersion(artifact)` when differing | `mobile/src/screens/gallery/GalleryScreen.tsx:387-400` |
+| **3. FileViewer effect comment** | Add comment explaining why `artifactStore.set` effect is kept | Explanatory comment added; guarded by `opened.id` | `mobile/src/screens/viewer/FileViewer.tsx:139-148` |
+| **4. Normal text in readingPages** | Regex doesn't touch normal text | Covered by removing raw-markdown strip pass and stashing code blocks in `stripDangerousHtml` | `mobile/src/screens/viewer/readingPages.ts:88-109` |
+
+## What Could Not Be Verified
+- As in the initial task, execution on physical Android/iOS hardware or a live nanobot backend was not run.
+- All requirements verified via automated Jest unit & integration tests (`mobile/test/screens/o-a.test.tsx` 17/17 passing; full suite 85/85 passing) and TypeScript compiler (`tsc --noEmit`).
+
+## Raw Outputs
+
+### `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest test/screens/o-a.test.tsx`
+```text
+PASS test/screens/o-a.test.tsx
+  O-A Task 1: Network permission is per version & fixError cleared
+    ✓ allowing network on v1, tapping next version resets network and clears fixError (247 ms)
+  O-A Task 2: PDF export & Markdown print sanitization
+    ✓ markdown print: CSP contains script-src 'none' (17 ms)
+    ✓ a fenced code block containing <script> and onclick= survives in the printed HTML (escaped by marked) (1 ms)
+    ✓ an HTML artifact print keeps its <script> and has connect-src 'none'
+    ✓ injects CSP into the first real <head> only (parse before <body), otherwise wraps (1 ms)
+    ✓ markdownToPrintHtml strips <svg/onload=...> and <img/src=x/onerror=...> (3 ms)
+  O-A Task 3: Profile switch guards against stale server responses
+    ✓ ProjectDetailScreen drops response if profile switched during load (4 ms)
+    ✓ KanbanScreen drops snapshot if profile switched during load (11 ms)
+    ✓ DevicesCard drops device list if profile switched during load (1 ms)
+  O-A Task 4: Saving viewed version & conflict overwrite dialog
+    ✓ saves viewed version (not latest), handles file_exists with confirm dialog and retry with overwrite (46 ms)
+    ✓ view artifact A at v1, then save gallery item B -> B's latest version is uploaded (24 ms)
+  O-A Task 5: Revoking this phone warning
+    ✓ shows devices.revokeSelf warning when revoking this phone (matching stored id via pairedDevice.get) (6 ms)
+    ✓ skips warning if device id does not match or pairedDevice.get has no id (4 ms)
+    ✓ ConnectScreen confirmDelete calls pairedDevice.clear(id) (32 ms)
+  O-A Task 6: Viewer libraries bundle verification and test hooks
+    ✓ setViewerLibForTest and clearViewerLibsForTest work correctly
+    ✓ Vega-Lite real bundle is non-empty, defines vegaLite, and chart shell embeds it (2 ms)
+    ✓ Leaflet real bundle is non-empty, defines global L, and map shell embeds it (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       17 passed, 17 total
+Snapshots:   0 total
+Time:        1.602 s, estimated 2 s
+Ran all test suites matching /test\/screens\/o-a.test.tsx/i.
+```
+
+### Full Test Suite (`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest`)
+```text
+Test Suites: 85 passed, 85 total
+Tests:       694 passed, 694 total
+Snapshots:   0 total
+Time:        7.646 s
+Ran all test suites.
+```
+
+### `npx tsc --noEmit`
+```text
+(Clean exit with code 0 - no errors or warnings reported)
+```
+

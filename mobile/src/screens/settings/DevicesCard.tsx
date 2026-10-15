@@ -7,24 +7,11 @@ import { Button, Dialog, ListItem, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Head } from "./common";
 import { sessionStore } from "../../state/sessionStore";
-import { kv } from "../../platform/storage";
+import { pairedDevice } from "../../core/pairing";
 
 function formatLastSeen(secs: number | null, lang: string, neverLabel: string): string {
   if (secs == null) return neverLabel;
   return new Intl.DateTimeFormat(lang, { dateStyle: "short", timeStyle: "short" }).format(new Date(secs * 1000));
-}
-
-function getStoredPhoneDeviceId(session?: NanobotSession): string | null {
-  if (session && (session as any).deviceId) return (session as any).deviceId;
-  if (session && (session as any).device_id) return (session as any).device_id;
-  const p = sessionStore?.getState ? sessionStore.getState()?.profile : null;
-  if (p && (p as any).deviceId) return (p as any).deviceId;
-  if (p && (p as any).device_id) return (p as any).device_id;
-  if (p?.id) {
-    const val = kv.get(`device.id.${p.id}`) ?? kv.get(`device_id.${p.id}`);
-    if (val) return val;
-  }
-  return kv.get("device.id") ?? kv.get("device_id") ?? kv.get("paired_device_id") ?? null;
 }
 
 export function DevicesCard({ session }: { session: NanobotSession }) {
@@ -84,7 +71,8 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   if (phase === "404" || phase === "loading") return null;
 
   const live = devices.filter((d) => d.revoked !== true);
-  const storedId = getStoredPhoneDeviceId(session);
+  const activeProfileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
+  const storedId = activeProfileId ? pairedDevice.get(activeProfileId) : null;
   const isRevokingSelf = Boolean(storedId && revokeTarget && revokeTarget.id === storedId);
 
   return (

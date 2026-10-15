@@ -386,13 +386,17 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
 
   const resolveArtifactForUpload = (artifact: Artifact): Artifact => {
     const opened = artifactStore.get();
-    if (opened && opened.index != null && artifact.versions[opened.index]) {
-      const isSameArtifact = !opened.id || opened.id === artifact.id;
-      if (isSameArtifact) {
-        return { ...artifact, versions: [artifact.versions[opened.index]] };
-      }
+    if (
+      opened &&
+      opened.id &&
+      opened.id === artifact.id &&
+      opened.index != null &&
+      artifact.versions[opened.index]
+    ) {
+      return { ...artifact, versions: [artifact.versions[opened.index]] };
     }
-    return artifact;
+    const latest = latestArtifactVersion(artifact);
+    return latest ? { ...artifact, versions: [latest] } : artifact;
   };
 
   const handleConfirmSaveToProject = async (project: Project) => {

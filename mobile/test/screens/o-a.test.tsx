@@ -228,27 +228,48 @@ describe("O-A Task 1: Network permission is per version & fixError cleared", () 
 });
 
 describe("O-A Task 2: PDF export & Markdown print sanitization", () => {
-  test("printDocument injects viewerCsp(false, false) into head", () => {
-    const csp = viewerCsp(false, false);
+  test("markdown print: CSP contains script-src 'none'", () => {
+    const res = markdownToPrintHtml("# Simple Title\n\nSome body text");
+    expect(res).toContain("script-src 'none'");
+    expect(res).toContain("connect-src 'none'");
+  });
 
-    // Fragment without head or html
-    const fragment = "<h1>Report</h1>";
-    const printedFragment = printDocument(fragment);
-    expect(printedFragment).toContain(csp);
-    expect(printedFragment).toContain("<head>" + csp);
+  test("a fenced code block containing <script> and onclick= survives in the printed HTML (escaped by marked)", () => {
+    const raw = "```html\n<script>alert(1)</script>\n<button onclick=\"doSomething()\">Click</button>\n```";
+    const res = markdownToPrintHtml(raw);
+    expect(res).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(res).toContain("onclick=");
+    expect(res).toContain("&lt;button onclick=");
+  });
 
-    // Full HTML document with existing head
-    const fullDoc = "<!DOCTYPE html><html><head><title>Test</title></head><body><p>Hello</p></body></html>";
-    const printedFull = printDocument(fullDoc);
-    expect(printedFull).toContain("<head>" + csp);
-    expect(printedFull).toContain("connect-src 'none'");
-    expect(printedFull).toContain("img-src data: blob:");
-    expect(printedFull).not.toContain("img-src data: blob: https:");
+  test("an HTML artifact print keeps its <script> and has connect-src 'none'", () => {
+    const fullDoc = "<!DOCTYPE html><html><head><title>Vega Chart</title></head><body><script>const x = 1;</script></body></html>";
+    const printed = printDocument(fullDoc, { scripts: true });
+    expect(printed).toContain("<script>const x = 1;</script>");
+    expect(printed).toContain("connect-src 'none'");
+    expect(printed).toContain("script-src 'unsafe-inline' 'unsafe-eval'");
+  });
 
-    // HTML document without head
-    const docNoHead = "<html><body><p>No head</p></body></html>";
-    const printedNoHead = printDocument(docNoHead);
-    expect(printedNoHead).toContain("<head>" + csp + "</head>");
+  test("injects CSP into the first real <head> only (parse before <body), otherwise wraps", () => {
+    // 1. First real head before body
+    const docWithHead = "<html><head><title>Doc</title></head><body><p>Text with fake <head> tag</p></body></html>";
+    const printed1 = printDocument(docWithHead);
+    // CSP should be injected right after <head>
+    expect(printed1).toContain("<head><meta http-equiv=\"Content-Security-Policy\"");
+    // And should not be duplicated after fake <head>
+    expect(printed1.indexOf("<meta http-equiv=\"Content-Security-Policy\"")).toBeLessThan(printed1.indexOf("<body>"));
+
+    // 2. Head after body is ignored and document is wrapped/injected before body
+    const docHeadAfterBody = "<html><body><p>First <head> is inside body</p></body></html>";
+    const printed2 = printDocument(docHeadAfterBody);
+    expect(printed2).toContain("<head><meta http-equiv=\"Content-Security-Policy\"");
+    expect(printed2.indexOf("<meta http-equiv=\"Content-Security-Policy\"")).toBeLessThan(printed2.indexOf("<body>"));
+
+    // 3. Raw fragment without html/head is wrapped
+    const fragment = "<h1>Fragment</h1>";
+    const printed3 = printDocument(fragment);
+    expect(printed3).toContain("<!DOCTYPE html><html><head><meta http-equiv=\"Content-Security-Policy\"");
+    expect(printed3).toContain("<body><h1>Fragment</h1></body></html>");
   });
 
   test("markdownToPrintHtml strips <svg/onload=...> and <img/src=x/onerror=...>", () => {
@@ -263,7 +284,7 @@ describe("O-A Task 2: PDF export & Markdown print sanitization", () => {
     expect(result).not.toContain("onload");
     expect(result).not.toContain("onerror");
     expect(result).not.toMatch(/<script\b/i);
-    expect(result).toContain(viewerCsp(false, false));
+    expect(result).toContain("script-src 'none'");
   });
 });
 
@@ -537,11 +558,103 @@ describe("O-A Task 4: Saving viewed version & conflict overwrite dialog", () => 
     expect(writtenFile?.content).not.toContain(v2Code);
     unmount();
   });
+
+  test("view artifact A at v1, then save gallery item B -> B's latest version is uploaded", async () => {
+    const key = "websocket:c2";
+    const session = fakeSession("p1");
+    sessionStore.setState({
+      profile: { id: "p1", baseUrl: "https://srv.test" } as any,
+      session,
+      state: "open",
+    });
+
+    const bV1Code = "<h1>B Version 1</h1>";
+    const bV2Code = "<h1>B Version 2</h1>";
+
+    threadStore.setState({
+      threads: {
+        [key]: {
+          messages: [
+            {
+              id: "m1",
+              role: "assistant",
+              content: `\`\`\`html id=artB title="Artifact B"\n${bV1Code}\n\`\`\``,
+              createdAt: 100,
+            } as never,
+            {
+              id: "m2",
+              role: "assistant",
+              content: `\`\`\`html id=artB title="Artifact B"\n${bV2Code}\n\`\`\``,
+              createdAt: 200,
+            } as never,
+          ],
+          running: false,
+          model: null,
+          preset: null,
+          notices: [],
+          draft: "",
+          loaded: true,
+          stopped: false,
+          sendError: null,
+          uploading: false,
+          pendingFiles: [],
+          forkBoundary: null,
+          temporary: false,
+        },
+      },
+    });
+
+    // Currently viewed artifact in store is artA at version 0 (v1)
+    artifactStore.set("<h1>Artifact A</h1>", "preview.html", {
+      id: "artA",
+      title: "Artifact A",
+      versions: [{ kind: "html", code: "<h1>Artifact A</h1>", title: "v1" }],
+      index: 0,
+    });
+
+    jest.spyOn(projectsApi, "listProjects").mockResolvedValue({
+      projects: [{ id: "proj-1", name: "Demo", path: "/demo", created_at: 1, updated_at: 1, file_count: 0, size_bytes: 0 }],
+    });
+
+    const uploadSpy = jest.spyOn(projectsApi, "uploadProjectFile").mockResolvedValueOnce({
+      file: { path: "artifact-b.html", size: 10, modified_at: 1 },
+    });
+
+    const { unmount } = await renderWithTheme(<GalleryScreen chatKey={key} />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole("tab", { name: "Artifacts" }));
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText("Save to project"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("gallery-save-project-row")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("gallery-save-project-row"));
+    });
+
+    await waitFor(() => {
+      expect(uploadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    // The written file should contain artifact B's latest version (bV2Code), NOT bV1Code
+    const uploadedName = uploadSpy.mock.calls[0][2];
+    const writtenFile = writtenFiles.find((f) => f.name === uploadedName);
+    expect(writtenFile).toBeTruthy();
+    expect(writtenFile?.content).toContain(bV2Code);
+    expect(writtenFile?.content).not.toContain(bV1Code);
+    unmount();
+  });
 });
 
 describe("O-A Task 5: Revoking this phone warning", () => {
-  test("shows devices.revokeSelf warning when revoking this phone (matching stored id)", async () => {
-    kv.set("device.id", "dev-this-phone");
+  test("shows devices.revokeSelf warning when revoking this phone (matching stored id via pairedDevice.get)", async () => {
+    pairingApi.pairedDevice.set("p1", "dev-this-phone");
 
     const session = {
       ...fakeSession("p1"),
@@ -568,8 +681,8 @@ describe("O-A Task 5: Revoking this phone warning", () => {
     unmount();
   });
 
-  test("skips warning if device id does not match or no stored id", async () => {
-    kv.del("device.id");
+  test("skips warning if device id does not match or pairedDevice.get has no id", async () => {
+    pairingApi.pairedDevice.clear("p1");
 
     const session = {
       ...fakeSession("p1"),
@@ -593,6 +706,36 @@ describe("O-A Task 5: Revoking this phone warning", () => {
 
     // Warning must NOT be present
     expect(screen.queryByText(/È questo telefono|This is this phone/i)).toBeNull();
+    unmount();
+  });
+
+  test("ConnectScreen confirmDelete calls pairedDevice.clear(id)", async () => {
+    pairingApi.pairedDevice.set("p-to-delete", "dev-123");
+    expect(pairingApi.pairedDevice.get("p-to-delete")).toBe("dev-123");
+
+    const profilesModule = require("../../src/core/profiles");
+    jest.spyOn(profilesModule.profiles, "list").mockReturnValue([
+      { id: "p-to-delete", name: "Server to delete", baseUrl: "https://del.test" },
+    ]);
+    const removeSpy = jest.spyOn(profilesModule.profiles, "remove").mockResolvedValue(undefined);
+
+    const { ConnectScreen } = require("../../src/screens/connect/ConnectScreen");
+    const { unmount } = await renderWithTheme(<ConnectScreen />);
+
+    // Long press on profile item to open delete dialog
+    const item = screen.getByText("Server to delete");
+    await act(async () => {
+      fireEvent(item, "longPress");
+    });
+
+    // Confirm delete
+    const deleteBtn = screen.getByRole("button", { name: "Delete" });
+    await act(async () => {
+      fireEvent.press(deleteBtn);
+    });
+
+    expect(removeSpy).toHaveBeenCalledWith("p-to-delete");
+    expect(pairingApi.pairedDevice.get("p-to-delete")).toBeNull();
     unmount();
   });
 });
