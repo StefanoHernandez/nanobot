@@ -614,7 +614,8 @@ class GatewayHTTPHandler:
         # Fork extensions (nanobot/ext): one hook, imported here so upstream import edits never conflict
         from nanobot.ext.projects import dispatch_projects_get
 
-        response = dispatch_projects_get(self, request, got)
+        # Thread: project listings and file reads (up to 32 MB) must not block the event loop.
+        response = await asyncio.to_thread(dispatch_projects_get, self, request, got)
         if response is not None:
             return response
 
