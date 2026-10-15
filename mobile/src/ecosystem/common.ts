@@ -45,39 +45,60 @@ export type PollingOpts = {
   tick: () => void | Promise<void>;
   enabled: boolean;
   onExpire?: () => void;
+  background?: boolean;
 };
 
-/** Interval poll: skips while the app is backgrounded, stops at expiry or unmount, never overlaps ticks. */
+/** Interval poll: skips while the app is backgrounded (unless background is true), stops at expiry or unmount, never overlaps ticks. */
 export function usePolling(o: PollingOpts): void {
   const ref = useRef(o);
   ref.current = o;
-  const { enabled, intervalMs, expiresAtMs } = o;
+  const { enabled, intervalMs, expiresAtMs, background } = o;
   useEffect(() => {
     if (!enabled) return;
     let stopped = false;
     let busy = false;
     let active = AppState.currentState !== "background" && AppState.currentState !== "inactive";
-    const sub = AppState.addEventListener("change", (s) => void (active = s === "active"));
     const expired = () => expiresAtMs !== undefined && Date.now() >= expiresAtMs;
-    const id = setInterval(async () => {
-      if (stopped || busy) return;
-      if (expired()) {
-        stopped = true;
-        clearInterval(id);
-        return ref.current.onExpire?.();
+
+    let id: ReturnType<typeof setInterval> | null = null;
+
+    const startTimer = () => {
+      if (id) clearInterval(id);
+      if (stopped) return;
+      const ms = !active && ref.current.background ? 15_000 : ref.current.intervalMs;
+      id = setInterval(async () => {
+        if (stopped || busy) return;
+        if (expired()) {
+          stopped = true;
+          if (id) clearInterval(id);
+          return ref.current.onExpire?.();
+        }
+        if (!active && !ref.current.background) return;
+        busy = true;
+        try {
+          await ref.current.tick();
+        } finally {
+          busy = false;
+        }
+      }, ms);
+    };
+
+    const sub = AppState.addEventListener("change", (s) => {
+      const nextActive = s === "active";
+      if (nextActive !== active) {
+        active = nextActive;
+        if (ref.current.background) {
+          startTimer();
+        }
       }
-      if (!active) return;
-      busy = true;
-      try {
-        await ref.current.tick();
-      } finally {
-        busy = false;
-      }
-    }, intervalMs);
+    });
+
+    startTimer();
+
     return () => {
       stopped = true;
-      clearInterval(id);
+      if (id) clearInterval(id);
       sub.remove();
     };
-  }, [enabled, intervalMs, expiresAtMs]);
+  }, [enabled, intervalMs, expiresAtMs, background]);
 }
