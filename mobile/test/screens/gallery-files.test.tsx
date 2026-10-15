@@ -9,7 +9,7 @@ import { sessionStore } from "../../src/state/sessionStore";
 import { fakeSession } from "../state/fake";
 import { GalleryScreen, collectThreadFiles, collectThreadImages } from "../../src/screens/gallery/GalleryScreen";
 import { ThreadScreen } from "../../src/screens/thread/ThreadScreen";
-import { downloadMedia } from "../../src/screens/thread/media/media";
+import { downloadMedia, openLocal, shareMedia } from "../../src/screens/thread/media/media";
 import type { UIMessage } from "@/lib/types";
 
 jest.mock("expo-router", () => ({
@@ -44,6 +44,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(threadStore.getState(), "load").mockImplementation(async () => {});
   threadStore.setState({ threads: {} });
   sessionStore.setState({
     session: fakeSession().session,
@@ -151,6 +152,72 @@ describe("F-A: collectThreadFiles", () => {
       { url: "https://example.com/bot-photo.jpg", name: "bot-photo.jpg" },
     ]);
   });
+
+  test("dedupe edge case: does not lose an image whose URL was first seen as a non-image file", () => {
+    const messages: UIMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "file first",
+        createdAt: 1000,
+        media: [{ url: "/shared.png", name: "shared.png", kind: "file" }],
+      } as UIMessage,
+      {
+        id: "m2",
+        role: "user",
+        content: "image later",
+        createdAt: 2000,
+        images: [{ url: "/shared.png", name: "shared.png" }],
+      } as UIMessage,
+    ];
+
+    const files = collectThreadFiles(messages, "https://example.com");
+    const images = collectThreadImages(messages, "https://example.com");
+    expect(images).toEqual([
+      { url: "https://example.com/shared.png", name: "shared.png" },
+    ]);
+    expect(files.some((f) => f.kind === "file" && f.url === "https://example.com/shared.png")).toBe(true);
+    expect(files.some((f) => f.kind === "image" && f.url === "https://example.com/shared.png")).toBe(true);
+  });
+
+  test("roles: only user maps to user, assistant, tool and system all map to assistant", () => {
+    const messages: UIMessage[] = [
+      {
+        id: "m1",
+        role: "user",
+        content: "user file",
+        createdAt: 1000,
+        media: [{ url: "/f1.pdf", name: "f1.pdf", kind: "file" }],
+      } as UIMessage,
+      {
+        id: "m2",
+        role: "assistant",
+        content: "assistant file",
+        createdAt: 2000,
+        media: [{ url: "/f2.pdf", name: "f2.pdf", kind: "file" }],
+      } as UIMessage,
+      {
+        id: "m3",
+        role: "tool" as never,
+        content: "tool file",
+        createdAt: 3000,
+        media: [{ url: "/f3.pdf", name: "f3.pdf", kind: "file" }],
+      } as UIMessage,
+      {
+        id: "m4",
+        role: "system" as never,
+        content: "system file",
+        createdAt: 4000,
+        media: [{ url: "/f4.pdf", name: "f4.pdf", kind: "file" }],
+      } as UIMessage,
+    ];
+
+    const files = collectThreadFiles(messages, "https://example.com");
+    expect(files[0].role).toBe("user");
+    expect(files[1].role).toBe("assistant");
+    expect(files[2].role).toBe("assistant");
+    expect(files[3].role).toBe("assistant");
+  });
 });
 
 describe("F-A: GalleryScreen with Files tab", () => {
@@ -236,6 +303,153 @@ describe("F-A: GalleryScreen with Files tab", () => {
       params: { uri: "file:///cache/media/specs.pdf", name: "specs.pdf" },
     });
   });
+
+  test("two quick presses on the same PDF row: downloadMedia called once, progress feedback shown, router.push called once", async () => {
+    const key = "websocket:chat-double-press";
+    threadStore.setState({
+      threads: {
+        [key]: {
+          messages: [
+            {
+              id: "m1",
+              role: "assistant",
+              content: "file",
+              createdAt: 100,
+              media: [{ url: "/doc.pdf", name: "doc.pdf", kind: "file" }],
+            } as never,
+          ],
+          running: false,
+          model: null,
+          preset: null,
+          notices: [],
+          draft: "",
+          loaded: true,
+          stopped: false,
+          sendError: null,
+          uploading: false,
+          pendingFiles: [],
+          forkBoundary: null,
+          temporary: false,
+        },
+      },
+    });
+
+    let finishDownload: (uri: string) => void = () => {};
+    (downloadMedia as jest.Mock).mockReturnValue(
+      new Promise<string>((resolve) => {
+        finishDownload = resolve;
+      }),
+    );
+
+    await wrap(<GalleryScreen chatKey={key} />);
+    const row = screen.getByLabelText(/doc\.pdf/i);
+
+    // Press twice quickly while download is in progress
+    await act(async () => {
+      fireEvent.press(row);
+      fireEvent.press(row);
+    });
+
+    // Progress feedback: shows ActivityIndicator in place of icon with label media.opening
+    expect(screen.getByLabelText(/opening/i)).toBeTruthy();
+
+    // Complete the download
+    await act(async () => {
+      finishDownload("file:///cache/media/doc.pdf");
+    });
+
+    expect(downloadMedia).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledTimes(1);
+  });
+
+  test("openLocal branch: file that viewer cannot show (.zip) calls openLocal and does not navigate", async () => {
+    const key = "websocket:chat-zip";
+    threadStore.setState({
+      threads: {
+        [key]: {
+          messages: [
+            {
+              id: "m1",
+              role: "assistant",
+              content: "archive",
+              createdAt: 100,
+              media: [{ url: "/archive.zip", name: "archive.zip", kind: "file" }],
+            } as never,
+          ],
+          running: false,
+          model: null,
+          preset: null,
+          notices: [],
+          draft: "",
+          loaded: true,
+          stopped: false,
+          sendError: null,
+          uploading: false,
+          pendingFiles: [],
+          forkBoundary: null,
+          temporary: false,
+        },
+      },
+    });
+
+    (downloadMedia as jest.Mock).mockResolvedValueOnce("file:///cache/media/archive.zip");
+
+    await wrap(<GalleryScreen chatKey={key} />);
+    const row = screen.getByLabelText(/archive\.zip/i);
+
+    await act(async () => {
+      fireEvent.press(row);
+    });
+
+    expect(downloadMedia).toHaveBeenCalledWith("https://example.com/archive.zip", "archive.zip");
+    expect(openLocal).toHaveBeenCalledWith("file:///cache/media/archive.zip", "zip");
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  test("share button calls shareMedia once and does not navigate", async () => {
+    const key = "websocket:chat-share";
+    threadStore.setState({
+      threads: {
+        [key]: {
+          messages: [
+            {
+              id: "m1",
+              role: "assistant",
+              content: "file",
+              createdAt: 100,
+              media: [{ url: "/shared.pdf", name: "shared.pdf", kind: "file" }],
+            } as never,
+          ],
+          running: false,
+          model: null,
+          preset: null,
+          notices: [],
+          draft: "",
+          loaded: true,
+          stopped: false,
+          sendError: null,
+          uploading: false,
+          pendingFiles: [],
+          forkBoundary: null,
+          temporary: false,
+        },
+      },
+    });
+
+    (downloadMedia as jest.Mock).mockResolvedValueOnce("file:///cache/media/shared.pdf");
+
+    await wrap(<GalleryScreen chatKey={key} />);
+    const shareBtns = screen.getAllByLabelText(/share|condividi/i);
+    const shareBtn = shareBtns[shareBtns.length - 1];
+
+    await act(async () => {
+      fireEvent.press(shareBtn);
+    });
+
+    expect(downloadMedia).toHaveBeenCalledWith("https://example.com/shared.pdf", "shared.pdf");
+    expect(shareMedia).toHaveBeenCalledWith("file:///cache/media/shared.pdf");
+    expect(router.push).not.toHaveBeenCalled();
+  });
 });
 
 describe("F-A: ThreadScreen header gallery button", () => {
@@ -270,7 +484,9 @@ describe("F-A: ThreadScreen header gallery button", () => {
     });
 
     await wrap(<ThreadScreen chatKey={key} onBack={() => {}} />);
-    expect(screen.getByLabelText(/gallery|media e file/i)).toBeTruthy();
+    const btn = screen.getByLabelText(/gallery|media and files|media e file/i);
+    expect(btn).toBeTruthy();
+    expect(btn.props.children[0].props.name).toBe("folder-multiple-image");
   });
 
   test("hides button when chat has no media at all", async () => {
@@ -303,6 +519,6 @@ describe("F-A: ThreadScreen header gallery button", () => {
     });
 
     await wrap(<ThreadScreen chatKey={key} onBack={() => {}} />);
-    expect(screen.queryByLabelText(/gallery|media e file/i)).toBeNull();
+    expect(screen.queryByLabelText(/gallery|media and files|media e file/i)).toBeNull();
   });
 });
