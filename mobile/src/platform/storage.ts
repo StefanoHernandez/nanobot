@@ -1,9 +1,6 @@
-export interface KV {
-  get(k: string): string | null;
-  set(k: string, v: string): void;
-  del(k: string): void;
-  keys(): string[];
-}
+import type { KV } from "./kv";
+
+export type { KV } from "./kv";
 
 type MmkvModule = typeof import("react-native-mmkv");
 
