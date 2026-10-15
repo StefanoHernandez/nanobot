@@ -356,7 +356,11 @@
     "openInBrowserTitle": "Open in browser?",
     "open": "Open",
     "cancel": "Cancel",
-    "lightPreview": "Light preview"
+    "lightPreview": "Light preview",
+    "openDocument": "Open as document",
+    "page": "Page {{current}} of {{total}}",
+    "prevPage": "Previous page",
+    "nextPage": "Next page"
   },
   "models": {
     "title": "Call order",

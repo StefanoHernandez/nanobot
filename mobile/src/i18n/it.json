@@ -356,7 +356,11 @@
     "openInBrowserTitle": "Aprire nel browser?",
     "open": "Apri",
     "cancel": "Annulla",
-    "lightPreview": "Anteprima leggera"
+    "lightPreview": "Anteprima leggera",
+    "openDocument": "Apri come documento",
+    "page": "Pagina {{current}} di {{total}}",
+    "prevPage": "Pagina precedente",
+    "nextPage": "Pagina successiva"
   },
   "models": {
     "title": "Ordine di chiamata",
