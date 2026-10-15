@@ -4,14 +4,18 @@ import { ChatDrawer } from "../../src/screens/chats/ChatDrawer";
 import { OfflineBanner } from "../../src/extras/OfflineBanner";
 import { SharePickerSheet } from "../../src/extras/SharePickerSheet";
 import { useTheme } from "../../src/ui/ThemeProvider";
+import { ApprovalCard } from "../../src/extras/ApprovalCard";
+import { useApprovalsPolling } from "../../src/extras/approvals";
 
 export default function MainLayout() {
   const { colors, font } = useTheme();
+  useApprovalsPolling();
   // Banner above the drawer: visible on Home and in threads (a thread has its own header; both sit below it).
   return (
     <View style={{ flex: 1 }}>
       <OfflineBanner />
       <SharePickerSheet />
+      <ApprovalCard />
       <Drawer
         drawerContent={(p) => <ChatDrawer onClose={() => p.navigation.closeDrawer()} />}
         screenOptions={{
