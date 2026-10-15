@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -32,6 +32,7 @@ import {
   type KanbanTask,
 } from "../../../ecosystem/kanban";
 import { useT } from "../../../i18n";
+import { sessionStore } from "../../../state/sessionStore";
 import { SettingsShell } from "../../settings/SettingsShell";
 import { Chips } from "../../settings/common";
 import { Button, Dialog, IconButton, TextField, goBackOr, toast } from "../../../ui/components";
@@ -65,14 +66,30 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
   const [botSaveBusy, setBotSaveBusy] = useState(false);
   const [deleteBotTarget, setDeleteBotTarget] = useState<KanbanBot | null>(null);
   const [deleteBotBusy, setDeleteBotBusy] = useState(false);
+  const genRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      genRef.current++;
+    };
+  }, []);
 
   const load = useCallback(async () => {
+    const currentGen = ++genRef.current;
+    const profileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
     try {
       const data = await fetchKanban(session, boardId);
+      if (!mountedRef.current || currentGen !== genRef.current) return;
+      if (sessionStore?.getState && sessionStore.getState()?.profile?.id !== profileId) return;
       setSnapshot(data);
       setBoardId(data.active_board.id);
       setPhase("ok");
     } catch (e) {
+      if (!mountedRef.current || currentGen !== genRef.current) return;
+      if (sessionStore?.getState && sessionStore.getState()?.profile?.id !== profileId) return;
       const status = (e as Error & { status?: number }).status;
       if (status === 404) {
         setSnapshot(null);

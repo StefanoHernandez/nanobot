@@ -89,14 +89,15 @@ function stripDangerousHtml(html: string): string {
   let out = html;
   out = out.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
   out = out.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*\/?>/gi, "");
-  out = out.replace(/\s(on[a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  out = out.replace(/[\s/]+(on[a-z0-9_-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
   out = out.replace(/\s(href|src)\s*=\s*("|')?\s*(javascript:|data:)[^"'>\s]*/gi, ' $1="#"');
   return out;
 }
 
 /** Full-document markdown as a sanitized HTML print payload for expo-print. */
 export function markdownToPrintHtml(text: string): string {
-  const raw = marked.parse(text, { async: false }) as string;
+  const strippedText = stripDangerousHtml(text);
+  const raw = marked.parse(strippedText, { async: false }) as string;
   const safe = stripDangerousHtml(raw);
   return printDocument(safe);
 }
