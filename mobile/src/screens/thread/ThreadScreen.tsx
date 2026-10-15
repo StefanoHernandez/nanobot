@@ -18,7 +18,7 @@ import { MessageList } from "./MessageList";
 import { SubagentsButton } from "./SubagentsSheet";
 import { ModelBadge } from "./ModelBadge";
 import { WorkspaceButton } from "./WorkspaceSheet";
-import { collectThreadImages } from "../gallery/GalleryScreen";
+import { collectThreadFiles } from "../gallery/GalleryScreen";
 
 export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () => void }) {
   const th = useTheme();
@@ -31,7 +31,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const last = messages[messages.length - 1];
   const face = faceStateOf(conn, running, !!last && last.kind === "trace", !!notices.some((n) => n.kind === "stream_error"));
 
-  const hasImages = React.useMemo(() => collectThreadImages(messages, "").length > 0, [messages]);
+  const hasFiles = React.useMemo(() => collectThreadFiles(messages, "").length > 0, [messages]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
@@ -48,9 +48,9 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
           </View>
         </View>
         {temporary ? <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{t("temporary.label")}</Text> : null}
-        {hasImages ? (
+        {hasFiles ? (
           <IconButton
-            icon="image-multiple-outline"
+            icon="folder-multiple-image"
             accessibilityLabel={t("gallery.open")}
             onPress={() => router.push(`/gallery/${encodeURIComponent(chatKey)}`)}
           />
