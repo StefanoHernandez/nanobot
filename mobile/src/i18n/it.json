@@ -149,6 +149,7 @@
       "models": "Modelli",
       "capabilities": "Funzionalità",
       "system": "Sistema",
+      "machine": "Macchina",
       "advanced": "Avanzate",
       "about": "Informazioni"
     },
@@ -980,5 +981,26 @@
   },
   "home": {
     "hello": "Ciao, sono {{name}}"
+  },
+  "machine": {
+    "gateway": "Gateway",
+    "noAccess": "Accesso negato",
+    "noErrors": "Nessun errore recente",
+    "cpu": "CPU",
+    "memory": "RAM",
+    "swap": "Swap",
+    "disk": "Disco",
+    "free": "liberi",
+    "temperature": "Temperatura",
+    "load": "Carico medio",
+    "cores": "{{count}} core",
+    "uptime": "Uptime macchina",
+    "gatewayUptime": "Uptime gateway",
+    "recentErrors": "Errori recenti",
+    "restart": "Riavvia gateway",
+    "restartHint": "Riavvia il processo nanobot sul server",
+    "restartConfirmTitle": "Riavvia gateway",
+    "restartConfirmMessage": "Vuoi davvero riavviare il processo gateway?",
+    "restartConfirm": "Riavvia"
   }
 }

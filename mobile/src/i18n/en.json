@@ -149,6 +149,7 @@
       "models": "Models",
       "capabilities": "Capabilities",
       "system": "System",
+      "machine": "Machine",
       "advanced": "Advanced",
       "about": "About"
     },
@@ -980,5 +981,26 @@
   },
   "home": {
     "hello": "Hi, I'm {{name}}"
+  },
+  "machine": {
+    "gateway": "Gateway",
+    "noAccess": "Access denied",
+    "noErrors": "No recent errors",
+    "cpu": "CPU",
+    "memory": "RAM",
+    "swap": "Swap",
+    "disk": "Disk",
+    "free": "free",
+    "temperature": "Temperature",
+    "load": "Load average",
+    "cores": "{{count}} cores",
+    "uptime": "Machine uptime",
+    "gatewayUptime": "Gateway uptime",
+    "recentErrors": "Recent errors",
+    "restart": "Restart gateway",
+    "restartHint": "Restart the nanobot process on the host",
+    "restartConfirmTitle": "Restart gateway",
+    "restartConfirmMessage": "Do you really want to restart the gateway process?",
+    "restartConfirm": "Restart"
   }
 }
