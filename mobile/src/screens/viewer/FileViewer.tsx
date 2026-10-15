@@ -127,7 +127,8 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const canFit = toolKind === "html";
   const canPng = toolKind === "svg" || toolKind === "mermaid";
   const canPdf = toolKind === "html" || toolKind === "svg";
-  const canNetwork = toolKind === "html" || toolKind === "svg" || toolKind === "mermaid" || toolKind === "map";
+  const canNetwork =
+    toolKind === "html" || toolKind === "svg" || toolKind === "mermaid" || toolKind === "map" || toolKind === "react";
 
   useEffect(() => {
     setNetwork(false);
@@ -157,6 +158,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
       kind === "mermaid" ||
       kind === "chart" ||
       kind === "map" ||
+      kind === "react" ||
       kind === "pdf" ||
       kind === "docx" ||
       kind === "pptx" ||
@@ -194,7 +196,14 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         if (active) setFileSize(size);
 
         if (isArtifact) {
-          if (kind === "html" || kind === "svg" || kind === "mermaid" || kind === "chart" || kind === "map") {
+          if (
+            kind === "html" ||
+            kind === "svg" ||
+            kind === "mermaid" ||
+            kind === "chart" ||
+            kind === "map" ||
+            kind === "react"
+          ) {
             if (size <= 2 * 1024 * 1024 || size > 10 * 1024 * 1024) {
               const text = await file.text();
               if (active) setContent(text);
@@ -273,7 +282,14 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     if (!canAsk || !session || sending.current) return;
     const previewKind =
       activeVersion?.kind ??
-      (kind === "svg" || kind === "mermaid" || kind === "chart" || kind === "map" || kind === "html" ? kind : "html");
+      (kind === "svg" ||
+      kind === "mermaid" ||
+      kind === "chart" ||
+      kind === "map" ||
+      kind === "react" ||
+      kind === "html"
+        ? kind
+        : "html");
     const text = artifactFixText({
       id: opened?.id || freshArtifactId(previewKind),
       kind: previewKind,
@@ -539,7 +555,14 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         );
       }
 
-      if (kind === "html" || kind === "svg" || kind === "mermaid" || kind === "chart" || kind === "map") {
+      if (
+        kind === "html" ||
+        kind === "svg" ||
+        kind === "mermaid" ||
+        kind === "chart" ||
+        kind === "map" ||
+        kind === "react"
+      ) {
         if (fileSize > 10 * 1024 * 1024 && !forcePreviewLargeText) {
           return (
             <View style={{ flex: 1 }}>

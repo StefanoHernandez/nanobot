@@ -1,11 +1,11 @@
 ---
 name: artifacts
-description: Give HTML, SVG, Mermaid, chart, and geojson map fences a stable id so a revision becomes the next version in the phone preview.
+description: Give HTML, SVG, Mermaid, chart, geojson map, and jsx/tsx React fences a stable id so a revision becomes the next version in the phone preview.
 ---
 
 # Artifacts
 
-When you write a fenced block the user can preview (`html`, `svg`, `mermaid`, `chart`, or `geojson`), put an id and a short title on the info line:
+When you write a fenced block the user can preview (`html`, `svg`, `mermaid`, `chart`, `geojson`, `jsx`, or `tsx`), put an id and a short title on the info line:
 
 ~~~
 ```html id=sales-dashboard title="Vendite"
@@ -51,6 +51,18 @@ Use a `geojson` fence. The body is one GeoJSON object (`Feature`, `FeatureCollec
     { "type": "Feature", "geometry": { "type": "Point", "coordinates": [12.5, 41.9] }, "properties": { "name": "Roma" } },
     { "type": "Feature", "geometry": { "type": "Point", "coordinates": [9.19, 45.46] }, "properties": { "name": "Milano" } }
   ]
+}
+```
+
+A later block with the same id is the next version.
+
+## React (jsx / tsx)
+
+Use a `jsx` or `tsx` fence. The body defines `function App()` and returns JSX. No `import`, no `require`, no `export`, no CDN. Remote `fetch` and images need the user to allow network for that preview.
+
+```jsx id=hello title="Saluto"
+function App() {
+  return <h1>Ciao</h1>;
 }
 ```
 

@@ -21,8 +21,8 @@ export function printDocument(body: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body>${body}</body></html>`;
 }
 
-const PREVIEW_NAME = /^preview\.(html|svg|mmd|vl|geojson)$/;
-const ARTIFACT_SOURCE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\.(html|svg|mmd|vl|geojson)$/;
+const PREVIEW_NAME = /^preview\.(html|svg|mmd|vl|geojson|react)$/;
+const ARTIFACT_SOURCE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\.(html|svg|mmd|vl|geojson|react)$/;
 /** About 2 MB of source. Larger previews are not written out for sharing. */
 const MAX_PREVIEW_CHARS = 2_000_000;
 
