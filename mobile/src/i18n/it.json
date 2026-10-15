@@ -55,6 +55,7 @@
     "unlock": "Sblocca",
     "unlockPrompt": "Sblocca nanobot",
     "shareFailed": "Impossibile creare la chat",
+    "shareTooLarge": "File troppo grande: {{name}}",
     "replyReady": "Risposta pronta",
     "offlineBanner": "Non raggiungibile — Tailscale attivo?",
     "reasoning": "Ragionamento",
@@ -748,7 +749,11 @@
     "pending": "In attesa",
     "paused": "In attesa — tocca per inviare",
     "cancel": "Annulla",
-    "sendNow": "Invia ora"
+    "sendNow": "Invia ora",
+    "pendingCount": "{{count}} in attesa",
+    "otherChats": "Messaggi in attesa in {{count}} chat",
+    "otherChats_one": "Messaggi in attesa in 1 chat",
+    "otherChats_other": "Messaggi in attesa in {{count}} chat"
   },
   "speech": {
     "listen": "Ascolta",
@@ -756,7 +761,8 @@
   },
   "widget": {
     "openingNewChat": "Apertura nuova chat…",
-    "newChat": "Nuova chat"
+    "newChat": "Nuova chat",
+    "offline": "Non connesso: riprova quando nanobot è raggiungibile"
   },
   "home": {
     "hello": "Ciao, sono {{name}}"

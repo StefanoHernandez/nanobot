@@ -50,7 +50,7 @@ export function SharePickerSheet() {
           <View style={styles.content}>
             <View style={[styles.summary, { backgroundColor: th.colors.muted, borderRadius: th.radius.md }]}>
               {pending.text ? (
-                <Text numberOfLines={2} style={{ color: th.colors.mutedForeground, fontSize: 13 }}>
+                <Text numberOfLines={2} style={{ color: th.colors.mutedForeground, fontSize: 13, fontFamily: th.font.regular }}>
                   {pending.text}
                 </Text>
               ) : null}
@@ -59,7 +59,7 @@ export function SharePickerSheet() {
                   style={{
                     color: th.colors.foreground,
                     fontFamily: th.font.medium,
-                    fontSize: 12,
+                    fontSize: 13,
                     marginTop: pending.text ? 4 : 0,
                   }}
                 >

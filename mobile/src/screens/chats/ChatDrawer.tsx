@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
+import { useStore } from "zustand";
 import type { ChatSummary } from "@/lib/types";
 import { useChats } from "../../state/chatsStore";
 import { useSession } from "../../state/sessionStore";
@@ -11,6 +12,7 @@ import { useTheme } from "../../ui/ThemeProvider";
 import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
 import { ChatRow, chatTitle } from "./ChatRow";
 import { BotFace } from "../../ui/BotFace";
+import { outboxStore, pendingByChat } from "../../extras/outbox";
 
 const chatPath = (key: string) => `/chat/${encodeURIComponent(key)}` as const;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -45,6 +47,11 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
   const openKey = pathname.startsWith("/chat/") ? decodeURIComponent(pathname.slice("/chat/".length)) : null;
 
+  // Do not send to chats that are not open: their thread isn't loaded, so ordering and hydrate can't be guaranteed.
+  const pendingMap = useStore(outboxStore, pendingByChat);
+  const otherChatKeys = Object.keys(pendingMap).filter((k) => k !== openKey && pendingMap[k] > 0);
+  const otherChatsCount = otherChatKeys.length;
+
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState<ChatSummary | null>(null);
   const [renaming, setRenaming] = useState<ChatSummary | null>(null);
@@ -57,6 +64,14 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   const open = (c: ChatSummary) => {
     router.navigate(chatPath(c.key));
     onClose();
+  };
+
+  const handleOpenFirstOther = () => {
+    const first = otherChatKeys[0];
+    if (first) {
+      router.navigate(chatPath(first));
+      onClose();
+    }
   };
 
   const doRename = async () => {
@@ -100,6 +115,34 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
       <View style={styles.search}>
         <TextField label={t("chats.search")} value={q} onChangeText={setQ} autoCapitalize="none" autoCorrect={false} />
       </View>
+      {otherChatsCount > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleOpenFirstOther}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            marginHorizontal: 16,
+            marginBottom: 8,
+            backgroundColor: th.colors.brandSoft,
+            borderRadius: th.radius.md,
+            gap: 8,
+          }}
+        >
+          <Text
+            style={{
+              flex: 1,
+              color: th.colors.brandSoftForeground,
+              fontFamily: th.font.medium,
+              fontSize: 13,
+            }}
+          >
+            {t("outbox.otherChats", { count: otherChatsCount })}
+          </Text>
+        </Pressable>
+      ) : null}
       <FlatList
         data={rows}
         keyExtractor={(c) => c.key}
