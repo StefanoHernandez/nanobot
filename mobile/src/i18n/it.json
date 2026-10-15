@@ -608,6 +608,19 @@
     "automations": "Automazioni",
     "comingSoon": "Presto"
   },
+  "memory": {
+    "title": "Memoria",
+    "subtitle": "Quello che Dream ricorda",
+    "profile": "Profilo",
+    "notes": "Note",
+    "voice": "Voce",
+    "dreamOn": "Dream acceso",
+    "dreamOff": "Dream spento",
+    "everyHours": "Ogni {{count}} ore",
+    "empty": "Ancora vuoto",
+    "truncated": "Testo accorciato",
+    "latest": "Ultima modifica"
+  },
   "channels": {
     "title": "Canali",
     "restartRequired": "Riavvio necessario",

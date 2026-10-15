@@ -42,6 +42,14 @@ export default function EcosystemIndex() {
         </View>
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem
+            title={t("memory.title")}
+            subtitle={t("memory.subtitle")}
+            left={<MaterialCommunityIcons name="brain" size={24} color={th.colors.foreground} />}
+            onPress={() => router.push("/ecosystem/memory")}
+          />
+        </View>
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem
             title={t("ecosystem.automations")}
             left={<MaterialCommunityIcons name="robot-outline" size={24} color={th.colors.foreground} />}
             onPress={() => router.push("/ecosystem/automations")}
