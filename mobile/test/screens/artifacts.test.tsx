@@ -126,6 +126,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(viewerKind("diagram.mermaid")).toBe("mermaid");
     expect(viewerKind("vector.svg")).toBe("svg");
     expect(viewerKind("preview.vl")).toBe("chart");
+    expect(viewerKind("preview.geojson")).toBe("map");
     expect(viewerKind("data.json")).toBe("json");
     expect(viewerKind("old.doc")).toBeNull();
     expect(viewerKind("old.ppt")).toBeNull();
@@ -606,6 +607,58 @@ describe("P5-V1 Artifacts & Document Previews", () => {
       expect.stringContaining("window.__chunkError")
     );
   });
+});
+
+test("buildShellHtml map inlines leaflet libs, locks network by default, and blocks remote urls", () => {
+  const libs = {
+    leafletCss: "/*LEAFLET_CSS*/",
+    leaflet: "/*LEAFLET_JS*/",
+  };
+  const spec = JSON.stringify({
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [12.5, 41.9] },
+        properties: { name: "Roma" },
+      },
+    ],
+  });
+  const locked = buildShellHtml({ kind: "map", html: spec, libs, network: false });
+  expect(locked).toContain("/*LEAFLET_CSS*/");
+  expect(locked).toContain("/*LEAFLET_JS*/");
+  expect(locked).toContain("connect-src 'none'");
+  expect(locked).not.toContain("connect-src https:");
+  expect(locked).toContain("img-src data: blob:");
+  expect(locked).not.toContain("img-src data: blob: https:");
+  expect(locked).not.toContain("tile.openstreetmap.org");
+
+  const online = buildShellHtml({ kind: "map", html: spec, libs, network: true });
+  expect(online).toContain("connect-src https:");
+  expect(online).toContain("img-src data: blob: https:");
+  expect(online).toContain("tile.openstreetmap.org");
+
+  const remote = buildShellHtml({
+    kind: "map",
+    html: JSON.stringify({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [0, 0] },
+      properties: { url: "https://evil.example/x" },
+    }),
+    libs,
+  });
+  expect(remote).not.toContain("https://evil.example");
+  expect(remote).not.toContain("L.map(");
+
+  const scriptBreak = buildShellHtml({
+    kind: "map",
+    html: JSON.stringify({
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { note: "</script>" } }],
+    }),
+    libs,
+  });
+  expect(scriptBreak).toContain("\\u003c/script");
 });
 
 test("buildShellHtml chart inlines vega libs, themes inline data, and blocks remote urls", () => {

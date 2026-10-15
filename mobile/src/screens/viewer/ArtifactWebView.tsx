@@ -29,10 +29,12 @@ export const CDN_VERSIONS = {
   vega: "6.4.0",
   vegaLite: "6.5.0",
   vegaEmbed: "7.3.0",
+  leaflet: "1.9.4",
 } as const;
 
 export function viewerLibsFor(kind: ArtifactKind, light: boolean): ViewerLibName[] {
   if (kind === "chart") return ["vega", "vegaLite", "vegaEmbed"];
+  if (kind === "map") return ["leafletCss", "leaflet"];
   if (kind === "mermaid") return ["mermaid"];
   if (kind === "pdf") return ["pdfjs", "pdfjsWorker"];
   if (kind === "docx") return light ? ["pako"] : ["jszip", "docxPreview"];
@@ -101,6 +103,7 @@ export type ArtifactKind =
   | "svg"
   | "mermaid"
   | "chart"
+  | "map"
   | "pdf"
   | "docx"
   | "pptx"
@@ -177,6 +180,128 @@ export function safeChartSpecJson(spec: Record<string, unknown>): string {
     .replace(/</g, "\\u003c")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
+}
+
+const GEOJSON_ROOT_TYPES = [
+  "Feature",
+  "FeatureCollection",
+  "Point",
+  "MultiPoint",
+  "LineString",
+  "MultiLineString",
+  "Polygon",
+  "MultiPolygon",
+  "GeometryCollection",
+] as const;
+
+export function isValidGeoJsonRoot(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const t = (value as Record<string, unknown>).type;
+  return typeof t === "string" && (GEOJSON_ROOT_TYPES as readonly string[]).includes(t);
+}
+
+export function sanitizeLeafletCss(css: string): string {
+  return css.replace(/url\s*\([^)]*\)/gi, "none").replace(/<\//g, "\\003c/");
+}
+
+function parseMapSpecText(text: string): { spec?: Record<string, unknown>; blocked?: boolean } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { blocked: true };
+  }
+  if (!isValidGeoJsonRoot(parsed)) return { blocked: true };
+  if (specHasRemoteRef(parsed)) return { blocked: true };
+  return { spec: parsed as Record<string, unknown> };
+}
+
+function mapRenderScript({
+  accent,
+  specLiteral,
+  network,
+}: {
+  accent: string;
+  specLiteral: string | null;
+  network: boolean;
+}): string {
+  const specInit = specLiteral != null ? `var spec = ${specLiteral};` : "var spec = null;";
+  const tileLayer = network
+    ? 'L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "\\u00a9 OpenStreetMap" }).addTo(map);'
+    : "";
+  return `<script>
+    (function() {
+      var GEO_TYPES = ${JSON.stringify([...GEOJSON_ROOT_TYPES])};
+      function isValidGeoJsonRoot(value) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+        var t = value.type;
+        return typeof t === "string" && GEO_TYPES.indexOf(t) >= 0;
+      }
+      function specHasRemoteRef(value) {
+        if (value == null || typeof value !== "object") return false;
+        if (Array.isArray(value)) {
+          for (var i = 0; i < value.length; i++) if (specHasRemoteRef(value[i])) return true;
+          return false;
+        }
+        for (var key in value) {
+          if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+          var val = value[key];
+          if ((key === "url" || key === "href") && typeof val === "string") return true;
+          if (val && typeof val === "object" && specHasRemoteRef(val)) return true;
+        }
+        return false;
+      }
+      function renderMapSpec(spec) {
+        if (!isValidGeoJsonRoot(spec)) {
+          postError(new Error("Invalid GeoJSON"));
+          return;
+        }
+        if (specHasRemoteRef(spec)) {
+          postError(new Error("Remote url not allowed"));
+          return;
+        }
+        if (typeof L === "undefined" || typeof L.map !== "function") {
+          postError(new Error("Leaflet not available"));
+          return;
+        }
+        try {
+          var container = document.getElementById("container");
+          container.style.height = window.innerHeight + "px";
+          var map = L.map(container, { zoomControl: true, attributionControl: true });
+          ${tileLayer}
+          var accent = ${JSON.stringify(accent)};
+          var layer = L.geoJSON(spec, {
+            style: function() { return { color: accent, weight: 3 }; },
+            pointToLayer: function(feature, latlng) {
+              return L.circleMarker(latlng, { radius: 7, color: accent, fillColor: accent, fillOpacity: 0.8 });
+            }
+          }).addTo(map);
+          var bounds = layer.getBounds();
+          if (bounds.isValid()) map.fitBounds(bounds, { padding: [16, 16] });
+          map.invalidateSize();
+          setTimeout(function() { map.invalidateSize(); }, 50);
+          postReady();
+        } catch (e) {
+          postError(e);
+        }
+      }
+      ${specInit}
+      try {
+        ${specLiteral != null ? "renderMapSpec(spec);" : ""}
+      } catch (e) {
+        postError(e);
+      }
+      window.__renderMapFromText = function(text) {
+        try {
+          var parsed = JSON.parse(text);
+          renderMapSpec(parsed);
+        } catch (e) {
+          postError(e);
+        }
+        return Promise.resolve();
+      };
+    })();
+  </script>`;
 }
 
 function prepareChartSpec(spec: Record<string, unknown>, accent: string): Record<string, unknown> {
@@ -847,9 +972,23 @@ export function buildShellHtml({
     };
   </script>`;
 
+  const networkOn = network && !isLightPreview;
+  let cspAllowNetwork = false;
+  let cspAllowRemoteImages = true;
+  if (kind === "chart") {
+    cspAllowNetwork = false;
+    cspAllowRemoteImages = false;
+  } else if (kind === "map") {
+    cspAllowNetwork = networkOn;
+    cspAllowRemoteImages = networkOn;
+  } else {
+    cspAllowNetwork = networkOn;
+    cspAllowRemoteImages = true;
+  }
+
   // Common bootstrap script that manages chunks & ready/error reporting
   const commonHead = `<head>
-${viewerCsp(kind !== "chart" && network && !isLightPreview, kind !== "chart")}
+${viewerCsp(cspAllowNetwork, cspAllowRemoteImages)}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style>
@@ -1105,6 +1244,48 @@ ${commonHead}
     return `${chartBodyStart}
   ${chartRenderScript({ isDark, bg, fg, border, accent, specLiteral: specJson })}
   ${zoomScript}
+</body>
+</html>`;
+  }
+
+  if (kind === "map") {
+    const leafletStyle = libs?.leafletCss ? `<style>${sanitizeLeafletCss(libs.leafletCss)}</style>` : "";
+    const mapBodyStart = `<!DOCTYPE html>
+<html>
+${commonHead}
+${leafletStyle}
+<body>
+  <div id="container"></div>
+  ${inlineScript(libs?.leaflet)}`;
+
+    if (!html && fileSize > 0) {
+      return `${mapBodyStart}
+  ${loadAllChunksScript}
+  ${mapRenderScript({ accent, specLiteral: null, network: networkOn })}
+  <script>
+    loadAllChunks(${fileSize}, null).then(function(bytes) {
+      var text = new TextDecoder("utf-8").decode(bytes);
+      return window.__renderMapFromText(text);
+    }).catch(function(e) {
+      postError(e);
+    });
+  </script>
+</body>
+</html>`;
+    }
+
+    const parsed = html ? parseMapSpecText(html) : { blocked: true };
+    if (parsed.blocked || !parsed.spec) {
+      return `${mapBodyStart}
+  <script>
+    postError(new Error("Invalid GeoJSON"));
+  </script>
+</body>
+</html>`;
+    }
+    const specJson = safeChartSpecJson(parsed.spec);
+    return `${mapBodyStart}
+  ${mapRenderScript({ accent, specLiteral: specJson, network: networkOn })}
 </body>
 </html>`;
   }

@@ -13,6 +13,14 @@ test("parseFenceInfo reads the language, a safe id and a quoted title", () => {
   expect(parseFenceInfo("mermaid id=a").id).toBeUndefined();
   expect(parseFenceInfo("vega-lite id=sales").lang).toBe("chart");
   expect(parseFenceInfo("vegalite").lang).toBe("chart");
+  expect(parseFenceInfo("geojson id=places").lang).toBe("map");
+});
+
+test("a geojson fence is collected as kind map", () => {
+  const spec = '{"type":"FeatureCollection","features":[]}';
+  const artifacts = collectArtifacts([msg("m1", `\`\`\`geojson id=places title="Luoghi"\n${spec}\n\`\`\``)]);
+  expect(artifacts).toHaveLength(1);
+  expect(artifacts[0].versions[0].kind).toBe("map");
 });
 
 test("chart and vega-lite fences with the same id are two versions of one chart artifact", () => {
