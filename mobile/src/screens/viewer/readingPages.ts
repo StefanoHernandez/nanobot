@@ -86,19 +86,15 @@ export function paginateMarkdown(text: string): string[] {
 }
 
 function stripDangerousHtml(html: string): string {
-  const codeBlocks: string[] = [];
-  let out = html.replace(/<pre\b[^>]*>[\s\S]*?<\/pre>/gi, (match) => {
-    codeBlocks.push(match);
-    return `___PRE_CODE_BLOCK_${codeBlocks.length - 1}___`;
-  });
-
-  out = out.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
+  // Attribute filters run only inside real tags: marked escapes code blocks,
+  // so `&lt;a onclick=...&gt;` samples are left alone.
+  let out = html.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
   out = out.replace(/<\s*(script|iframe|object|embed|link)\b[^>]*\/?>/gi, "");
-  out = out.replace(/[\s/]+(on[a-z0-9_-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-  out = out.replace(/\s(href|src)\s*=\s*("|')?\s*(javascript:|data:)[^"'>\s]*/gi, ' $1="#"');
-
-  out = out.replace(/___PRE_CODE_BLOCK_(\d+)___/g, (_, idx) => codeBlocks[Number(idx)]);
-  return out;
+  return out.replace(/<[a-z][^>]*>/gi, (tag) =>
+    tag
+      .replace(/[\s/]+(on[a-z0-9_-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(/\s(href|src)\s*=\s*("|')?\s*(javascript:|data:)[^"'>\s]*/gi, ' $1="#"'),
+  );
 }
 
 /** Full-document markdown as a sanitized HTML print payload for expo-print. */
