@@ -618,6 +618,12 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        from nanobot.ext.memory_pages import dispatch_memory_get
+
+        response = dispatch_memory_get(self, request, got)
+        if response is not None:
+            return response
+
         # API 404 (never serve SPA for /api/ routes)
         if got.startswith("/api/"):
             return _http_error(404, "API route not found")

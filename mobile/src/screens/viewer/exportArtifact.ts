@@ -21,6 +21,42 @@ export function printDocument(body: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body>${body}</body></html>`;
 }
 
+const PREVIEW_NAME = /^preview\.(html|svg|mmd)$/;
+const ARTIFACT_SOURCE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\.(html|svg|mmd)$/;
+/** About 2 MB of source. Larger previews are not written out for sharing. */
+const MAX_PREVIEW_CHARS = 2_000_000;
+
+/** Writes an in-memory preview (no file URI yet) into the cache. Returns a file URI, or null. */
+export function writePreview(name: string, text: string): string | null {
+  if (!PREVIEW_NAME.test(name) || !text || text.length > MAX_PREVIEW_CHARS) return null;
+  const dir = new Directory(Paths.cache, "artifacts");
+  dir.create({ intermediates: true, idempotent: true });
+  const file = new File(dir, name);
+  file.write(text);
+  const uri = file.uri;
+  if (!uri.startsWith("file://") || uri.includes("..")) return null;
+  return uri;
+}
+
+/** Writes artifact source into the cache under a safe upload filename. Returns a file URI, or null. */
+export function writeArtifactSource(name: string, text: string): string | null {
+  if (
+    !ARTIFACT_SOURCE_NAME.test(name) ||
+    name.includes("..") ||
+    !text ||
+    text.length > MAX_PREVIEW_CHARS
+  ) {
+    return null;
+  }
+  const dir = new Directory(Paths.cache, "artifacts");
+  dir.create({ intermediates: true, idempotent: true });
+  const file = new File(dir, name);
+  file.write(text);
+  const uri = file.uri;
+  if (!uri.startsWith("file://") || uri.includes("..")) return null;
+  return uri;
+}
+
 /** Writes a validated PNG into the cache. Returns a file URI, or null when the payload is refused. */
 export function writePng(dataUrl: string): string | null {
   const body = pngBase64(dataUrl);

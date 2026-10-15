@@ -8,7 +8,6 @@ import { useTheme } from "../../ui/ThemeProvider";
 import { Dialog } from "../../ui/components";
 import {
   inlineScript,
-  jsStringLiteral,
   loadViewerLibs,
   takeCached,
   type ViewerLibMap,
@@ -71,8 +70,26 @@ export function parseZipCentralDirectory(tailChunk: Uint8Array, totalSize: numbe
   return { cdSize, cdStartOffset, cdEntriesCount };
 }
 
-export const CSP_META =
-  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'unsafe-eval\'; style-src \'unsafe-inline\'; font-src data:; img-src data: blob: https:; media-src data: blob:; worker-src blob:; connect-src \'none\'; frame-src \'none\'; form-action \'none\'; base-uri \'none\'">';
+/** Sandbox for one preview. Network stays off unless this render was confirmed. Scripts never come from the network. */
+export function viewerCsp(allowNetwork = false): string {
+  const connect = allowNetwork ? "https:" : "'none'";
+  const policy = [
+    "default-src 'none'",
+    "script-src 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'unsafe-inline'",
+    "font-src data:",
+    "img-src data: blob: https:",
+    "media-src data: blob:",
+    "worker-src blob:",
+    `connect-src ${connect}`,
+    "frame-src 'none'",
+    "form-action 'none'",
+    "base-uri 'none'",
+  ].join("; ");
+  return `<meta http-equiv="Content-Security-Policy" content="${policy}">`;
+}
+
+export const CSP_META = viewerCsp(false);
 
 export type ArtifactKind =
   | "html"
@@ -100,6 +117,8 @@ export type BuildShellHtmlOptions = {
   border?: string;
   fileSize?: number;
   isLightPreview?: boolean;
+  /** This render only. Confirmed in the viewer; never stored. */
+  network?: boolean;
   i18n?: ShellI18n;
   /** Bundled library sources. Missing entries are not loaded from the network. */
   libs?: ViewerLibMap;
@@ -122,6 +141,8 @@ export type ArtifactWebViewProps = {
   /** HTML only. True scales the page down to the screen width. */
   fit?: boolean;
   isLightPreview?: boolean;
+  /** This render only. Does not load remote scripts. */
+  network?: boolean;
 };
 
 export function escapeHtml(str: string): string {
@@ -560,16 +581,23 @@ ${lightHead}
 export function buildShellHtml({
   kind,
   html = "",
-  isDark = false,
-  bg = "#ffffff",
-  fg = "#000000",
+  isDark: themeDark = false,
+  bg: themeBg = "#ffffff",
+  fg: themeFg = "#000000",
   accent = "#2f3389",
-  border = "#d3d7f3",
+  border: themeBorder = "#d3d7f3",
   fileSize = 0,
   isLightPreview = false,
+  network = false,
   i18n = {},
   libs,
 }: BuildShellHtmlOptions): string {
+  // Documents are paper. HTML, SVG and Mermaid keep the app theme.
+  const documentPaper = kind === "pdf" || kind === "docx" || kind === "pptx" || kind === "xlsx";
+  const isDark = documentPaper ? false : themeDark;
+  const bg = documentPaper ? "#ffffff" : themeBg;
+  const fg = documentPaper ? "#1c1c1c" : themeFg;
+  const border = documentPaper ? "#dddddd" : themeBorder;
   const loadingLabel = i18n.loading || "Caricamento...";
   const progressTpl = i18n.loadingProgress || "Caricamento {{loaded}}/{{total}} MB";
   const showMoreRowsLabel = i18n.showMoreRows || "Mostra altre righe";
@@ -683,7 +711,7 @@ export function buildShellHtml({
 
   // Common bootstrap script that manages chunks & ready/error reporting
   const commonHead = `<head>
-${CSP_META}
+${viewerCsp(network && !isLightPreview)}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style>
@@ -907,9 +935,11 @@ ${commonHead}
 <body>
   <div id="container" style="display:flex;flex-direction:column;align-items:center;padding:16px;"></div>
   ${inlineScript(libs?.pdfjs)}
+  ${inlineScript(libs?.pdfjsWorker)}
   <script>
     try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([${jsStringLiteral(libs?.pdfjsWorker ?? "")}], { type: "text/javascript" }));
+      // The worker script above sets globalThis.pdfjsWorker, so pdf.js stays on this thread.
+      // A blob Worker fails in the Android WebView and the preview falls back.
       var totalSize = ${fileSize};
 
       class RangeTransport extends pdfjsLib.PDFDataRangeTransport {
@@ -1279,6 +1309,7 @@ export function ArtifactWebView({
   pngTicket = 0,
   fit = true,
   isLightPreview = false,
+  network = false,
 }: ArtifactWebViewProps) {
   const t = useT();
   const th = useTheme();
@@ -1367,10 +1398,11 @@ export function ArtifactWebView({
       border: th.colors.border,
       fileSize: resolvedSize,
       isLightPreview: activeLightPreview,
+      network,
       i18n: shellI18n,
       libs,
     });
-  }, [libs, kind, html, th.scheme, th.colors.popover, th.colors.popoverForeground, th.colors.chartInput, th.colors.border, resolvedSize, activeLightPreview, shellI18n]);
+  }, [libs, kind, html, th.scheme, th.colors.popover, th.colors.popoverForeground, th.colors.chartInput, th.colors.border, resolvedSize, activeLightPreview, network, shellI18n]);
 
   // Track shell version and reset isFirstLoadRef whenever shellHtml changes
   const prevShellHtmlRef = useRef<string | null>(null);

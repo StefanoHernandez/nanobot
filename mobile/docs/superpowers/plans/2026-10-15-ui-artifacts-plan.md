@@ -1,6 +1,6 @@
 # Plan: "Notte Compagno" dark theme, UI refinements, better artifacts
 
-Date: 2026-10-15. Status: **approved**. Wave 1 (U-C1, U-C2), **A-3**, **A-4**, **U-C3**, **U-D1**, **A-1** and **A-2** are on `claude/projects`. T-N1 still waits for a side-by-side screenshot.
+Date: 2026-10-15. Status: **approved**. Wave 1 (U-C1, U-C2), **A-3**, **A-4**, **U-C3**, **U-D1**, **A-1**, **A-2**, **A-6** and **U-S1** are on `claude/projects`. T-N1 still waits for a side-by-side screenshot.
 Owner of this plan: Claude. Implementers: agy (briefs in `mobile/docs/agy/briefs/`), Claude for the design-critical and security parts.
 Design references: `mobile/docs/design/companion.md` (identity) and the impeccable/frontend-design guidance (product register, Android).
 
@@ -17,13 +17,13 @@ Design references: `mobile/docs/design/companion.md` (identity) and the impeccab
 | **U-C2** | Composer on two rows | agy | none | `src/screens/thread/Composer.tsx` |
 | **U-C3** | Thread header: overflow "⋮" menu | **done** on `claude/projects` | **F-A merged** | `src/screens/thread/ThreadScreen.tsx` |
 | **U-D1** | Chat list grouped by date, Projects on top | **done** on `claude/projects` | **P-A merged** | `src/screens/chats/ChatDrawer.tsx` |
-| **U-S1** | Material snackbar instead of toasts | agy | none (shared UI kit, so check every caller) | `src/ui/components/Toast*.tsx` |
+| **U-S1** | Material snackbar instead of toasts | **done** on `claude/projects` | none (shared UI kit, so check every caller) | `src/ui/components/Toast*.tsx` |
 | **A-1** | Artifact identity and versions (+ server skill) | **done** on `claude/projects` | none | `src/artifacts/collect.ts`, viewer version bar, `nanobot/skills/artifacts/` |
 | **A-2** | "Correggi" and "Chiedi modifica" from the artifact | **done** on `claude/projects` | none (A-1 makes it better, not required) | `ArtifactWebView.tsx`, `FileViewer.tsx`, viewer route |
 | **A-3** | Zoom/pan, landscape, fit, artifact theme, export PNG/PDF | **done** on `claude/projects` | none | `ArtifactWebView.tsx` (shell HTML), viewer route |
 | **A-4** | Offline: bundle the viewer libraries in the APK | Claude (CSP/security) | **done** on `claude/projects` | `ArtifactWebView.tsx`, `assets/viewers/` |
 | **A-5** | New types: charts, Markdown documents, maps, React | agy | A-4; maps and React also need A-6 | `ArtifactWebView.tsx`, `formats.ts`, `CodeBlock.tsx` |
-| **A-6** | Per-artifact "allow network" toggle | Claude (security) | A-4 | CSP builder, viewer UI |
+| **A-6** | Per-artifact "allow network" toggle | **done** on `claude/projects` | A-4 | CSP builder, viewer UI |
 | **A-7** | Artifact tab in "Media e file"; save an artifact to a Project | agy | **F-A and P-A merged**, A-1 | gallery screen, `src/projects/api.ts` |
 
 **Waves** (tasks in the same wave never touch the same files, except i18n JSON, which merges as a union):

@@ -6,7 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
 import { i18n } from "../../src/i18n";
 import { viewerKind } from "../../src/screens/viewer/formats";
-import { ArtifactWebView, buildShellHtml, escapeHtml, CDN_VERSIONS } from "../../src/screens/viewer/ArtifactWebView";
+import { ArtifactWebView, buildShellHtml, escapeHtml, CDN_VERSIONS, viewerCsp } from "../../src/screens/viewer/ArtifactWebView";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FileViewer } from "../../src/screens/viewer/FileViewer";
@@ -659,7 +659,7 @@ test("Fix and ask send a short note to the source chat, never the artifact sourc
     expect(screen.getByText("Artifact error")).toBeTruthy();
     expect(screen.queryByText("Preview not available")).toBeNull();
     (router.back as jest.Mock).mockClear();
-    fireEvent.press(screen.getByRole("button", { name: "Fix" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Fix" }));
     expect(sendMessage).toHaveBeenCalledWith("fix", expect.stringContaining("Correggi l'artefatto `sales-dashboard` (html)"), undefined, expect.any(Object));
     expect(sendMessage.mock.calls[0][1]).toContain("Errore: Unexpected token (riga 2)");
     expect(sendMessage.mock.calls[0][1]).not.toContain("SECRET SOURCE");
@@ -669,14 +669,55 @@ test("Fix and ask send a short note to the source chat, never the artifact sourc
     await act(async () => {
       screen.getByLabelText("What should change?").props.onChangeText("titolo più grande");
     });
-    fireEvent.press(screen.getByRole("button", { name: "Ask for a change" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Ask for a change" }));
     expect(sendMessage.mock.calls[0][1]).toContain("Modifica l'artefatto `sales-dashboard` (html)");
+    expect(sendMessage.mock.calls[0][1]).toContain("Stessa prima riga, non un artefatto nuovo: `html id=sales-dashboard`");
     expect(sendMessage.mock.calls[0][1]).toContain("Richiesta: titolo più grande");
     expect(sendMessage.mock.calls[0][1]).not.toContain("SECRET SOURCE");
   } finally {
     artifactStore.clear();
     threadStore.setState({ threads: {} });
     sessionStore.setState({ session: null, state: "none" as never, profile: null });
+  }
+});
+
+test("network stays off until this preview confirms it, and remote scripts stay blocked", async () => {
+  const open = viewerCsp(true);
+  expect(viewerCsp(false)).toContain("connect-src 'none'");
+  expect(open).toContain("connect-src https:");
+  expect(open).not.toContain("http:");
+  expect(open).toContain("script-src 'unsafe-inline' 'unsafe-eval'");
+  expect(open).not.toMatch(/script-src[^;]*https/);
+  expect(open).toContain("frame-src 'none'");
+  expect(open).toContain("form-action 'none'");
+  expect(buildShellHtml({ kind: "svg", html: "<svg></svg>", network: true })).toContain("connect-src https:");
+  expect(buildShellHtml({ kind: "html", html: "<p>x</p>" })).toContain("connect-src 'none'");
+  expect(buildShellHtml({ kind: "html", html: "<p>x</p>", network: true, isLightPreview: true })).toContain("connect-src 'none'");
+
+  artifactStore.set("<p>hi</p>", "preview.html");
+  try {
+    await wrap(<FileViewer uri="" name="preview.html" />);
+    await screen.findByLabelText("Allow network");
+    const shell = () => (screen.getByTestId("webview").props.source.html as string);
+    const toggle = async (on: boolean) => {
+      const sw = screen.getByRole("switch", { name: on ? "Allow network" : "Network allowed" });
+      await act(async () => {
+        sw.props.onChange({ nativeEvent: { value: on } });
+      });
+    };
+    expect(shell()).toContain("connect-src 'none'");
+    await toggle(true);
+    expect(screen.getByText("Allow network for this artifact?")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+    expect(shell()).toContain("connect-src 'none'");
+    await toggle(true);
+    await fireEvent.press(screen.getByRole("button", { name: "Allow" }));
+    expect(shell()).toContain("connect-src https:");
+    expect(shell()).not.toMatch(/script-src[^;]*https/);
+    await toggle(false);
+    expect(shell()).toContain("connect-src 'none'");
+  } finally {
+    artifactStore.clear();
   }
 });
 
@@ -708,7 +749,7 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
   const libs = {
     mermaid: "window.mermaid = 1;",
     pdfjs: "/*pdfjs*/",
-    pdfjsWorker: "worker<script>",
+    pdfjsWorker: "worker</script><script>alert(1)",
     jszip: "window.JSZip = 1;",
     pako: "window.pako = 1;",
     docxPreview: "window.docx = 1;",
@@ -734,8 +775,13 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
   expect(mermaid).toContain("<\\/script>");
   const pdf = buildShellHtml({ kind: "pdf", fileSize: 10, libs });
   expect(pdf).toContain("/*pdfjs*/");
-  expect(pdf).toContain("createObjectURL");
-  expect(pdf).not.toContain("worker<script>");
+  expect(pdf).toContain("worker<\\/script>");
+  expect(pdf).not.toContain("worker</script>");
+  expect(pdf).not.toContain("GlobalWorkerOptions.workerSrc");
+  const paper = buildShellHtml({ kind: "docx", fileSize: 10, isDark: true, bg: "#1c3a34", fg: "#e8f0ed", libs });
+  expect(paper).toContain("background-color: #ffffff");
+  expect(paper).not.toContain("#1c3a34");
+  expect(paper).not.toContain("#e8f0ed");
   const pins = readFileSync(path.join(__dirname, "../../scripts/fetch-viewer-libs.mjs"), "utf8");
   for (const version of Object.values(CDN_VERSIONS)) {
     expect(pins).toContain(version);

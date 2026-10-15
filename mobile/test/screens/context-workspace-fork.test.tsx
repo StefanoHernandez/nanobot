@@ -14,6 +14,7 @@ import { ThreadScreen } from "../../src/screens/thread/ThreadScreen";
 import { useThread, useThreadSlice } from "../../src/state/threadStore";
 import { useWorkspace, workspaceStore } from "../../src/state/workspace";
 import { chatsStore } from "../../src/state/chatsStore";
+import { sessionStore } from "../../src/state/sessionStore";
 
 jest.mock("../../src/state/threadStore", () => ({
   useThreadSlice: jest.fn(),
@@ -142,6 +143,45 @@ test("tapping a recent folder sets that path", async () => {
   await wrap(<WorkspaceSheet chatKey={KEY} open onClose={() => {}} />);
   fireEvent.press(screen.getByText("r1"));
   await waitFor(() => expect(setScope).toHaveBeenCalledWith(expect.objectContaining({ project_path: "/r1" })));
+});
+
+test("browsing the agent workspace hides its own folders", async () => {
+  const browse = jest.fn(async () => ({
+    path: "/home/bot/.nanobot/workspace",
+    parent: "/home/bot/.nanobot",
+    entries: [
+      { name: "cron", path: "/home/bot/.nanobot/workspace/cron" },
+      { name: "memory", path: "/home/bot/.nanobot/workspace/memory" },
+      { name: "skills", path: "/home/bot/.nanobot/workspace/skills" },
+      { name: "projects", path: "/home/bot/.nanobot/workspace/projects" },
+    ],
+    truncated: false,
+    host: "h",
+    platform: "p",
+  }));
+  (useWorkspace as jest.Mock).mockReturnValue({ scope, info, error: null, browse, setScope });
+  await wrap(<WorkspaceSheet chatKey={KEY} open onClose={() => {}} />);
+  fireEvent.press(screen.getByText("Browse…"));
+  expect(await screen.findByText("projects")).toBeTruthy();
+  expect(screen.queryByText("cron")).toBeNull();
+  expect(screen.queryByText("skills")).toBeNull();
+  expect(screen.getByText("The bot's own folders stay hidden.")).toBeTruthy();
+});
+
+test("compact sends /compact and closes the sheet", async () => {
+  const send = jest.fn(() => true);
+  const onClose = jest.fn();
+  (useThreadSlice as jest.Mock).mockReturnValue({ messages: [], send });
+  sessionStore.setState({ session: { client: {} } as never, state: "open", profile: null });
+  try {
+    const messages = [asst("a", { usage: { context_tokens: 3000 }, contextWindowTokens: 128000 })] as never;
+    await wrap(<ContextPopover open onClose={onClose} messages={messages} chatKey={KEY} />);
+    fireEvent.press(screen.getByText("Compact"));
+    expect(send).toHaveBeenCalledWith("/compact");
+    expect(onClose).toHaveBeenCalled();
+  } finally {
+    sessionStore.setState({ session: null, state: "none", profile: null });
+  }
 });
 
 test("browse into a folder, then .. goes to the parent", async () => {

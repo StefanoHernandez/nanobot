@@ -51,15 +51,34 @@ export function MediaImage({ url, name }: { url: string; name: string }) {
   const th = useTheme();
   const [open, setOpen] = useState(false);
   const [ratio, setRatio] = useState(4 / 3);
+  const [sharing, setSharing] = useState(false);
+  const share = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const local = await downloadMedia(url, name);
+      await shareMedia(local);
+    } catch {
+      toast.show(t("media.shareFailed"));
+    } finally {
+      setSharing(false);
+    }
+  };
   return (
     <>
       <Pressable onPress={() => setOpen(true)} accessibilityRole="imagebutton" accessibilityLabel={name || t("media.image")}>
         <AnyImage testID="media-image" url={url} name={name} onLoad={(e) => { const { width: w, height: h } = e.nativeEvent.source; if (w && h) setRatio(w / h); }} style={{ width: "100%", maxWidth: 320, aspectRatio: ratio, borderRadius: th.radius.md, backgroundColor: th.colors.muted }} resizeMode="cover" />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable onPress={() => setOpen(false)} accessibilityLabel={t("media.close")} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center" }}>
-          <AnyImage url={url} name={name} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
-        </Pressable>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.92)" }}>
+          <View style={{ position: "absolute", top: 8, right: 8, zIndex: 2, flexDirection: "row" }}>
+            <IconButton icon="share-variant" size={24} color={th.colors.overlayForeground} loading={sharing} onPress={() => void share()} accessibilityLabel={t("viewer.share")} />
+            <IconButton icon="close" size={24} color={th.colors.overlayForeground} onPress={() => setOpen(false)} accessibilityLabel={t("media.close")} />
+          </View>
+          <Pressable onPress={() => setOpen(false)} style={{ flex: 1, justifyContent: "center" }}>
+            <AnyImage url={url} name={name} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
+          </Pressable>
+        </View>
       </Modal>
     </>
   );

@@ -282,6 +282,8 @@
     "cached": "Cached",
     "ofTotal": "of {{total}} ({{pct}}%)",
     "nearLimit": "Close to the limit: the bot will compact older messages soon.",
+    "compact": "Compact",
+    "compactFailed": "Could not compact",
     "recentRounds_one": "Last exchange",
     "recentRounds_other": "Last {{count}} exchanges",
     "latestRound": "Latest exchange"
@@ -294,6 +296,7 @@
     "favorites": "Favorites",
     "browse": "Browse…",
     "useFolder": "Use this folder",
+    "internalHidden": "The bot's own folders stay hidden.",
     "error": "Could not change the workspace"
   },
   "fork": {
@@ -338,6 +341,11 @@
     "exportPdf": "Save PDF",
     "exportFailed": "Couldn't export",
     "rotateFailed": "Rotation isn't available",
+    "network": "Allow network",
+    "networkOn": "Network allowed",
+    "networkTitle": "Allow network for this artifact?",
+    "networkBody": "It can contact https sites. This lasts only for this preview, and scripts stay the ones already in the app.",
+    "networkAllow": "Allow",
     "previewAnyway": "Preview anyway",
     "largeFileNotice": "Large file ({{size}} MB): preview may take a while",
     "openPreview": "Open preview",
@@ -510,6 +518,11 @@
     "sentByBot": "From bot",
     "emptyImages": "No images in this chat",
     "emptyFiles": "No files in this chat",
+    "tabArtifacts": "Artifacts",
+    "emptyArtifacts": "No artifacts in this chat",
+    "saveToProject": "Save to project",
+    "saved": "Saved to project",
+    "saveFailed": "Could not save to project",
     "share": "Share"
   },
   "system": {
@@ -599,6 +612,19 @@
     "skills": "Skills",
     "automations": "Automations",
     "comingSoon": "Coming soon"
+  },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "What Dream remembers",
+    "profile": "Profile",
+    "notes": "Notes",
+    "voice": "Voice",
+    "dreamOn": "Dream on",
+    "dreamOff": "Dream off",
+    "everyHours": "Every {{count}} hours",
+    "empty": "Still empty",
+    "truncated": "Text shortened",
+    "latest": "Latest change"
   },
   "channels": {
     "title": "Channels",
