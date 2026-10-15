@@ -516,6 +516,10 @@ class AgentLoop:
         from nanobot.ext.subagent_model import attach
 
         attach(loop, defaults.subagent_model_preset)
+        # Fork extension (nanobot/ext/approvals.py): shell commands can wait for a phone approval.
+        from nanobot.ext.approvals import install
+
+        install()
         return loop
 
     def _sync_subagent_runtime_limits(self) -> None:
