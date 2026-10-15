@@ -958,6 +958,26 @@
       "generic": "Operazione non riuscita"
     }
   },
+  "approvals": {
+    "title": "nanobot vuole eseguire un comando",
+    "chatKanban": "Kanban",
+    "chatCron": "Automazione",
+    "allow": "Consenti",
+    "deny": "Nega",
+    "always": "Consenti sempre in questa chat",
+    "expired": "Comando scaduto",
+    "notify": "Comando da approvare",
+    "security": "Sicurezza",
+    "enable": "Approva i comandi shell",
+    "enableHelp": "Il bot chiede il permesso sul telefono prima di ogni comando. Senza risposta in 5 minuti, il comando viene negato.",
+    "alwaysAllowedTitle": "Chat sempre consentite",
+    "alwaysAllowedEmpty": "Nessuna chat sempre consentita",
+    "remove": "Rimuovi",
+    "confirm": "Conferma",
+    "forgetConfirmTitle": "Rimuovi permesso?",
+    "forgetConfirmMessage": "Il bot chiederà di nuovo l'approvazione per eseguire comandi in questa chat.",
+    "expiresIn": "Scade tra {{sec}}s"
+  },
   "home": {
     "hello": "Ciao, sono {{name}}"
   }
