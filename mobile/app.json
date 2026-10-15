@@ -91,7 +91,8 @@
             "backgroundColor": "#14163a"
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "scheme": "nanobot"
   }
