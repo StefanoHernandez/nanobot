@@ -20,7 +20,7 @@ This is not a copy of the APK into the current site. Expo exports static files, 
 
 Before the legacy site is removed, the native pieces need a browser equivalent: the secret store, the camera scanner, and the preview WebView. The Android widget, notifications, and share sheet stay on the phone.
 
-This starts after kanban. Until the export covers connect, chat, and settings, the legacy site remains the computer UI.
+Kanban for this scope is done. The export has not started. Until the export covers connect, chat, and settings, the legacy site remains the computer UI.
 
 Phase 6 is parked. Dream stays the only memory writer. The phone memory screen is read-only. No vector database, no graph, no second fact store.
 
@@ -30,9 +30,9 @@ Phase 6 is parked. Dream stays the only memory writer. The phone memory screen i
 | 1–3 | Chat, media, settings | app | done |
 | 4 | Ecosystem: channels, apps/MCP/plugins, skills, automations | app | done; final review fixes FIX-A/FIX-B in progress |
 | 5 | Interactive artifacts + PDF/docx/pptx/xlsx previews (P5-V1, running); share-to-nanobot, offline outbox, read-aloud replies, widget, quick tile | app | in progress |
-| 5b | **QR device pairing** (fork + app). WebUI of the fork: Settings → "Collega telefono" shows a one-time QR (code expires in 5 min; it carries the URL plus the pairing code, never the master secret). The app's Connect screen has an in-app scanner (no deep link). The app claims the code and gets its own revocable device token, stored in SecureStore. The WebUI lists devices (name, last seen) with Revoke. Bootstrap accepts the device token next to the secret. New module + thin bootstrap hook in the fork. | fork + app | planned (user chose option B, 2026-10-14) |
+| 5b | **QR device pairing** (fork + app). An already connected phone shows a one-time QR (code expires in 5 min; it carries the URL plus the pairing code, never the master secret). The second phone scans in the app (no deep link), claims a revocable device token, and stores it in SecureStore. The phone lists devices with Revoke. Bootstrap accepts the device token next to the secret. The computer page arrives with the web export, not as a page in the legacy WebUI. | fork + app | done on the phone |
 | 6 | Hybrid memory (vectors, graph, second fact store) | — | parked 2026-10-15. Dream and the read-only memory screen stay |
-| 7 | **Kanban.** Store, HTTP, and the phone board, chat, bots, and review are written. A bot does not take a card yet. No git worktrees. The computer page arrives with the web export of the app, not as a page in the legacy WebUI. | fork + app | in progress |
+| 7 | **Kanban.** Store, HTTP, phone board, chat, bots, review, and the in-process runner (one ready card or one mention per tick). No git worktrees. The computer page arrives with the web export of the app, not as a page in the legacy WebUI. | fork + app | done for this scope |
 | — | iOS | — | postponed |
 
 ## Feature backlog chosen by the user (2026-10-15)
