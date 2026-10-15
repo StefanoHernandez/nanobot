@@ -38,13 +38,14 @@ export type ApprovalsState = {
 
 let generation = 0;
 const notifiedIds = new Set<string>();
+const decidedIds = new Map<string, number>();
 
 export async function fetchApprovals(session: NanobotSession): Promise<ApprovalsPayload> {
-  if (typeof session.get === "function") {
-    return await session.get<ApprovalsPayload>("/api/ext/approvals");
-  }
   const root = session.baseUrl.replace(/\/+$/, "");
   const res = await fetch(`${root}/api/ext/approvals`, {
+    method: "GET",
+    redirect: "error",
+    credentials: "omit",
     headers: { Authorization: `Bearer ${session.apiToken()}` },
   });
   if (!res.ok) {
@@ -100,8 +101,8 @@ export function chatLabelFor(
   chats: { key: string; title?: string }[],
   t: (key: any, options?: any) => any,
 ): string {
-  if (session_key.startsWith("kanban:")) return t("approvals.chatKanban", { defaultValue: "Kanban" }) || "Kanban";
-  if (session_key.startsWith("cron:")) return t("approvals.chatCron", { defaultValue: "Automazione" }) || "Automazione";
+  if (session_key.startsWith("kanban:")) return t("approvals.chatKanban");
+  if (session_key.startsWith("cron:")) return t("approvals.chatCron");
   const found = chats.find((c) => c.key === session_key);
   if (found?.title?.trim()) return found.title.trim();
   return session_key;
@@ -115,11 +116,11 @@ export const approvalsStore = createStore<ApprovalsState>((set, get) => ({
   loading: false,
 
   refresh: async () => {
-    const currentGen = generation;
+    const thisGen = ++generation;
     const session = sessionStore?.getState ? sessionStore.getState()?.session : null;
     const profileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
     if (!session) {
-      if (currentGen !== generation) return;
+      if (thisGen !== generation) return;
       set({ enabled: false, pending: [], allow: {}, error: null, loading: false });
       return;
     }
@@ -127,19 +128,29 @@ export const approvalsStore = createStore<ApprovalsState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const data = await fetchApprovals(session);
-      if (currentGen !== generation) return;
+      if (thisGen !== generation) return;
       const currentProfileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
       if (profileId !== currentProfileId) return;
 
+      // Clean up decided IDs older than 10s
+      const now = Date.now();
+      for (const [id, ts] of decidedIds) {
+        if (now - ts > 10_000) decidedIds.delete(id);
+      }
+
+      const pendingList = (Array.isArray(data.pending) ? data.pending : []).filter(
+        (item) => !decidedIds.has(item.id),
+      );
+
       // Background notification for new pending items
       const isBackground = AppState.currentState !== "active";
-      for (const item of data.pending ?? []) {
+      for (const item of pendingList) {
         if (!notifiedIds.has(item.id)) {
           notifiedIds.add(item.id);
           if (isBackground) {
             void Notifications.scheduleNotificationAsync({
               content: {
-                title: i18n.t("approvals.notify", "Comando da approvare"),
+                title: i18n.t("approvals.notify"),
               },
               trigger: { channelId: CHANNEL },
             });
@@ -149,13 +160,13 @@ export const approvalsStore = createStore<ApprovalsState>((set, get) => ({
 
       set({
         enabled: !!data.enabled,
-        pending: Array.isArray(data.pending) ? data.pending : [],
+        pending: pendingList,
         allow: data.allow && typeof data.allow === "object" ? data.allow : {},
         error: null,
         loading: false,
       });
     } catch (e: any) {
-      if (currentGen !== generation) return;
+      if (thisGen !== generation) return;
       set({
         error: e instanceof Error ? e.message : String(e),
         loading: false,
@@ -166,6 +177,7 @@ export const approvalsStore = createStore<ApprovalsState>((set, get) => ({
   reset: () => {
     generation++;
     notifiedIds.clear();
+    decidedIds.clear();
     set({
       enabled: false,
       pending: [],
@@ -176,6 +188,7 @@ export const approvalsStore = createStore<ApprovalsState>((set, get) => ({
   },
 
   removePending: (id: string, alwaysSessionKey?: string) => {
+    decidedIds.set(id, Date.now());
     set((state) => {
       const newPending = state.pending.filter((p) => p.id !== id);
       const newAllow = { ...state.allow };
@@ -229,5 +242,6 @@ export function useApprovalsPolling(): void {
     enabled: isOpen,
     intervalMs: enabled ? 3000 : 60000,
     tick: () => approvalsStore.getState().refresh(),
+    background: true,
   });
 }

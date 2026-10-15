@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useStore } from "zustand";
 import { useTheme } from "../ui/ThemeProvider";
@@ -17,6 +17,8 @@ export function ApprovalCard() {
 
   const item = pending[0] ?? null;
   const [secondsLeft, setSecondsLeft] = useState(item?.expires_in ?? 0);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
   useEffect(() => {
     if (!item) return;
@@ -32,19 +34,24 @@ export function ApprovalCard() {
   const originLabel = chatLabelFor(item.session_key, chats, t);
 
   const handleDecide = async (allow: boolean, always: boolean) => {
-    if (!session) return;
+    if (busyRef.current || !item || !session) return;
+    busyRef.current = true;
+    setBusy(true);
     const currentId = item.id;
     const sessionKey = item.session_key;
-    // Optimistic removal from local store
-    approvalsStore.getState().removePending(currentId, always ? sessionKey : undefined);
     try {
       await decideApproval(session, currentId, allow, always);
+      approvalsStore.getState().removePending(currentId, always ? sessionKey : undefined);
     } catch (err: any) {
       if (err?.status === 404) {
         toast.show(t("approvals.expired"));
+        approvalsStore.getState().removePending(currentId);
       } else {
-        toast.show(err instanceof Error ? err.message : String(err));
+        toast.show(t("common.operationFailed"));
       }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   };
 
@@ -102,6 +109,7 @@ export function ApprovalCard() {
           <Button
             title={t("approvals.deny")}
             variant="destructive"
+            disabled={busy}
             onPress={() => void handleDecide(false, false)}
           />
         </View>
@@ -109,6 +117,7 @@ export function ApprovalCard() {
           <Button
             title={t("approvals.allow")}
             variant="primary"
+            disabled={busy}
             onPress={() => void handleDecide(true, false)}
           />
         </View>
@@ -117,6 +126,7 @@ export function ApprovalCard() {
       <Button
         title={t("approvals.always")}
         variant="ghost"
+        disabled={busy}
         onPress={() => void handleDecide(true, true)}
       />
     </Sheet>

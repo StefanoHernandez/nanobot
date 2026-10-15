@@ -24,9 +24,9 @@ export function ApprovalsCard() {
     approvalsStore.getState().setEnabled(val);
     try {
       await setApprovalsEnabled(session, val);
-    } catch (err) {
+    } catch {
       approvalsStore.getState().setEnabled(!val);
-      toast.show(err instanceof Error ? err.message : String(err));
+      toast.show(t("common.operationFailed"));
     }
   };
 
@@ -37,8 +37,8 @@ export function ApprovalsCard() {
     try {
       await forgetApproval(session, key);
       approvalsStore.getState().removeAllow(key);
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : String(err));
+    } catch {
+      toast.show(t("common.operationFailed"));
     }
   };
 
