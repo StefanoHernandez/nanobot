@@ -14,7 +14,7 @@ from nanobot.ext.kanban import KanbanStore, kanban_db_path
 from nanobot.triggers.local_session_turns import LOCAL_TRIGGER_META
 
 _TASK_FOOTER = (
-    "Reply with the outcome. You may call kanban_complete, kanban_request_review, or kanban_block."
+    "Reply with the outcome. You may call the kanban tool (action complete, request_review or block)."
 )
 _WAKE_PREFIX = "Board message for you:\n"
 _WAKE_FAILURE_MESSAGE = "I couldn't reply to this message."
