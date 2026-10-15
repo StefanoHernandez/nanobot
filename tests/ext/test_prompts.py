@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -28,7 +29,8 @@ def test_global_and_project_scoping(prompts_file):
     assert [x["title"] for x in pr.list_prompts()] == ["Global"]
     assert {x["id"] for x in pr.list_prompts("alpha")} == {g["id"], p["id"]}
     assert g["variables"] == ["text"]
-    assert prompts_file.stat().st_mode & 0o777 == 0o600
+    if sys.platform != "win32":  # no POSIX modes on Windows
+        assert prompts_file.stat().st_mode & 0o777 == 0o600
 
 
 def test_edit_used_and_delete(monkeypatch):

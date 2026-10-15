@@ -127,7 +127,7 @@ def _timezone_name() -> str | None:
 def _rows(db: Path, start_ms: int) -> list[sqlite3.Row]:
     if not db.exists():
         return []
-    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+    conn = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True, timeout=2)
     conn.row_factory = sqlite3.Row
     try:
         return conn.execute(

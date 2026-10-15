@@ -69,7 +69,7 @@ def _add_sqlite(tar: tarfile.TarFile, path: Path, arcname: str) -> None:
     fd, tmp = tempfile.mkstemp(suffix=".sqlite3")
     os.close(fd)
     try:
-        src = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+        src = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True, timeout=5)
         dst = sqlite3.connect(tmp)
         try:
             src.backup(dst)

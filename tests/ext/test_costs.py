@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -117,7 +118,8 @@ async def test_settings_post(tmp_path, monkeypatch):
     assert ok.status == 200
     saved = costs.load_settings(path)
     assert saved["daily_cap_usd"] == 5.0 and saved["prices"] == {"m": {"input": 1.0, "output": 2.0}}
-    assert path.stat().st_mode & 0o777 == 0o600
+    if sys.platform != "win32":  # no POSIX modes on Windows
+        assert path.stat().st_mode & 0o777 == 0o600
     await handler(_post({"daily_cap_usd": None}, "api"))
     assert costs.load_settings(path)["daily_cap_usd"] is None
     assert costs.load_settings(path)["prices"]  # untouched fields kept
