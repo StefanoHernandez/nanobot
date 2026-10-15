@@ -18,6 +18,9 @@
     "keep": "Keep",
     "operationFailed": "Operation failed"
   },
+  "devices": {
+    "revokeSelf": "This is this phone: you will be disconnected"
+  },
   "thread": {
     "reasoning": "Reasoning",
     "activityWorkingFor": "Working for {{duration}}",
@@ -537,6 +540,8 @@
     "saveToProject": "Save to project",
     "saved": "Saved to project",
     "saveFailed": "Could not save to project",
+    "fileExistsConfirm": "File already exists: overwrite?",
+    "overwrite": "Overwrite",
     "share": "Share"
   },
   "system": {

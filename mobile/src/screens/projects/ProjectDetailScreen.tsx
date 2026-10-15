@@ -21,7 +21,7 @@ import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, Dialog, IconButton, Sheet, TextField, toast } from "../../ui/components";
 import { BotFace } from "../../ui/BotFace";
-import { useSession } from "../../state/sessionStore";
+import { sessionStore, useSession } from "../../state/sessionStore";
 import { chatsStore, useChats } from "../../state/chatsStore";
 import {
   archiveProject,
@@ -89,6 +89,16 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isFirstRender = React.useRef(true);
+  const genRef = React.useRef(0);
+  const mountedRef = React.useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      genRef.current++;
+    };
+  }, []);
 
   // Edit metadata sheet
   const [editSheetOpen, setEditSheetOpen] = useState(false);
@@ -120,16 +130,28 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
   const [archiving, setArchiving] = useState(false);
 
   const loadData = async () => {
+    const currentGen = ++genRef.current;
+    const profileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
     if (!session) return;
     setLoading(true);
     try {
       setError(null);
       const res = await getProject(session, id);
+      if (!mountedRef.current || currentGen !== genRef.current) return;
+      if (sessionStore?.getState && sessionStore.getState()?.profile?.id !== profileId) return;
       setDetail(res);
     } catch (e: any) {
+      if (!mountedRef.current || currentGen !== genRef.current) return;
+      if (sessionStore?.getState && sessionStore.getState()?.profile?.id !== profileId) return;
       setError(e?.message || "generic");
     } finally {
-      setLoading(false);
+      if (
+        mountedRef.current &&
+        currentGen === genRef.current &&
+        (!sessionStore?.getState || sessionStore.getState()?.profile?.id === profileId)
+      ) {
+        setLoading(false);
+      }
     }
   };
 

@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from "expo-file-system";
+import { viewerCsp } from "./ArtifactWebView";
 
 const PNG_PREFIX = "data:image/png;base64,";
 /** About 6 MB of PNG bytes. Larger snapshots are refused. */
@@ -14,11 +15,18 @@ export function pngBase64(dataUrl: string): string | null {
   return body;
 }
 
-/** A print document for the artifact markup. A full HTML document is left as the author wrote it. */
+/** A print document for the artifact markup. Injects strict CSP into head, wrapping in head if missing. */
 export function printDocument(body: string): string {
+  const csp = viewerCsp(false, false);
+  if (/<head\b[^>]*>/i.test(body)) {
+    return body.replace(/<head\b[^>]*>/i, (match) => `${match}${csp}`);
+  }
+  if (/<html\b[^>]*>/i.test(body)) {
+    return body.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${csp}</head>`);
+  }
   const trimmed = body.trimStart();
-  if (/^<!doctype html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) return body;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0}</style></head><body>${body}</body></html>`;
+  const withoutDocType = trimmed.replace(/^<!doctype html[^>]*>/i, "").trimStart();
+  return `<!DOCTYPE html><html><head>${csp}<meta charset="utf-8"><style>body{margin:0}</style></head><body>${withoutDocType}</body></html>`;
 }
 
 const PREVIEW_NAME = /^preview\.(html|svg|mmd|vl|geojson|react)$/;

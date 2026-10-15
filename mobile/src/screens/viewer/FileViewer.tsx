@@ -133,7 +133,17 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   useEffect(() => {
     setNetwork(false);
     setAskNetwork(false);
-  }, [name, opened?.id]);
+    setFixError(null);
+  }, [name, opened?.id, versionIndex]);
+
+  useEffect(() => {
+    if (opened && opened.index !== versionIndex) {
+      artifactStore.set(opened.content, opened.name, {
+        ...opened,
+        index: versionIndex,
+      });
+    }
+  }, [opened, versionIndex]);
 
   useEffect(() => {
     setPageIndex(0);

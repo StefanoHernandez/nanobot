@@ -40,9 +40,10 @@ test("an in-memory preview is written only for a safe preview name", () => {
   expect(written).toHaveLength(2);
 });
 
-test("print wraps a fragment and leaves a full document alone", () => {
+test("print wraps a fragment and injects CSP into a full document", () => {
   expect(printDocument("<svg></svg>")).toContain("<!DOCTYPE html>");
   expect(printDocument("<svg></svg>")).toContain("<svg></svg>");
   const full = "<!DOCTYPE html><html><body>già</body></html>";
-  expect(printDocument(full)).toBe(full);
+  expect(printDocument(full)).toContain("<head><meta http-equiv=\"Content-Security-Policy\"");
+  expect(printDocument(full)).toContain("<body>già</body>");
 });
