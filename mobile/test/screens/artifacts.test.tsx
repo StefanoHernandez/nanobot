@@ -108,6 +108,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     jest.useRealTimers();
     jest.clearAllMocks();
     capturedWebViewProps = null;
+    artifactStore.clear();
   });
 
   afterEach(() => {
@@ -124,6 +125,11 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(viewerKind("d.mmd")).toBe("mermaid");
     expect(viewerKind("diagram.mermaid")).toBe("mermaid");
     expect(viewerKind("vector.svg")).toBe("svg");
+    expect(viewerKind("preview.vl")).toBe("chart");
+    expect(viewerKind("preview.geojson")).toBe("map");
+    expect(viewerKind("preview.react")).toBe("react");
+    expect(viewerKind("app.tsx")).toBe("code");
+    expect(viewerKind("data.json")).toBe("json");
     expect(viewerKind("old.doc")).toBeNull();
     expect(viewerKind("old.ppt")).toBeNull();
   });
@@ -605,6 +611,147 @@ describe("P5-V1 Artifacts & Document Previews", () => {
   });
 });
 
+test("buildShellHtml react inlines libs in order, locks network by default, and blocks imports", () => {
+  const libs = {
+    react: "/*REACT*/",
+    reactDom: "/*REACT_DOM*/",
+    babel: "/*BABEL*/",
+  };
+  const source = "function App() { return <h1>Hi</h1>; }";
+  const locked = buildShellHtml({ kind: "react", html: source, libs, network: false });
+  expect(locked.indexOf("/*REACT*/")).toBeLessThan(locked.indexOf("/*REACT_DOM*/"));
+  expect(locked.indexOf("/*REACT_DOM*/")).toBeLessThan(locked.indexOf("/*BABEL*/"));
+  expect(locked).toContain("connect-src 'none'");
+  expect(locked).not.toContain("connect-src https:");
+  expect(locked).toContain("img-src data: blob:");
+  expect(locked).not.toContain("img-src data: blob: https:");
+  expect(locked).toContain("script-src 'unsafe-inline' 'unsafe-eval'");
+  expect(locked).not.toMatch(/script-src[^;]*https/);
+
+  const online = buildShellHtml({ kind: "react", html: source, libs, network: true });
+  expect(online).toContain("connect-src https:");
+  expect(online).not.toMatch(/script-src[^;]*https/);
+
+  const remote = buildShellHtml({
+    kind: "react",
+    html: 'import x from "https://evil.example/x.js"\nfunction App() { return null; }',
+    libs,
+  });
+  expect(remote).not.toContain("https://evil.example");
+  expect(remote).not.toContain("Babel.transform");
+  const bare = buildShellHtml({
+    kind: "react",
+    html: 'import"https://evil.example/y.js"\nfunction App() { return null; }',
+    libs,
+  });
+  expect(bare).not.toContain("https://evil.example");
+  expect(bare).not.toContain("Babel.transform");
+
+  const scriptBreak = buildShellHtml({
+    kind: "react",
+    html: 'function App() { return "note: </script>"; }',
+    libs,
+  });
+  expect(scriptBreak).toContain("\\u003c/script");
+});
+
+test("buildShellHtml map inlines leaflet libs, locks network by default, and blocks remote urls", () => {
+  const libs = {
+    leafletCss: "/*LEAFLET_CSS*/",
+    leaflet: "/*LEAFLET_JS*/",
+  };
+  const spec = JSON.stringify({
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [12.5, 41.9] },
+        properties: { name: "Roma" },
+      },
+    ],
+  });
+  const locked = buildShellHtml({ kind: "map", html: spec, libs, network: false });
+  expect(locked).toContain("/*LEAFLET_CSS*/");
+  expect(locked).toContain("/*LEAFLET_JS*/");
+  expect(locked).toContain("connect-src 'none'");
+  expect(locked).not.toContain("connect-src https:");
+  expect(locked).toContain("img-src data: blob:");
+  expect(locked).not.toContain("img-src data: blob: https:");
+  expect(locked).not.toContain("tile.openstreetmap.org");
+
+  const online = buildShellHtml({ kind: "map", html: spec, libs, network: true });
+  expect(online).toContain("connect-src https:");
+  expect(online).toContain("img-src data: blob: https:");
+  expect(online).toContain("tile.openstreetmap.org");
+
+  const remote = buildShellHtml({
+    kind: "map",
+    html: JSON.stringify({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [0, 0] },
+      properties: { url: "https://evil.example/x" },
+    }),
+    libs,
+  });
+  expect(remote).not.toContain("https://evil.example");
+  expect(remote).not.toContain("L.map(");
+
+  const scriptBreak = buildShellHtml({
+    kind: "map",
+    html: JSON.stringify({
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] }, properties: { note: "</script>" } }],
+    }),
+    libs,
+  });
+  expect(scriptBreak).toContain("\\u003c/script");
+});
+
+test("buildShellHtml chart inlines vega libs, themes inline data, and blocks remote urls", () => {
+  const libs = {
+    vega: "/*VEGA_LIB*/",
+    vegaLite: "/*VEGA_LITE_LIB*/",
+    vegaEmbed: "/*VEGA_EMBED_LIB*/",
+  };
+  const spec = JSON.stringify({
+    data: { values: [{ month: "Jan", sales: 3 }] },
+    mark: "bar",
+    encoding: {
+      x: { field: "month", type: "ordinal" },
+      y: { field: "sales", type: "quantitative" },
+    },
+  });
+  const shell = buildShellHtml({ kind: "chart", html: spec, libs, network: true, isDark: true });
+  expect(shell).toContain("/*VEGA_LIB*/");
+  expect(shell).toContain("/*VEGA_LITE_LIB*/");
+  expect(shell).toContain("/*VEGA_EMBED_LIB*/");
+  expect(shell).toContain('"values"');
+  expect(shell).toContain("connect-src 'none'");
+  expect(shell).not.toContain("connect-src https:");
+  expect(shell).toContain("img-src data: blob:");
+  expect(shell).not.toContain("img-src data: blob: https:");
+  expect(shell).toContain('tooltip = { theme: "dark" }');
+  expect(shell).toContain("translate(");
+
+  const remote = buildShellHtml({
+    kind: "chart",
+    html: JSON.stringify({ data: { url: "https://evil.example/data.json" }, mark: "bar" }),
+    libs,
+  });
+  expect(remote).not.toContain("https://evil.example");
+  expect(remote).not.toContain("vegaEmbed(container");
+
+  const scriptBreak = buildShellHtml({
+    kind: "chart",
+    html: JSON.stringify({ data: { values: [{ note: "</script>" }] }, mark: "point" }),
+    libs,
+  });
+  expect(scriptBreak).toContain("\\u003c/script");
+  const closers = scriptBreak.match(/<\/script>/gi) ?? [];
+  expect(closers.length).toBeGreaterThan(0);
+  expect(scriptBreak).not.toContain('"</script>"');
+});
+
 test("mermaid follows the app theme and svg/mermaid pages carry the zoom script", () => {
   const dark = buildShellHtml({ kind: "mermaid", html: "graph TD; A-->B", isDark: true, bg: "#1c3a34", fg: "#e8f0ed", accent: "#e4d4ec" });
   expect(dark).toContain('theme: "dark"');
@@ -735,7 +882,7 @@ test("an HTML preview rotates, fits, and exports PDF", async () => {
   expect(ScreenOrientation.lockAsync).toHaveBeenCalledWith("LANDSCAPE");
 
   fireEvent.press(screen.getByLabelText("Save PDF"));
-  await act(async () => {});
+  await waitFor(() => expect(shareMedia).toHaveBeenCalled());
   expect(Print.printToFileAsync).toHaveBeenCalledWith({
     html: expect.stringContaining("<h1>Vendite</h1>"),
   });
@@ -743,6 +890,31 @@ test("an HTML preview rotates, fits, and exports PDF", async () => {
 
   await view.unmount();
   artifactStore.clear();
+});
+
+test("answer.md uses paginated reading view from artifactStore, not route params", async () => {
+  const md = "## Alpha\n\nPage one text\n\n## Beta\n\nPage two text";
+  artifactStore.set(md, "answer.md");
+  const routeParams = { name: "answer.md" };
+  expect(JSON.stringify(routeParams)).not.toContain("Page one text");
+
+  try {
+    const view = await wrap(<FileViewer uri="" name="answer.md" />);
+    expect(await screen.findByText("Alpha")).toBeTruthy();
+    expect(screen.getByText("Page one text")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText("Next page"));
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Page 2 of 2")).toBeTruthy();
+    });
+    expect(screen.getByText("Beta")).toBeTruthy();
+    expect(screen.getByText("Page two text")).toBeTruthy();
+    expect(screen.getByLabelText("Save PDF")).toBeTruthy();
+    await view.unmount();
+  } finally {
+    artifactStore.clear();
+  }
 });
 
 test("preview libraries are inlined from the app, never fetched from a CDN", () => {
@@ -756,8 +928,14 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
     pptxPreview: "window.pptxPreview = { init: 1 };",
     xlsx: "window.XLSX = 1;",
   };
-  for (const kind of ["html", "svg", "mermaid", "pdf", "docx", "pptx", "xlsx"] as const) {
-    const shell = buildShellHtml({ kind, html: "<p>x</p>", fileSize: 1000, libs });
+  const chartLibs = { ...libs, vega: "window.vega=1;", vegaLite: "window.vegaLite=1;", vegaEmbed: "window.vegaEmbed=1;" };
+  for (const kind of ["html", "svg", "mermaid", "chart", "pdf", "docx", "pptx", "xlsx"] as const) {
+    const shell = buildShellHtml({
+      kind,
+      html: kind === "chart" ? '{"data":{"values":[]},"mark":"bar"}' : "<p>x</p>",
+      fileSize: 1000,
+      libs: kind === "chart" ? chartLibs : libs,
+    });
     expect(shell).not.toContain("cdn.jsdelivr.net");
     expect(shell).not.toContain("cdnjs.cloudflare.com");
     expect(shell).not.toContain("unpkg.com");

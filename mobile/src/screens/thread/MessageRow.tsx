@@ -1,5 +1,6 @@
 import React, { memo } from "react";
 import { Pressable, Text, View } from "react-native";
+import { router } from "expo-router";
 import { useStore } from "zustand";
 import type { UIMessage } from "@/lib/types";
 import type { TurnUnit } from "@/lib/activity-timeline";
@@ -11,6 +12,7 @@ import { useTheme } from "../../ui/ThemeProvider";
 import { ActivityRow } from "./ActivityRow";
 import { MediaList } from "./media/MediaViews";
 import { ReasoningBlock } from "./ReasoningBlock";
+import { artifactStore } from "../viewer/artifactStore";
 
 type Props = { unit: TurnUnit; live: boolean; chatKey?: string; onLongPress?: (m: UIMessage) => void };
 
@@ -23,6 +25,7 @@ function MessageRowImpl({ unit, live, chatKey, onLongPress }: Props) {
 
   const isFinishedAnswer =
     !!m && m.role === "assistant" && !live && !m.isStreaming && m.kind !== "trace" && !!m.content;
+  const showOpenDocument = isFinishedAnswer && (m?.content.trim().length ?? 0) >= 800;
 
 
   if (unit.type === "activity") return <ActivityRow messages={unit.messages} live={live} startedAtMs={unit.startedAtMs} />;
@@ -48,13 +51,25 @@ function MessageRowImpl({ unit, live, chatKey, onLongPress }: Props) {
       {m.reasoning ? <ReasoningBlock text={m.reasoning} streaming={!!m.reasoningStreaming} /> : null}
       {m.content ? <Markdown text={m.content} chatKey={chatKey} messageId={m.id} /> : null}
       {m.media?.length ? <MediaList media={m.media} /> : null}
-      {isFinishedAnswer && audioOn ? (
+      {showOpenDocument || (isFinishedAnswer && audioOn) ? (
         <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 4 }}>
-          <IconButton
-            icon={isSpeaking ? "stop-circle-outline" : "volume-high"}
-            accessibilityLabel={t(isSpeaking ? "speech.stop" : "speech.listen")}
-            onPress={() => speechStore.getState().toggle(m.id, m.content)}
-          />
+          {showOpenDocument ? (
+            <IconButton
+              icon="book-open-variant"
+              accessibilityLabel={t("artifact.openDocument")}
+              onPress={() => {
+                artifactStore.set(m.content, "answer.md");
+                router.push({ pathname: "/viewer", params: { name: "answer.md" } });
+              }}
+            />
+          ) : null}
+          {isFinishedAnswer && audioOn ? (
+            <IconButton
+              icon={isSpeaking ? "stop-circle-outline" : "volume-high"}
+              accessibilityLabel={t(isSpeaking ? "speech.stop" : "speech.listen")}
+              onPress={() => speechStore.getState().toggle(m.id, m.content)}
+            />
+          ) : null}
         </View>
       ) : null}
     </Wrap>

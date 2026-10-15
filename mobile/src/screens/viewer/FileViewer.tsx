@@ -30,6 +30,7 @@ import { openLocal, shareMedia } from "../thread/media/media";
 import { langOf, parseCsv, prettyJson, viewerKind, type ViewerKind } from "./formats";
 import { ArtifactWebView, type ArtifactKind } from "./ArtifactWebView";
 import { artifactStore } from "./artifactStore";
+import { markdownToPrintHtml, paginateMarkdown } from "./readingPages";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const MAX_PREVIEW_CHARS = 200 * 1024; // 200 KB
@@ -116,16 +117,27 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
 
   const ext = useMemo(() => langOf(name), [name]);
   const kind = useMemo(() => viewerKind(name), [name]);
+  const isReadingView = name === "answer.md" && uri === "";
+  const readingPages = useMemo(
+    () => (isReadingView ? paginateMarkdown(content) : []),
+    [isReadingView, content]
+  );
+  const [pageIndex, setPageIndex] = useState(0);
   const toolKind = activeVersion?.kind ?? kind;
   const canFit = toolKind === "html";
   const canPng = toolKind === "svg" || toolKind === "mermaid";
   const canPdf = toolKind === "html" || toolKind === "svg";
-  const canNetwork = toolKind === "html" || toolKind === "svg" || toolKind === "mermaid";
+  const canNetwork =
+    toolKind === "html" || toolKind === "svg" || toolKind === "mermaid" || toolKind === "map" || toolKind === "react";
 
   useEffect(() => {
     setNetwork(false);
     setAskNetwork(false);
   }, [name, opened?.id]);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [content, isReadingView]);
 
   useEffect(() => {
     return () => {
@@ -144,6 +156,9 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
       kind === "html" ||
       kind === "svg" ||
       kind === "mermaid" ||
+      kind === "chart" ||
+      kind === "map" ||
+      kind === "react" ||
       kind === "pdf" ||
       kind === "docx" ||
       kind === "pptx" ||
@@ -181,7 +196,14 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         if (active) setFileSize(size);
 
         if (isArtifact) {
-          if (kind === "html" || kind === "svg" || kind === "mermaid") {
+          if (
+            kind === "html" ||
+            kind === "svg" ||
+            kind === "mermaid" ||
+            kind === "chart" ||
+            kind === "map" ||
+            kind === "react"
+          ) {
             if (size <= 2 * 1024 * 1024 || size > 10 * 1024 * 1024) {
               const text = await file.text();
               if (active) setContent(text);
@@ -258,7 +280,16 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
 
   const sendToChat = (request?: string) => {
     if (!canAsk || !session || sending.current) return;
-    const previewKind = activeVersion?.kind ?? (kind === "svg" || kind === "mermaid" || kind === "html" ? kind : "html");
+    const previewKind =
+      activeVersion?.kind ??
+      (kind === "svg" ||
+      kind === "mermaid" ||
+      kind === "chart" ||
+      kind === "map" ||
+      kind === "react" ||
+      kind === "html"
+        ? kind
+        : "html");
     const text = artifactFixText({
       id: opened?.id || freshArtifactId(previewKind),
       kind: previewKind,
@@ -312,7 +343,8 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     const body = activeVersion?.code ?? content;
     if (!body.trim()) return;
     setPdfBusy(true);
-    void Print.printToFileAsync({ html: printDocument(body) })
+    const html = isReadingView ? markdownToPrintHtml(content) : printDocument(body);
+    void Print.printToFileAsync({ html })
       .then((result) => {
         const out = result.uri;
         if (!out.startsWith("file://") || out.includes("..")) throw new Error("export");
@@ -523,7 +555,14 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         );
       }
 
-      if (kind === "html" || kind === "svg" || kind === "mermaid") {
+      if (
+        kind === "html" ||
+        kind === "svg" ||
+        kind === "mermaid" ||
+        kind === "chart" ||
+        kind === "map" ||
+        kind === "react"
+      ) {
         if (fileSize > 10 * 1024 * 1024 && !forcePreviewLargeText) {
           return (
             <View style={{ flex: 1 }}>
@@ -642,6 +681,17 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     }
 
     if (kind === "markdown") {
+      if (isReadingView) {
+        const pageText = readingPages[pageIndex] ?? "";
+        return (
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={[styles.contentPadding, { paddingBottom: 16 }]}
+          >
+            <Markdown text={pageText} />
+          </ScrollView>
+        );
+      }
       return (
         <ScrollView
           style={styles.scrollArea}
@@ -824,6 +874,58 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     </View>
   ) : null;
 
+  const readingBar =
+    isReadingView && allowed && !loading && !error && !tooLarge ? (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          minHeight: 48,
+          paddingHorizontal: 4,
+          borderTopWidth: 1,
+          borderTopColor: th.colors.border,
+          backgroundColor: th.colors.background,
+          paddingBottom: insets.bottom,
+        }}
+      >
+        {readingPages.length > 1 ? (
+          <>
+            <IconButton
+              icon="chevron-left"
+              accessibilityLabel={t("artifact.prevPage")}
+              disabled={pageIndex === 0}
+              onPress={() => setPageIndex((i) => Math.max(0, i - 1))}
+            />
+            <Text
+              style={{
+                flex: 1,
+                textAlign: "center",
+                color: th.colors.foreground,
+                fontFamily: th.font.regular,
+                fontSize: 14,
+              }}
+            >
+              {t("artifact.page", { current: pageIndex + 1, total: readingPages.length })}
+            </Text>
+            <IconButton
+              icon="chevron-right"
+              accessibilityLabel={t("artifact.nextPage")}
+              disabled={pageIndex >= readingPages.length - 1}
+              onPress={() => setPageIndex((i) => Math.min(readingPages.length - 1, i + 1))}
+            />
+          </>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
+        <IconButton
+          icon="file-pdf-box"
+          accessibilityLabel={t("artifact.exportPdf")}
+          disabled={pdfBusy || !content.trim()}
+          onPress={savePdf}
+        />
+      </View>
+    ) : null;
+
   const fixBar = canAsk ? (
     <View style={{ borderTopWidth: 1, borderTopColor: th.colors.border, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 8, gap: 8, backgroundColor: th.colors.background }}>
       {fixError ? (
@@ -904,6 +1006,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
       {toolRow}
       {/* Body */}
       <View style={{ flex: 1 }}>{renderBody()}</View>
+      {readingBar}
       <Dialog
         open={askNetwork}
         title={t("artifact.networkTitle")}

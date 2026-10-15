@@ -26,9 +26,19 @@ export const CDN_VERSIONS = {
   pptxPreview: "1.0.7",
   // Note: xlsx 0.18.5 is pinned. Any parsing risk from legacy SheetJS is strictly contained by the WebView sandbox (no network, connect-src 'none', no storage, no secrets).
   xlsx: "0.18.5",
+  vega: "6.4.0",
+  vegaLite: "6.5.0",
+  vegaEmbed: "7.3.0",
+  leaflet: "1.9.4",
+  react: "18.3.1",
+  reactDom: "18.3.1",
+  babel: "7.28.5",
 } as const;
 
 export function viewerLibsFor(kind: ArtifactKind, light: boolean): ViewerLibName[] {
+  if (kind === "chart") return ["vega", "vegaLite", "vegaEmbed"];
+  if (kind === "map") return ["leafletCss", "leaflet"];
+  if (kind === "react") return ["react", "reactDom", "babel"];
   if (kind === "mermaid") return ["mermaid"];
   if (kind === "pdf") return ["pdfjs", "pdfjsWorker"];
   if (kind === "docx") return light ? ["pako"] : ["jszip", "docxPreview"];
@@ -71,14 +81,15 @@ export function parseZipCentralDirectory(tailChunk: Uint8Array, totalSize: numbe
 }
 
 /** Sandbox for one preview. Network stays off unless this render was confirmed. Scripts never come from the network. */
-export function viewerCsp(allowNetwork = false): string {
+export function viewerCsp(allowNetwork = false, allowRemoteImages = true): string {
   const connect = allowNetwork ? "https:" : "'none'";
+  const images = allowRemoteImages ? "data: blob: https:" : "data: blob:";
   const policy = [
     "default-src 'none'",
     "script-src 'unsafe-inline' 'unsafe-eval'",
     "style-src 'unsafe-inline'",
     "font-src data:",
-    "img-src data: blob: https:",
+    `img-src ${images}`,
     "media-src data: blob:",
     "worker-src blob:",
     `connect-src ${connect}`,
@@ -95,6 +106,9 @@ export type ArtifactKind =
   | "html"
   | "svg"
   | "mermaid"
+  | "chart"
+  | "map"
+  | "react"
   | "pdf"
   | "docx"
   | "pptx"
@@ -153,6 +167,321 @@ export function escapeHtml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/** True when a Vega-Lite spec references remote data or images via url/href. */
+export function specHasRemoteRef(value: unknown): boolean {
+  if (value == null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(specHasRemoteRef);
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if ((key === "url" || key === "href") && typeof val === "string") return true;
+    if (val != null && typeof val === "object" && specHasRemoteRef(val)) return true;
+  }
+  return false;
+}
+
+export function safeChartSpecJson(spec: Record<string, unknown>): string {
+  return JSON.stringify(spec)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+export function safeReactSourceJson(source: string): string {
+  return JSON.stringify(source)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+export function reactSourceRefused(source: string): boolean {
+  return /\bimport\b/.test(source) || /\brequire\s*\(/.test(source);
+}
+
+function parseReactSourceText(text: string): { source?: string; blocked?: boolean } {
+  if (reactSourceRefused(text)) return { blocked: true };
+  return { source: text };
+}
+
+const GEOJSON_ROOT_TYPES = [
+  "Feature",
+  "FeatureCollection",
+  "Point",
+  "MultiPoint",
+  "LineString",
+  "MultiLineString",
+  "Polygon",
+  "MultiPolygon",
+  "GeometryCollection",
+] as const;
+
+export function isValidGeoJsonRoot(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const t = (value as Record<string, unknown>).type;
+  return typeof t === "string" && (GEOJSON_ROOT_TYPES as readonly string[]).includes(t);
+}
+
+export function sanitizeLeafletCss(css: string): string {
+  return css.replace(/url\s*\([^)]*\)/gi, "none").replace(/<\//g, "\\003c/");
+}
+
+function parseMapSpecText(text: string): { spec?: Record<string, unknown>; blocked?: boolean } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { blocked: true };
+  }
+  if (!isValidGeoJsonRoot(parsed)) return { blocked: true };
+  if (specHasRemoteRef(parsed)) return { blocked: true };
+  return { spec: parsed as Record<string, unknown> };
+}
+
+function mapRenderScript({
+  accent,
+  specLiteral,
+  network,
+}: {
+  accent: string;
+  specLiteral: string | null;
+  network: boolean;
+}): string {
+  const specInit = specLiteral != null ? `var spec = ${specLiteral};` : "var spec = null;";
+  const tileLayer = network
+    ? 'L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "\\u00a9 OpenStreetMap" }).addTo(map);'
+    : "";
+  return `<script>
+    (function() {
+      var GEO_TYPES = ${JSON.stringify([...GEOJSON_ROOT_TYPES])};
+      function isValidGeoJsonRoot(value) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+        var t = value.type;
+        return typeof t === "string" && GEO_TYPES.indexOf(t) >= 0;
+      }
+      function specHasRemoteRef(value) {
+        if (value == null || typeof value !== "object") return false;
+        if (Array.isArray(value)) {
+          for (var i = 0; i < value.length; i++) if (specHasRemoteRef(value[i])) return true;
+          return false;
+        }
+        for (var key in value) {
+          if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+          var val = value[key];
+          if ((key === "url" || key === "href") && typeof val === "string") return true;
+          if (val && typeof val === "object" && specHasRemoteRef(val)) return true;
+        }
+        return false;
+      }
+      function renderMapSpec(spec) {
+        if (!isValidGeoJsonRoot(spec)) {
+          postError(new Error("Invalid GeoJSON"));
+          return;
+        }
+        if (specHasRemoteRef(spec)) {
+          postError(new Error("Remote url not allowed"));
+          return;
+        }
+        if (typeof L === "undefined" || typeof L.map !== "function") {
+          postError(new Error("Leaflet not available"));
+          return;
+        }
+        try {
+          var container = document.getElementById("container");
+          container.style.height = window.innerHeight + "px";
+          var map = L.map(container, { zoomControl: true, attributionControl: true });
+          ${tileLayer}
+          var accent = ${JSON.stringify(accent)};
+          var layer = L.geoJSON(spec, {
+            style: function() { return { color: accent, weight: 3 }; },
+            pointToLayer: function(feature, latlng) {
+              return L.circleMarker(latlng, { radius: 7, color: accent, fillColor: accent, fillOpacity: 0.8 });
+            }
+          }).addTo(map);
+          var bounds = layer.getBounds();
+          if (bounds.isValid()) map.fitBounds(bounds, { padding: [16, 16] });
+          map.invalidateSize();
+          setTimeout(function() { map.invalidateSize(); }, 50);
+          postReady();
+        } catch (e) {
+          postError(e);
+        }
+      }
+      ${specInit}
+      try {
+        ${specLiteral != null ? "renderMapSpec(spec);" : ""}
+      } catch (e) {
+        postError(e);
+      }
+      window.__renderMapFromText = function(text) {
+        try {
+          var parsed = JSON.parse(text);
+          renderMapSpec(parsed);
+        } catch (e) {
+          postError(e);
+        }
+        return Promise.resolve();
+      };
+    })();
+  </script>`;
+}
+
+function reactRenderScript({ sourceLiteral }: { sourceLiteral: string | null }): string {
+  const sourceInit = sourceLiteral != null ? `var source = ${sourceLiteral};` : "var source = null;";
+  return `<script>
+    (function() {
+      function refuseSource(text) {
+        return /\\bimport\\b/.test(text) || /\\brequire\\s*\\(/.test(text);
+      }
+      function renderReactSource(source) {
+        if (refuseSource(source)) {
+          postError(new Error("Import not allowed"));
+          return;
+        }
+        if (typeof Babel === "undefined" || typeof React === "undefined" || typeof ReactDOM === "undefined") {
+          postError(new Error("React runtime not available"));
+          return;
+        }
+        try {
+          var result = Babel.transform(source, { filename: "App.tsx", presets: [["react", { runtime: "classic" }], "typescript"] });
+          var code = result.code;
+          var App = new Function("React", "ReactDOM", code + "\\nreturn typeof App === 'function' ? App : null;")(React, ReactDOM);
+          if (typeof App !== "function") {
+            postError(new Error("App component required"));
+            return;
+          }
+          var container = document.getElementById("container");
+          ReactDOM.createRoot(container).render(React.createElement(App));
+          postReady();
+        } catch (e) {
+          postError(e);
+        }
+      }
+      ${sourceInit}
+      try {
+        ${sourceLiteral != null ? "renderReactSource(source);" : ""}
+      } catch (e) {
+        postError(e);
+      }
+      window.__renderReactFromText = function(text) {
+        renderReactSource(text);
+        return Promise.resolve();
+      };
+    })();
+  </script>`;
+}
+
+function prepareChartSpec(spec: Record<string, unknown>, accent: string): Record<string, unknown> {
+  const out = { ...spec };
+  const mark = out.mark;
+  if (typeof mark === "string") {
+    out.mark = { type: mark, color: accent };
+  } else if (typeof mark === "object" && mark != null && !Array.isArray(mark)) {
+    const markObj = mark as Record<string, unknown>;
+    if (!markObj.color) out.mark = { ...markObj, color: accent };
+  }
+  return out;
+}
+
+function parseChartSpecText(text: string): { spec?: Record<string, unknown>; blocked?: boolean } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { blocked: true };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { blocked: true };
+  if (specHasRemoteRef(parsed)) return { blocked: true };
+  return { spec: parsed as Record<string, unknown> };
+}
+
+function chartRenderScript({
+  isDark,
+  bg,
+  fg,
+  border,
+  accent,
+  specLiteral,
+}: {
+  isDark: boolean;
+  bg: string;
+  fg: string;
+  border: string;
+  accent: string;
+  specLiteral: string | null;
+}): string {
+  const themeConfig = JSON.stringify({
+    background: bg,
+    axis: { labelColor: fg, titleColor: fg, domainColor: border, gridColor: border },
+    legend: { labelColor: fg, titleColor: fg },
+    title: { color: fg },
+    view: { stroke: border },
+  });
+  const tooltipLine = isDark ? 'opts.tooltip = { theme: "dark" };' : "";
+  const specInit = specLiteral != null ? `var spec = ${specLiteral};` : "var spec = null;";
+  return `<script>
+    (function() {
+      function specHasRemoteRef(value) {
+        if (value == null || typeof value !== "object") return false;
+        if (Array.isArray(value)) {
+          for (var i = 0; i < value.length; i++) if (specHasRemoteRef(value[i])) return true;
+          return false;
+        }
+        for (var key in value) {
+          if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+          var val = value[key];
+          if ((key === "url" || key === "href") && typeof val === "string") return true;
+          if (val && typeof val === "object" && specHasRemoteRef(val)) return true;
+        }
+        return false;
+      }
+      function applyAccent(spec, accentColor) {
+        var mark = spec.mark;
+        if (typeof mark === "string") spec.mark = { type: mark, color: accentColor };
+        else if (mark && typeof mark === "object" && !Array.isArray(mark) && !mark.color) {
+          spec.mark = Object.assign({}, mark, { color: accentColor });
+        }
+      }
+      function renderChartSpec(spec) {
+        if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+          postError(new Error("Invalid chart spec"));
+          return Promise.resolve();
+        }
+        if (specHasRemoteRef(spec)) {
+          postError(new Error("Remote url not allowed"));
+          return Promise.resolve();
+        }
+        if (typeof vegaEmbed !== "function") {
+          postError(new Error("vegaEmbed not available"));
+          return Promise.resolve();
+        }
+        applyAccent(spec, ${JSON.stringify(accent)});
+        var container = document.getElementById("container");
+        var themeConfig = ${themeConfig};
+        var opts = { actions: false, renderer: "svg", config: themeConfig };
+        ${tooltipLine}
+        return vegaEmbed(container, spec, opts).then(function() {
+          postReady();
+        }).catch(function(e) {
+          postError(e);
+        });
+      }
+      ${specInit}
+      try {
+        ${specLiteral != null ? "renderChartSpec(spec);" : ""}
+      } catch (e) {
+        postError(e);
+      }
+      window.__renderChartFromText = function(text) {
+        try {
+          var parsed = JSON.parse(text);
+          return renderChartSpec(parsed);
+        } catch (e) {
+          postError(e);
+          return Promise.resolve();
+        }
+      };
+    })();
+  </script>`;
 }
 
 function getChunkProtocolScript(): string {
@@ -709,9 +1038,23 @@ export function buildShellHtml({
     };
   </script>`;
 
+  const networkOn = network && !isLightPreview;
+  let cspAllowNetwork = false;
+  let cspAllowRemoteImages = true;
+  if (kind === "chart") {
+    cspAllowNetwork = false;
+    cspAllowRemoteImages = false;
+  } else if (kind === "map" || kind === "react") {
+    cspAllowNetwork = networkOn;
+    cspAllowRemoteImages = networkOn;
+  } else {
+    cspAllowNetwork = networkOn;
+    cspAllowRemoteImages = true;
+  }
+
   // Common bootstrap script that manages chunks & ready/error reporting
   const commonHead = `<head>
-${viewerCsp(network && !isLightPreview)}
+${viewerCsp(cspAllowNetwork, cspAllowRemoteImages)}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style>
@@ -924,6 +1267,133 @@ ${commonHead}
     }
   </script>
   ${zoomScript}
+</body>
+</html>`;
+  }
+
+  if (kind === "chart") {
+    const chartBodyStart = `<!DOCTYPE html>
+<html>
+${commonHead}
+<body>
+  <div id="container" style="padding:16px;"></div>
+  ${inlineScript(libs?.vega)}
+  ${inlineScript(libs?.vegaLite)}
+  ${inlineScript(libs?.vegaEmbed)}`;
+
+    if (!html && fileSize > 0) {
+      return `${chartBodyStart}
+  ${loadAllChunksScript}
+  ${chartRenderScript({ isDark, bg, fg, border, accent, specLiteral: null })}
+  <script>
+    loadAllChunks(${fileSize}, null).then(function(bytes) {
+      var text = new TextDecoder("utf-8").decode(bytes);
+      return window.__renderChartFromText(text);
+    }).catch(function(e) {
+      postError(e);
+    });
+  </script>
+</body>
+</html>`;
+    }
+
+    const parsed = html ? parseChartSpecText(html) : { blocked: true };
+    if (parsed.blocked || !parsed.spec) {
+      return `${chartBodyStart}
+  <script>
+    postError(new Error("Invalid chart spec"));
+  </script>
+</body>
+</html>`;
+    }
+    const specJson = safeChartSpecJson(prepareChartSpec(parsed.spec, accent));
+    return `${chartBodyStart}
+  ${chartRenderScript({ isDark, bg, fg, border, accent, specLiteral: specJson })}
+  ${zoomScript}
+</body>
+</html>`;
+  }
+
+  if (kind === "map") {
+    const leafletStyle = libs?.leafletCss ? `<style>${sanitizeLeafletCss(libs.leafletCss)}</style>` : "";
+    const mapBodyStart = `<!DOCTYPE html>
+<html>
+${commonHead}
+${leafletStyle}
+<body>
+  <div id="container"></div>
+  ${inlineScript(libs?.leaflet)}`;
+
+    if (!html && fileSize > 0) {
+      return `${mapBodyStart}
+  ${loadAllChunksScript}
+  ${mapRenderScript({ accent, specLiteral: null, network: networkOn })}
+  <script>
+    loadAllChunks(${fileSize}, null).then(function(bytes) {
+      var text = new TextDecoder("utf-8").decode(bytes);
+      return window.__renderMapFromText(text);
+    }).catch(function(e) {
+      postError(e);
+    });
+  </script>
+</body>
+</html>`;
+    }
+
+    const parsed = html ? parseMapSpecText(html) : { blocked: true };
+    if (parsed.blocked || !parsed.spec) {
+      return `${mapBodyStart}
+  <script>
+    postError(new Error("Invalid GeoJSON"));
+  </script>
+</body>
+</html>`;
+    }
+    const specJson = safeChartSpecJson(parsed.spec);
+    return `${mapBodyStart}
+  ${mapRenderScript({ accent, specLiteral: specJson, network: networkOn })}
+</body>
+</html>`;
+  }
+
+  if (kind === "react") {
+    const reactBodyStart = `<!DOCTYPE html>
+<html>
+${commonHead}
+<body>
+  <div id="container"></div>
+  ${inlineScript(libs?.react)}
+  ${inlineScript(libs?.reactDom)}
+  ${inlineScript(libs?.babel)}`;
+
+    if (!html && fileSize > 0) {
+      return `${reactBodyStart}
+  ${loadAllChunksScript}
+  ${reactRenderScript({ sourceLiteral: null })}
+  <script>
+    loadAllChunks(${fileSize}, null).then(function(bytes) {
+      var text = new TextDecoder("utf-8").decode(bytes);
+      return window.__renderReactFromText(text);
+    }).catch(function(e) {
+      postError(e);
+    });
+  </script>
+</body>
+</html>`;
+    }
+
+    const parsed = html ? parseReactSourceText(html) : { blocked: true };
+    if (parsed.blocked || parsed.source == null) {
+      return `${reactBodyStart}
+  <script>
+    postError(new Error("Import not allowed"));
+  </script>
+</body>
+</html>`;
+    }
+    const sourceJson = safeReactSourceJson(parsed.source);
+    return `${reactBodyStart}
+  ${reactRenderScript({ sourceLiteral: sourceJson })}
 </body>
 </html>`;
   }

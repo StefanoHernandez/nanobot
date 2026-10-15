@@ -11,7 +11,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1e2150",
+        "backgroundColor": "#1a1024",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -67,6 +67,12 @@
           "microphonePermission": "nanobot usa il microfono per i messaggi vocali"
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "nanobot usa la fotocamera per leggere il codice di collegamento"
+        }
+      ],
       "expo-web-browser",
       [
         "expo-font",
@@ -85,10 +91,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#eef0ff",
+          "backgroundColor": "#f7f4fb",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#14163a"
+            "backgroundColor": "#0c0b10"
           }
         }
       ],
