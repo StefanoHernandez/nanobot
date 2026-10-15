@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Linking, StyleSheet, View } from "react-native";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import { PreviewHost, type PreviewHandle } from "./PreviewHost";
 import { File } from "expo-file-system";
 import * as FileSystemLegacy from "expo-file-system/legacy";
 import { useT } from "../../i18n";
@@ -542,13 +542,41 @@ function getChunkProtocolScript(): string {
     postError(new Error("Chunk error at offset " + offset));
   };
 
-  function postReady() {
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "ready" }));
+  function canPost() {
+    return !!(window.ReactNativeWebView || (window.parent && window.parent !== window));
+  }
+  function postHost(payload) {
+    var text = JSON.stringify(payload);
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(text);
+    else if (window.parent && window.parent !== window) window.parent.postMessage(text, "*");
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (typeof m === "string") {
+      try { m = JSON.parse(m); } catch (err) { return; }
     }
+    if (!m || m.source !== "nanobot-host") return;
+    if (m.type === "setHtmlFit" && window.__setHtmlFit) window.__setHtmlFit(!!m.fit);
+    if (m.type === "exportPng" && window.__exportPng) window.__exportPng();
+    if (m.type === "chunk" && window.__chunk) window.__chunk(m.offset, String(m.b64 || ""));
+    if (m.type === "chunkError" && window.__chunkError) window.__chunkError(m.offset);
+  });
+  document.addEventListener("click", function (e) {
+    var node = e.target;
+    while (node && node.tagName !== "A") node = node.parentNode;
+    if (!node) return;
+    var href = node.getAttribute("href") || "";
+    if (!/^https?:/i.test(href)) return;
+    e.preventDefault();
+    postHost({ type: "open", url: href });
+  }, true);
+  function postReady() {
+    if (!canPost()) return;
+    postHost({ type: "ready" });
   }
   function postError(err) {
-    if (!window.ReactNativeWebView) return;
+    if (!canPost()) return;
     var message = "";
     var line = null;
     if (err) {
@@ -558,7 +586,7 @@ function getChunkProtocolScript(): string {
       else if (typeof err.line === "number") line = err.line;
     }
     message = String(message).replace(/\\s+/g, " ").trim().slice(0, 300);
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: "error", message: message, line: line }));
+    postHost({ type: "error", message: message, line: line });
   }
 
   function requestChunk(offset, length) {
@@ -570,13 +598,11 @@ function getChunkProtocolScript(): string {
         return;
       }
       window.__chunkCallbacks.push({ key: key, offset: offset, length: length, resolve: resolve, reject: reject });
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: "need",
-          offset: offset,
-          length: length
-        }));
-      }
+      postHost({
+        type: "need",
+        offset: offset,
+        length: length
+      });
     });
   }
 
@@ -1003,7 +1029,7 @@ export function buildShellHtml({
     window.__exportPng = function() {
       try {
         var svg = document.querySelector("svg");
-        if (!svg || !window.ReactNativeWebView) return;
+        if (!svg || !canPost()) return;
         if (!svg.getAttribute("xmlns")) svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
         var box = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width ? svg.viewBox.baseVal : null;
         var rect = svg.getBoundingClientRect();
@@ -1029,7 +1055,7 @@ export function buildShellHtml({
             var dataUrl = canvas.toDataURL("image/png");
             URL.revokeObjectURL(url);
             if (!dataUrl || dataUrl.length > 8000000) return;
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: "png", dataUrl: dataUrl }));
+            postHost({ type: "png", dataUrl: dataUrl });
           } catch (e) { URL.revokeObjectURL(url); }
         };
         img.onerror = function() { URL.revokeObjectURL(url); };
@@ -1783,7 +1809,7 @@ export function ArtifactWebView({
 }: ArtifactWebViewProps) {
   const t = useT();
   const th = useTheme();
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<PreviewHandle | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstLoadRef = useRef(true);
   const onFallbackRef = useRef(onFallback);
@@ -1937,7 +1963,7 @@ export function ArtifactWebView({
     return false;
   };
 
-  const handleMessage = async (event: WebViewMessageEvent) => {
+  const handleMessage = async (event: { nativeEvent: { data: string } }) => {
     let data: any;
     try {
       data = JSON.parse(event.nativeEvent.data);
@@ -1963,6 +1989,15 @@ export function ArtifactWebView({
     if (data.type === "png") {
       const body = typeof data.dataUrl === "string" ? pngBase64(data.dataUrl) : null;
       if (body) onPngRef.current?.(`data:image/png;base64,${body}`);
+      return;
+    }
+
+    if (data.type === "open") {
+      const url = typeof data.url === "string" ? data.url : "";
+      if (/^https?:\/\//i.test(url) && url.length <= 2000) {
+        setPendingUrl(url);
+        setShowConfirmDialog(true);
+      }
       return;
     }
 
@@ -2029,7 +2064,7 @@ export function ArtifactWebView({
   return (
     <View testID={activeLightPreview ? "light-preview" : undefined} style={styles.container}>
       {shellHtml ? (
-        <WebView
+        <PreviewHost
           key={`webview-${shellVersionRef.current}`}
           ref={webViewRef}
           source={{ html: shellHtml, baseUrl: "about:blank" }}

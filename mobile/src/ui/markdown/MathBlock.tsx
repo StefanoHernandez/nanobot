@@ -3,12 +3,7 @@ import { ScrollView, Text } from "react-native";
 import { WebView } from "react-native-webview";
 import { useTheme } from "../ThemeProvider";
 import { katexHtml } from "./katex";
-
-// ponytail: fixed height estimate (~48dp per TeX line, min 56). Upgrade path: an onMessage height
-// bridge (needs JS enabled in the WebView, which the sandbox deliberately forbids today).
-// tall constructs (fractions, big operators, environments) get extra room per line
-const heightFor = (tex: string) =>
-  Math.max(56, (/\\(frac|dfrac|sum|int|prod|lim|begin|sqrt)/.test(tex) ? 72 : 48) * tex.split("\\\\").length);
+import { heightFor } from "./mathFrame";
 
 export function MathBlock({ tex }: { tex: string }) {
   const th = useTheme();
