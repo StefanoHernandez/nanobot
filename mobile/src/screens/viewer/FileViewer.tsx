@@ -144,6 +144,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
       kind === "html" ||
       kind === "svg" ||
       kind === "mermaid" ||
+      kind === "chart" ||
       kind === "pdf" ||
       kind === "docx" ||
       kind === "pptx" ||
@@ -181,7 +182,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         if (active) setFileSize(size);
 
         if (isArtifact) {
-          if (kind === "html" || kind === "svg" || kind === "mermaid") {
+          if (kind === "html" || kind === "svg" || kind === "mermaid" || kind === "chart") {
             if (size <= 2 * 1024 * 1024 || size > 10 * 1024 * 1024) {
               const text = await file.text();
               if (active) setContent(text);
@@ -258,7 +259,9 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
 
   const sendToChat = (request?: string) => {
     if (!canAsk || !session || sending.current) return;
-    const previewKind = activeVersion?.kind ?? (kind === "svg" || kind === "mermaid" || kind === "html" ? kind : "html");
+    const previewKind =
+      activeVersion?.kind ??
+      (kind === "svg" || kind === "mermaid" || kind === "chart" || kind === "html" ? kind : "html");
     const text = artifactFixText({
       id: opened?.id || freshArtifactId(previewKind),
       kind: previewKind,
@@ -523,7 +526,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         );
       }
 
-      if (kind === "html" || kind === "svg" || kind === "mermaid") {
+      if (kind === "html" || kind === "svg" || kind === "mermaid" || kind === "chart") {
         if (fileSize > 10 * 1024 * 1024 && !forcePreviewLargeText) {
           return (
             <View style={{ flex: 1 }}>
