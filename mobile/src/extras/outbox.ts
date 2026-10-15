@@ -1,7 +1,7 @@
 import { createStore } from "zustand";
 import { kv } from "../platform/storage";
 import { sessionStore } from "../state/sessionStore";
-import { threadStore, type SendOpts } from "../state/threadStore";
+import type { SendOpts } from "../state/threadStore";
 
 export type OutboxItem = {
   id: string;
@@ -114,6 +114,7 @@ export const outboxStore = createStore<OutboxState>((set, get) => ({
     const { activeProfileId, queues } = get();
     if (!activeProfileId || s.profile?.id !== activeProfileId) return false;
 
+    const { threadStore } = require("../state/threadStore");
     const slice = threadStore.getState().threads[chatKey];
     if (!slice || !slice.loaded || slice.hydrating || slice.running || slice.uploading) return false;
 
@@ -132,3 +133,29 @@ export const outboxStore = createStore<OutboxState>((set, get) => ({
     return sent;
   },
 }));
+
+// Do not send to chats that are not open: their thread isn't loaded, so ordering and hydrate can't be guaranteed.
+let lastActiveProfileId: string | null = null;
+let lastQueues: Record<string, OutboxItem[]> | null = null;
+let lastResult: Record<string, number> = {};
+
+export function pendingByChat(state: OutboxState): Record<string, number> {
+  if (state.activeProfileId === lastActiveProfileId && state.queues === lastQueues) {
+    return lastResult;
+  }
+  lastActiveProfileId = state.activeProfileId;
+  lastQueues = state.queues;
+  if (!state.activeProfileId) {
+    lastResult = {};
+    return lastResult;
+  }
+  const result: Record<string, number> = {};
+  for (const [chatKey, items] of Object.entries(state.queues)) {
+    if (items && items.length > 0) {
+      result[chatKey] = items.length;
+    }
+  }
+  lastResult = result;
+  return lastResult;
+}
+
