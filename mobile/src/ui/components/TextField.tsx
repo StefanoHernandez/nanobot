@@ -13,7 +13,7 @@ export type TextFieldProps = {
   autoCapitalize?: TextInputProps["autoCapitalize"];
   keyboardType?: KeyboardTypeOptions;
   right?: React.ReactNode;
-} & Pick<TextInputProps, "autoCorrect" | "spellCheck" | "autoComplete" | "multiline" | "editable">;
+} & Pick<TextInputProps, "autoCorrect" | "spellCheck" | "autoComplete" | "multiline" | "editable" | "onBlur">;
 
 export function TextField({ label, value, onChangeText, secureTextEntry, helper, error, placeholder, autoCapitalize, keyboardType, right, ...passThrough }: TextFieldProps) {
   const th = useTheme();
