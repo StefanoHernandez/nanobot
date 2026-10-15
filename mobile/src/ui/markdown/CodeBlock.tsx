@@ -51,7 +51,13 @@ export function CodeBlock({ code, lang, chatKey, messageId }: { code: string; la
 
   const openPreview = () => {
     const ext =
-      info.lang === "mermaid" ? "mmd" : info.lang === "chart" ? "vl" : info.lang === "map" ? "geojson" : info.lang;
+      info.lang === "mermaid"
+        ? "mmd"
+        : info.lang === "chart"
+          ? "vl"
+          : info.lang === "map"
+            ? "geojson"
+            : info.lang;
     const name = `preview.${ext}`;
     const messages = chatKey ? threadStore.getState().threads[chatKey]?.messages ?? [] : [];
     const found = locateVersion(collectArtifacts(messages), { id: info.id, code, messageId });

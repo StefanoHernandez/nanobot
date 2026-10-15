@@ -108,6 +108,16 @@ test("explicit map artifact uploads as .geojson", () => {
   ).toBe("places.geojson");
 });
 
+test("explicit react artifact uploads as .react", () => {
+  expect(
+    artifactUploadFileName({
+      id: "hello",
+      explicit: true,
+      versions: [{ kind: "react", code: "function App() { return <h1/>; }" }],
+    }),
+  ).toBe("hello.react");
+});
+
 describe("GalleryScreen artifacts tab", () => {
   test("two versions of one explicit artifact show one row with latest title and kind", async () => {
     const key = "websocket:c1";

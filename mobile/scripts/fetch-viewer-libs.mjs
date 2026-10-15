@@ -32,6 +32,12 @@ const files = {
     "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js",
   "leaflet.css.vendorjs":
     "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
+  "react.production.min.vendorjs":
+    "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+  "react-dom.production.min.vendorjs":
+    "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+  "babel.min.vendorjs":
+    "https://cdn.jsdelivr.net/npm/@babel/standalone@7.28.5/babel.min.js",
 };
 
 for (const [name, url] of Object.entries(files)) {

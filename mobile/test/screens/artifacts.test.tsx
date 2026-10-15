@@ -127,6 +127,8 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(viewerKind("vector.svg")).toBe("svg");
     expect(viewerKind("preview.vl")).toBe("chart");
     expect(viewerKind("preview.geojson")).toBe("map");
+    expect(viewerKind("preview.react")).toBe("react");
+    expect(viewerKind("app.tsx")).toBe("code");
     expect(viewerKind("data.json")).toBe("json");
     expect(viewerKind("old.doc")).toBeNull();
     expect(viewerKind("old.ppt")).toBeNull();
@@ -607,6 +609,50 @@ describe("P5-V1 Artifacts & Document Previews", () => {
       expect.stringContaining("window.__chunkError")
     );
   });
+});
+
+test("buildShellHtml react inlines libs in order, locks network by default, and blocks imports", () => {
+  const libs = {
+    react: "/*REACT*/",
+    reactDom: "/*REACT_DOM*/",
+    babel: "/*BABEL*/",
+  };
+  const source = "function App() { return <h1>Hi</h1>; }";
+  const locked = buildShellHtml({ kind: "react", html: source, libs, network: false });
+  expect(locked.indexOf("/*REACT*/")).toBeLessThan(locked.indexOf("/*REACT_DOM*/"));
+  expect(locked.indexOf("/*REACT_DOM*/")).toBeLessThan(locked.indexOf("/*BABEL*/"));
+  expect(locked).toContain("connect-src 'none'");
+  expect(locked).not.toContain("connect-src https:");
+  expect(locked).toContain("img-src data: blob:");
+  expect(locked).not.toContain("img-src data: blob: https:");
+  expect(locked).toContain("script-src 'unsafe-inline' 'unsafe-eval'");
+  expect(locked).not.toMatch(/script-src[^;]*https/);
+
+  const online = buildShellHtml({ kind: "react", html: source, libs, network: true });
+  expect(online).toContain("connect-src https:");
+  expect(online).not.toMatch(/script-src[^;]*https/);
+
+  const remote = buildShellHtml({
+    kind: "react",
+    html: 'import x from "https://evil.example/x.js"\nfunction App() { return null; }',
+    libs,
+  });
+  expect(remote).not.toContain("https://evil.example");
+  expect(remote).not.toContain("Babel.transform");
+  const bare = buildShellHtml({
+    kind: "react",
+    html: 'import"https://evil.example/y.js"\nfunction App() { return null; }',
+    libs,
+  });
+  expect(bare).not.toContain("https://evil.example");
+  expect(bare).not.toContain("Babel.transform");
+
+  const scriptBreak = buildShellHtml({
+    kind: "react",
+    html: 'function App() { return "note: </script>"; }',
+    libs,
+  });
+  expect(scriptBreak).toContain("\\u003c/script");
 });
 
 test("buildShellHtml map inlines leaflet libs, locks network by default, and blocks remote urls", () => {

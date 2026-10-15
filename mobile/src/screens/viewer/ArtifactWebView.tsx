@@ -30,11 +30,15 @@ export const CDN_VERSIONS = {
   vegaLite: "6.5.0",
   vegaEmbed: "7.3.0",
   leaflet: "1.9.4",
+  react: "18.3.1",
+  reactDom: "18.3.1",
+  babel: "7.28.5",
 } as const;
 
 export function viewerLibsFor(kind: ArtifactKind, light: boolean): ViewerLibName[] {
   if (kind === "chart") return ["vega", "vegaLite", "vegaEmbed"];
   if (kind === "map") return ["leafletCss", "leaflet"];
+  if (kind === "react") return ["react", "reactDom", "babel"];
   if (kind === "mermaid") return ["mermaid"];
   if (kind === "pdf") return ["pdfjs", "pdfjsWorker"];
   if (kind === "docx") return light ? ["pako"] : ["jszip", "docxPreview"];
@@ -104,6 +108,7 @@ export type ArtifactKind =
   | "mermaid"
   | "chart"
   | "map"
+  | "react"
   | "pdf"
   | "docx"
   | "pptx"
@@ -180,6 +185,22 @@ export function safeChartSpecJson(spec: Record<string, unknown>): string {
     .replace(/</g, "\\u003c")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
+}
+
+export function safeReactSourceJson(source: string): string {
+  return JSON.stringify(source)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+export function reactSourceRefused(source: string): boolean {
+  return /\bimport\b/.test(source) || /\brequire\s*\(/.test(source);
+}
+
+function parseReactSourceText(text: string): { source?: string; blocked?: boolean } {
+  if (reactSourceRefused(text)) return { blocked: true };
+  return { source: text };
 }
 
 const GEOJSON_ROOT_TYPES = [
@@ -298,6 +319,51 @@ function mapRenderScript({
         } catch (e) {
           postError(e);
         }
+        return Promise.resolve();
+      };
+    })();
+  </script>`;
+}
+
+function reactRenderScript({ sourceLiteral }: { sourceLiteral: string | null }): string {
+  const sourceInit = sourceLiteral != null ? `var source = ${sourceLiteral};` : "var source = null;";
+  return `<script>
+    (function() {
+      function refuseSource(text) {
+        return /\\bimport\\b/.test(text) || /\\brequire\\s*\\(/.test(text);
+      }
+      function renderReactSource(source) {
+        if (refuseSource(source)) {
+          postError(new Error("Import not allowed"));
+          return;
+        }
+        if (typeof Babel === "undefined" || typeof React === "undefined" || typeof ReactDOM === "undefined") {
+          postError(new Error("React runtime not available"));
+          return;
+        }
+        try {
+          var result = Babel.transform(source, { filename: "App.tsx", presets: [["react", { runtime: "classic" }], "typescript"] });
+          var code = result.code;
+          var App = new Function("React", "ReactDOM", code + "\\nreturn typeof App === 'function' ? App : null;")(React, ReactDOM);
+          if (typeof App !== "function") {
+            postError(new Error("App component required"));
+            return;
+          }
+          var container = document.getElementById("container");
+          ReactDOM.createRoot(container).render(React.createElement(App));
+          postReady();
+        } catch (e) {
+          postError(e);
+        }
+      }
+      ${sourceInit}
+      try {
+        ${sourceLiteral != null ? "renderReactSource(source);" : ""}
+      } catch (e) {
+        postError(e);
+      }
+      window.__renderReactFromText = function(text) {
+        renderReactSource(text);
         return Promise.resolve();
       };
     })();
@@ -978,7 +1044,7 @@ export function buildShellHtml({
   if (kind === "chart") {
     cspAllowNetwork = false;
     cspAllowRemoteImages = false;
-  } else if (kind === "map") {
+  } else if (kind === "map" || kind === "react") {
     cspAllowNetwork = networkOn;
     cspAllowRemoteImages = networkOn;
   } else {
@@ -1286,6 +1352,48 @@ ${leafletStyle}
     const specJson = safeChartSpecJson(parsed.spec);
     return `${mapBodyStart}
   ${mapRenderScript({ accent, specLiteral: specJson, network: networkOn })}
+</body>
+</html>`;
+  }
+
+  if (kind === "react") {
+    const reactBodyStart = `<!DOCTYPE html>
+<html>
+${commonHead}
+<body>
+  <div id="container"></div>
+  ${inlineScript(libs?.react)}
+  ${inlineScript(libs?.reactDom)}
+  ${inlineScript(libs?.babel)}`;
+
+    if (!html && fileSize > 0) {
+      return `${reactBodyStart}
+  ${loadAllChunksScript}
+  ${reactRenderScript({ sourceLiteral: null })}
+  <script>
+    loadAllChunks(${fileSize}, null).then(function(bytes) {
+      var text = new TextDecoder("utf-8").decode(bytes);
+      return window.__renderReactFromText(text);
+    }).catch(function(e) {
+      postError(e);
+    });
+  </script>
+</body>
+</html>`;
+    }
+
+    const parsed = html ? parseReactSourceText(html) : { blocked: true };
+    if (parsed.blocked || parsed.source == null) {
+      return `${reactBodyStart}
+  <script>
+    postError(new Error("Import not allowed"));
+  </script>
+</body>
+</html>`;
+    }
+    const sourceJson = safeReactSourceJson(parsed.source);
+    return `${reactBodyStart}
+  ${reactRenderScript({ sourceLiteral: sourceJson })}
 </body>
 </html>`;
   }
