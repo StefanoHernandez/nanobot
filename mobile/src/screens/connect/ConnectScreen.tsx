@@ -3,11 +3,13 @@ import React, { useRef, useState } from "react";
 import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
+import { claimDevice, pairingDeviceName, parsePairingQr } from "../../core/pairing";
 import { normalizeBaseUrl, profiles, testConnection, type Profile } from "../../core/profiles";
+import { PairScanModal, toastInvalidScan } from "./PairScanModal";
 import { sessionStore } from "../../state/sessionStore";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
-import { Dialog, ListItem, toast } from "../../ui/components";
+import { Button, Dialog, ListItem, toast } from "../../ui/components";
 import { ProfileForm, type ProfileFormValues } from "./ProfileForm";
 
 export function ConnectScreen() {
@@ -25,6 +27,7 @@ export function ConnectScreen() {
   const [secretError, setSecretError] = useState<string | undefined>(authFailed ? t("connect.authError") : undefined);
   const [loading, setLoading] = useState(false);
   const [toDelete, setToDelete] = useState<Profile | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   const busy = useRef(false);
 
   const open = (id: string) => {
@@ -32,6 +35,46 @@ export function ConnectScreen() {
     void sessionStore.getState().open(id); // the session otherwise only opens at app start
     if (router.canDismiss()) router.dismissAll(); // no duplicate (main) under the new session
     router.replace("/");
+  };
+
+  const finishPair = async (baseUrl: string, deviceToken: string) => {
+    setUrlError(undefined);
+    setSecretError(undefined);
+    const existing = list.find((p) => p.baseUrl === baseUrl);
+    const r = await testConnection(baseUrl, deviceToken);
+    if (!r.ok) {
+      if (r.kind === "auth") setSecretError(t("connect.authError"));
+      else if (r.kind === "unreachable") setUrlError(t("connect.unreachable"));
+      else toast.show(t("common.error"));
+      return;
+    }
+    const id = existing?.id ?? crypto.randomUUID();
+    const name = values.name.trim() || existing?.name || new URL(baseUrl).host;
+    await profiles.save({ id, name, baseUrl }, deviceToken);
+    open(id);
+  };
+
+  const onPairPayload = async (raw: string) => {
+    if (busy.current) return;
+    const parsed = parsePairingQr(raw);
+    if (!parsed) {
+      toastInvalidScan(t);
+      return;
+    }
+    busy.current = true;
+    setLoading(true);
+    setScanOpen(false);
+    setValues((v) => ({ ...v, url: parsed.url }));
+    try {
+      const name = pairingDeviceName(values.name);
+      const { device_token } = await claimDevice(parsed.url, parsed.code, name);
+      await finishPair(parsed.url, device_token);
+    } catch {
+      toast.show(t("common.error"));
+    } finally {
+      busy.current = false;
+      setLoading(false);
+    }
   };
 
   const submit = async () => {
@@ -99,8 +142,12 @@ export function ConnectScreen() {
             ))}
           </View>
         )}
+        <View style={{ gap: 12, marginBottom: 12 }}>
+          <Button title={t("connect.scan")} variant="secondary" onPress={() => setScanOpen(true)} disabled={loading} />
+        </View>
         <ProfileForm values={values} onChange={setValues} urlError={urlError} secretError={secretError} loading={loading} onSubmit={submit} />
       </ScrollView>
+      <PairScanModal open={scanOpen} onClose={() => setScanOpen(false)} onPayload={(raw) => void onPairPayload(raw)} loading={loading} />
       <Dialog
         open={!!toDelete}
         title={t("connect.deleteTitle")}

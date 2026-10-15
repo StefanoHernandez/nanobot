@@ -109,7 +109,10 @@
     "authError": "Secret required or wrong (needed for non-localhost access)",
     "unreachable": "Server unreachable — is Tailscale on?",
     "deleteTitle": "Delete server",
-    "deleteConfirm": "Delete {{name}}?"
+    "deleteConfirm": "Delete {{name}}?",
+    "scan": "Scan code",
+    "scanFailed": "Code not valid",
+    "pasteCode": "Paste the code"
   },
   "settings": {
     "title": "Settings",
@@ -125,6 +128,8 @@
     "unlockReason": "Confirm to turn off the lock",
     "server": "Server",
     "changeServer": "Change server",
+    "pairPhone": "Pair a phone",
+    "pairHint": "Good for 5 minutes.",
     "about": "About",
     "appName": "nanobot mobile",
     "version": "Version {{v}}",

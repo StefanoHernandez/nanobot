@@ -6,7 +6,9 @@ import { useT } from "../../i18n";
 import { VENDOR_COMMIT, VENDOR_DATE } from "../../platform/vendorVersion";
 import { useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
-import { Button, ListItem } from "../../ui/components";
+import { mintPairingCode, pairingQrValue } from "../../core/pairing";
+import { Button, Dialog, ListItem, toast } from "../../ui/components";
+import { PairQrView } from "../../ui/PairQrView";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Head } from "./common";
 
@@ -20,6 +22,23 @@ export function AboutSection() {
   const { session, profile } = useSession();
   const { data } = useSettings();
   const [check, setCheck] = useState<"idle" | "busy" | "latest" | "failed" | string>("idle");
+  const [pair, setPair] = useState<{ code: string; qr: string } | null>(null);
+  const [pairBusy, setPairBusy] = useState(false);
+
+  const onPairPhone = async () => {
+    if (!session || pairBusy) return;
+    setPairBusy(true);
+    try {
+      const minted = await mintPairingCode(session);
+      const qr = pairingQrValue(session.baseUrl, minted.code);
+      if (!qr) throw new Error("mint failed");
+      setPair({ code: minted.code, qr });
+    } catch {
+      toast.show(t("common.error"));
+    } finally {
+      setPairBusy(false);
+    }
+  };
 
   const onCheck = async () => {
     if (!session) return;
@@ -39,8 +58,11 @@ export function AboutSection() {
       <Head>{t("settings.server")}</Head>
       <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem title={profile?.name ?? "-"} subtitle={profile?.baseUrl} />
-        <View style={{ padding: 16, paddingTop: 4 }}>
+        <View style={{ padding: 16, paddingTop: 4, gap: 8 }}>
           <Button title={t("settings.changeServer")} variant="secondary" onPress={() => router.push("/connect")} />
+          {session ? (
+            <Button title={t("settings.pairPhone")} variant="secondary" loading={pairBusy} onPress={() => void onPairPhone()} />
+          ) : null}
         </View>
       </View>
 
@@ -81,6 +103,27 @@ export function AboutSection() {
         <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>{t("settings.unofficial")}</Text>
         <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>{t("settings.license")}</Text>
       </View>
+
+      <Dialog
+        open={!!pair}
+        title={t("settings.pairPhone")}
+        message={t("settings.pairHint")}
+        confirmLabel={t("common.close")}
+        onConfirm={() => setPair(null)}
+        onCancel={() => setPair(null)}
+      >
+        {pair ? (
+          <View style={{ alignItems: "center", gap: 16 }}>
+            <PairQrView value={pair.qr} size={200} />
+            <Text
+              selectable
+              style={{ color: th.colors.foreground, fontFamily: th.font.mono, fontSize: 18, letterSpacing: 1 }}
+            >
+              {pair.code}
+            </Text>
+          </View>
+        ) : null}
+      </Dialog>
     </>
   );
 }

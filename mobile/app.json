@@ -67,6 +67,12 @@
           "microphonePermission": "nanobot usa il microfono per i messaggi vocali"
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "nanobot usa la fotocamera per leggere il codice di collegamento"
+        }
+      ],
       "expo-web-browser",
       [
         "expo-font",
