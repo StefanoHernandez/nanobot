@@ -11,13 +11,28 @@ import { TextField } from "../ui/components/TextField";
 import { useTheme } from "../ui/ThemeProvider";
 import { groupCommands, loadCommands, type Cmd } from "./logic";
 
-export function CommandDrawerButton({ chatKey }: { chatKey: string }) {
+export function CommandDrawerButton({
+  chatKey,
+  trigger = true,
+  open: openProp,
+  onOpenChange,
+}: {
+  chatKey: string;
+  trigger?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const t = useT();
   const th = useTheme();
   const { session } = useSession();
   const { send } = useThreadSlice(chatKey);
 
-  const [open, setOpen] = useState(false);
+  const [inner, setInner] = useState(false);
+  const open = openProp ?? inner;
+  const setOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (openProp === undefined) setInner(next);
+  };
   const [commands, setCommands] = useState<Cmd[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,11 +91,13 @@ export function CommandDrawerButton({ chatKey }: { chatKey: string }) {
 
   return (
     <>
-      <IconButton
-        icon="console-line"
-        accessibilityLabel={t("extras.commands")}
-        onPress={() => setOpen(true)}
-      />
+      {trigger ? (
+        <IconButton
+          icon="console-line"
+          accessibilityLabel={t("extras.commands")}
+          onPress={() => setOpen(true)}
+        />
+      ) : null}
 
       {open ? (
         <Sheet open={open} onClose={() => setOpen(false)} title={t("extras.commands")}>

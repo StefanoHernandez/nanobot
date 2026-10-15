@@ -29,20 +29,35 @@ export const SubagentChip = ({ state }: { state: string }) => {
 const secs = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m ${Math.round(s % 60)}s` : `${Math.round(s)}s`);
 
 /** Header badge + the sheet it opens; renders nothing without tasks. */
-export function SubagentsButton({ chatKey }: { chatKey: string }) {
+export function SubagentsButton({
+  chatKey,
+  trigger = true,
+  open: openProp,
+  onOpenChange,
+}: {
+  chatKey: string;
+  trigger?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const t = useT();
   const th = useTheme();
   const { session } = useSession();
   const { tasks, cancel } = useSubagents(chatKey);
-  const [open, setOpen] = useState(false);
+  const [inner, setInner] = useState(false);
+  const open = openProp ?? inner;
+  const setOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (openProp === undefined) setInner(next);
+  };
   const [pending, setPending] = useState<string | null>(null);
   if (!subagentsAvailable(session, chatKey) || tasks.length === 0) return null;
   const active = tasks.filter((x) => isActive(x.state)).length;
   const sorted = [...tasks].sort((a: SubagentTaskSnapshot, b: SubagentTaskSnapshot) => b.created_at - a.created_at);
   return (
     <View>
-      <IconButton icon="robot-outline" accessibilityLabel={t("subagents.open")} onPress={() => setOpen(true)} />
-      {active > 0 ? (
+      {trigger ? <IconButton icon="robot-outline" accessibilityLabel={t("subagents.open")} onPress={() => setOpen(true)} /> : null}
+      {trigger && active > 0 ? (
         <View pointerEvents="none" style={{ position: "absolute", top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: th.colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}>
           <Text style={{ color: th.colors.primaryForeground, fontSize: 10 }}>{active}</Text>
         </View>

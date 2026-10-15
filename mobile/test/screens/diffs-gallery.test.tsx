@@ -282,6 +282,7 @@ describe("GalleryScreen & ThreadScreen gallery button", () => {
       </SafeAreaProvider>,
     );
 
+    await fireEvent.press(screen.getByLabelText(/more actions/i));
     expect(screen.getByLabelText(/gallery|media and files/i)).toBeTruthy();
   });
 });

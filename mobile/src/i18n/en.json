@@ -32,6 +32,7 @@
     "message": "Message",
     "readOnly": "Read-only chat",
     "back": "Back",
+    "more": "More actions",
     "notice": {
       "compaction": "Context compacted",
       "recovery": "Recovering conversation",
@@ -186,7 +187,14 @@
     "renameTitle": "Rename chat",
     "titleLabel": "Title",
     "deleteTitle": "Delete chat",
-    "deleteConfirm": "Delete {{title}}?"
+    "deleteConfirm": "Delete {{title}}?",
+    "allProjects": "All projects",
+    "section": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "This week",
+      "older": "Older"
+    }
   },
   "composer": {
     "placeholder": "Message nanobot…",

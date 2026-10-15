@@ -15,8 +15,8 @@ Design references: `mobile/docs/design/companion.md` (identity) and the impeccab
 | **T-N1** | "Notte Compagno" dark theme | Claude | none | `src/ui/theme.ts`, `docs/design/companion.md`, `test/ui/theme.test.ts` |
 | **U-C1** | Bot replies without a bubble; Markdown headings in Atkinson bold | agy | none | `src/screens/thread/MessageRow.tsx`, `src/ui/markdown/Markdown.tsx` |
 | **U-C2** | Composer on two rows | agy | none | `src/screens/thread/Composer.tsx` |
-| **U-C3** | Thread header: overflow "⋮" menu | agy | **F-A merged** (it edits the header) | `src/screens/thread/ThreadScreen.tsx` |
-| **U-D1** | Chat list grouped by date, Projects on top | agy | **P-A merged** (it edits the drawer) | `src/screens/chats/ChatDrawer.tsx` |
+| **U-C3** | Thread header: overflow "⋮" menu | **done** on `claude/projects` | **F-A merged** | `src/screens/thread/ThreadScreen.tsx` |
+| **U-D1** | Chat list grouped by date, Projects on top | **done** on `claude/projects` | **P-A merged** | `src/screens/chats/ChatDrawer.tsx` |
 | **U-S1** | Material snackbar instead of toasts | agy | none (shared UI kit, so check every caller) | `src/ui/components/Toast*.tsx` |
 | **A-1** | Artifact identity and versions (+ server skill) | Claude (design + skill), then agy (UI) | none | new `src/artifacts/**`; fork skill under `nanobot/skills/` |
 | **A-2** | "Correggi" and "Chiedi modifica" from the artifact | agy | none (A-1 makes it better, not required) | `ArtifactWebView.tsx`, `FileViewer.tsx`, viewer route |
