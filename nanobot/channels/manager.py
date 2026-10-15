@@ -58,6 +58,7 @@ def _default_webui_dist() -> Path | None:
         candidate = Path(override).expanduser().resolve()
         if candidate.is_dir() and (candidate / "index.html").is_file():
             return candidate
+        logger.warning("NANOBOT_APP_DIST has no index.html; serving the legacy WebUI")
     try:
         import nanobot.web as web_pkg  # type: ignore[import-not-found]
     except ImportError:
