@@ -13,6 +13,7 @@ import { router } from "expo-router";
 import { artifactStore } from "../../src/screens/viewer/artifactStore";
 import { toast } from "../../src/ui/components/Toast";
 import * as projectsApi from "../../src/projects/api";
+import { artifactUploadFileName } from "../../src/screens/gallery/galleryArtifacts";
 
 jest.mock("../../src/ui/components/Toast", () => ({
   toast: { show: jest.fn() },
@@ -86,6 +87,16 @@ function seedThread(key: string, messages: UIMessage[]) {
     },
   });
 }
+
+test("explicit chart artifact uploads as .vl", () => {
+  expect(
+    artifactUploadFileName({
+      id: "sales",
+      explicit: true,
+      versions: [{ kind: "chart", code: '{"data":{"values":[]},"mark":"bar"}' }],
+    }),
+  ).toBe("sales.vl");
+});
 
 describe("GalleryScreen artifacts tab", () => {
   test("two versions of one explicit artifact show one row with latest title and kind", async () => {

@@ -50,7 +50,7 @@ export function CodeBlock({ code, lang, chatKey, messageId }: { code: string; la
   const canPreview = isPreviewKind(info.lang);
 
   const openPreview = () => {
-    const ext = info.lang === "mermaid" ? "mmd" : info.lang;
+    const ext = info.lang === "mermaid" ? "mmd" : info.lang === "chart" ? "vl" : info.lang;
     const name = `preview.${ext}`;
     const messages = chatKey ? threadStore.getState().threads[chatKey]?.messages ?? [] : [];
     const found = locateVersion(collectArtifacts(messages), { id: info.id, code, messageId });

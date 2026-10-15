@@ -7,6 +7,7 @@ export type ViewerKind =
   | "html"
   | "svg"
   | "mermaid"
+  | "chart"
   | "pdf"
   | "docx"
   | "pptx"
@@ -33,6 +34,7 @@ export function viewerKind(name: string): ViewerKind {
   if (ext === "html" || ext === "htm") return "html";
   if (ext === "svg") return "svg";
   if (ext === "mmd" || ext === "mermaid") return "mermaid";
+  if (ext === "vl") return "chart";
   if (ext === "pdf") return "pdf";
   if (ext === "docx") return "docx";
   if (ext === "pptx") return "pptx";

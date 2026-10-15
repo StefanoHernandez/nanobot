@@ -11,6 +11,22 @@ test("parseFenceInfo reads the language, a safe id and a quoted title", () => {
   expect(parseFenceInfo("python")).toEqual({ lang: "python" });
   expect(parseFenceInfo('svg id="../etc" title="x"').id).toBeUndefined();
   expect(parseFenceInfo("mermaid id=a").id).toBeUndefined();
+  expect(parseFenceInfo("vega-lite id=sales").lang).toBe("chart");
+  expect(parseFenceInfo("vegalite").lang).toBe("chart");
+});
+
+test("chart and vega-lite fences with the same id are two versions of one chart artifact", () => {
+  const spec1 = '{"data":{"values":[{"x":1}]},"mark":"bar"}';
+  const spec2 = '{"data":{"values":[{"x":2}]},"mark":"line"}';
+  const artifacts = collectArtifacts([
+    msg("m1", `\`\`\`chart id=sales title="One"\n${spec1}\n\`\`\``),
+    msg("m2", "```python\nprint(1)\n```"),
+    msg("m3", `\`\`\`vega-lite id=sales title="Two"\n${spec2}\n\`\`\``),
+  ]);
+  expect(artifacts.map((a) => a.id)).toEqual(["sales"]);
+  expect(artifacts[0].versions).toHaveLength(2);
+  expect(artifacts[0].versions.every((v) => v.kind === "chart")).toBe(true);
+  expect(artifacts[0].versions.map((v) => v.code)).toEqual([spec1, spec2]);
 });
 
 test("the same id across messages is one artifact with versions in order", () => {

@@ -14,9 +14,14 @@ export function artifactRowTitle(artifact: Artifact): string {
   return latest.title ?? artifact.title ?? artifact.id;
 }
 
+function uploadExtForKind(kind: PreviewKind): string {
+  if (kind === "mermaid") return "mmd";
+  if (kind === "chart") return "vl";
+  return kind;
+}
+
 export function previewNameForKind(kind: PreviewKind): string {
-  const ext = kind === "mermaid" ? "mmd" : kind;
-  return `preview.${ext}`;
+  return `preview.${uploadExtForKind(kind)}`;
 }
 
 export function mimeForArtifactKind(kind: PreviewKind): string {
@@ -38,7 +43,7 @@ function sanitizeArtifactBase(raw: string): string | null {
 export function artifactUploadFileName(artifact: Artifact): string | null {
   const latest = latestArtifactVersion(artifact);
   if (!latest) return null;
-  const ext = latest.kind === "mermaid" ? "mmd" : latest.kind;
+  const ext = uploadExtForKind(latest.kind);
   const base = artifact.explicit
     ? sanitizeArtifactBase(artifact.id)
     : sanitizeArtifactBase(artifact.title ?? "");

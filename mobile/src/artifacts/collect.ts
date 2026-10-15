@@ -1,4 +1,4 @@
-export const PREVIEW_KINDS = ["html", "svg", "mermaid"] as const;
+export const PREVIEW_KINDS = ["html", "svg", "mermaid", "chart"] as const;
 export type PreviewKind = (typeof PREVIEW_KINDS)[number];
 
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])$/;
@@ -33,7 +33,8 @@ export function parseFenceInfo(info: string | undefined): FenceInfo {
   const raw = (info ?? "").trim();
   if (!raw) return { lang: "" };
   const space = raw.search(/\s/);
-  const lang = (space < 0 ? raw : raw.slice(0, space)).toLowerCase();
+  let lang = (space < 0 ? raw : raw.slice(0, space)).toLowerCase();
+  if (lang === "vega-lite" || lang === "vegalite") lang = "chart";
   const attrs = space < 0 ? "" : raw.slice(space + 1);
   let id: string | undefined;
   let title: string | undefined;

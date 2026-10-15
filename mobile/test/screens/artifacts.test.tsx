@@ -124,6 +124,8 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(viewerKind("d.mmd")).toBe("mermaid");
     expect(viewerKind("diagram.mermaid")).toBe("mermaid");
     expect(viewerKind("vector.svg")).toBe("svg");
+    expect(viewerKind("preview.vl")).toBe("chart");
+    expect(viewerKind("data.json")).toBe("json");
     expect(viewerKind("old.doc")).toBeNull();
     expect(viewerKind("old.ppt")).toBeNull();
   });
@@ -605,6 +607,51 @@ describe("P5-V1 Artifacts & Document Previews", () => {
   });
 });
 
+test("buildShellHtml chart inlines vega libs, themes inline data, and blocks remote urls", () => {
+  const libs = {
+    vega: "/*VEGA_LIB*/",
+    vegaLite: "/*VEGA_LITE_LIB*/",
+    vegaEmbed: "/*VEGA_EMBED_LIB*/",
+  };
+  const spec = JSON.stringify({
+    data: { values: [{ month: "Jan", sales: 3 }] },
+    mark: "bar",
+    encoding: {
+      x: { field: "month", type: "ordinal" },
+      y: { field: "sales", type: "quantitative" },
+    },
+  });
+  const shell = buildShellHtml({ kind: "chart", html: spec, libs, network: true, isDark: true });
+  expect(shell).toContain("/*VEGA_LIB*/");
+  expect(shell).toContain("/*VEGA_LITE_LIB*/");
+  expect(shell).toContain("/*VEGA_EMBED_LIB*/");
+  expect(shell).toContain('"values"');
+  expect(shell).toContain("connect-src 'none'");
+  expect(shell).not.toContain("connect-src https:");
+  expect(shell).toContain("img-src data: blob:");
+  expect(shell).not.toContain("img-src data: blob: https:");
+  expect(shell).toContain('tooltip = { theme: "dark" }');
+  expect(shell).toContain("translate(");
+
+  const remote = buildShellHtml({
+    kind: "chart",
+    html: JSON.stringify({ data: { url: "https://evil.example/data.json" }, mark: "bar" }),
+    libs,
+  });
+  expect(remote).not.toContain("https://evil.example");
+  expect(remote).not.toContain("vegaEmbed(container");
+
+  const scriptBreak = buildShellHtml({
+    kind: "chart",
+    html: JSON.stringify({ data: { values: [{ note: "</script>" }] }, mark: "point" }),
+    libs,
+  });
+  expect(scriptBreak).toContain("\\u003c/script");
+  const closers = scriptBreak.match(/<\/script>/gi) ?? [];
+  expect(closers.length).toBeGreaterThan(0);
+  expect(scriptBreak).not.toContain('"</script>"');
+});
+
 test("mermaid follows the app theme and svg/mermaid pages carry the zoom script", () => {
   const dark = buildShellHtml({ kind: "mermaid", html: "graph TD; A-->B", isDark: true, bg: "#1c3a34", fg: "#e8f0ed", accent: "#e4d4ec" });
   expect(dark).toContain('theme: "dark"');
@@ -756,8 +803,14 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
     pptxPreview: "window.pptxPreview = { init: 1 };",
     xlsx: "window.XLSX = 1;",
   };
-  for (const kind of ["html", "svg", "mermaid", "pdf", "docx", "pptx", "xlsx"] as const) {
-    const shell = buildShellHtml({ kind, html: "<p>x</p>", fileSize: 1000, libs });
+  const chartLibs = { ...libs, vega: "window.vega=1;", vegaLite: "window.vegaLite=1;", vegaEmbed: "window.vegaEmbed=1;" };
+  for (const kind of ["html", "svg", "mermaid", "chart", "pdf", "docx", "pptx", "xlsx"] as const) {
+    const shell = buildShellHtml({
+      kind,
+      html: kind === "chart" ? '{"data":{"values":[]},"mark":"bar"}' : "<p>x</p>",
+      fileSize: 1000,
+      libs: kind === "chart" ? chartLibs : libs,
+    });
     expect(shell).not.toContain("cdn.jsdelivr.net");
     expect(shell).not.toContain("cdnjs.cloudflare.com");
     expect(shell).not.toContain("unpkg.com");

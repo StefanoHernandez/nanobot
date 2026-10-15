@@ -22,6 +22,12 @@ const files = {
     "https://cdn.jsdelivr.net/npm/pptx-preview@1.0.7/dist/pptx-preview.umd.min.js",
   "xlsx.full.min.vendorjs":
     "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+  "vega.min.vendorjs":
+    "https://cdn.jsdelivr.net/npm/vega@6.4.0/build/vega.min.js",
+  "vega-lite.min.vendorjs":
+    "https://cdn.jsdelivr.net/npm/vega-lite@6.5.0/build/vega-lite.min.js",
+  "vega-embed.min.vendorjs":
+    "https://cdn.jsdelivr.net/npm/vega-embed@7.3.0/build/vega-embed.min.js",
 };
 
 for (const [name, url] of Object.entries(files)) {
