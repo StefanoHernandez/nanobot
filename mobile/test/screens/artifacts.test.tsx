@@ -300,6 +300,12 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(screen.getByLabelText(/Preview|Anteprima/i)).toBeTruthy();
   });
 
+  test("A fence info string with an id keeps the preview and shows the title", async () => {
+    await wrap(<CodeBlock code="<h1>Hello</h1>" lang={'html id=sales-dashboard title="Vendite"'} />);
+    expect(screen.getByLabelText(/Preview|Anteprima/i)).toBeTruthy();
+    expect(screen.getByText("Vendite")).toBeTruthy();
+  });
+
   test("A chat code block with python does not show the Preview button", async () => {
     await wrap(<CodeBlock code="print('hello')" lang="python" />);
     expect(screen.queryByLabelText(/Preview|Anteprima/i)).toBeNull();

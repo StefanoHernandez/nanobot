@@ -319,6 +319,11 @@
   },
   "artifact": {
     "preview": "Anteprima",
+    "version": "v{{current}}/{{total}}",
+    "prevVersion": "Versione precedente",
+    "nextVersion": "Versione successiva",
+    "compare": "Confronta",
+    "compareOff": "Una sola",
     "previewAnyway": "Anteprima comunque",
     "largeFileNotice": "File grande ({{size}} MB): l'anteprima può richiedere tempo",
     "openPreview": "Apri anteprima",

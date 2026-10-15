@@ -83,6 +83,11 @@ export function FileViewer({ uri, name }: FileViewerProps) {
   const [artifactFallback, setArtifactFallback] = useState(false);
   const [forcePreviewLargeDoc, setForcePreviewLargeDoc] = useState(false);
   const [forcePreviewLargeText, setForcePreviewLargeText] = useState(false);
+  const opened = useMemo(() => (uri ? null : artifactStore.get()), [uri]);
+  const versions = opened?.versions && opened.versions.length > 1 ? opened.versions : null;
+  const [versionIndex, setVersionIndex] = useState(opened?.index ?? 0);
+  const [compare, setCompare] = useState(false);
+  const activeVersion = versions?.[versionIndex];
 
   const ext = useMemo(() => langOf(name), [name]);
   const kind = useMemo(() => viewerKind(name), [name]);
@@ -167,8 +172,9 @@ export function FileViewer({ uri, name }: FileViewerProps) {
   }, [uri, isArtifact, kind, name, allowed]);
 
   const handleCopy = async () => {
-    if (!allowed || !content) return;
-    await Clipboard.setStringAsync(content);
+    const text = activeVersion?.code ?? content;
+    if (!allowed || !text) return;
+    await Clipboard.setStringAsync(text);
     toast.show(t("viewer.copied"));
   };
 
@@ -431,15 +437,75 @@ export function FileViewer({ uri, name }: FileViewerProps) {
           );
         }
 
+        const viewKind = activeVersion?.kind ?? kind;
+        const viewHtml = activeVersion?.code ?? (fileSize <= 2 * 1024 * 1024 ? content : undefined);
+        const otherIndex = versionIndex === 0 ? 1 : versionIndex - 1;
         return (
-          <ArtifactWebView
-            kind={kind}
-            uri={uri}
-            html={fileSize <= 2 * 1024 * 1024 ? content : undefined}
-            name={name}
-            fileSize={fileSize}
-            onFallback={() => setArtifactFallback(true)}
-          />
+          <View style={{ flex: 1 }}>
+            {versions ? (
+              <View style={{ flexDirection: "row", alignItems: "center", minHeight: 48, paddingRight: 8 }}>
+                <IconButton
+                  icon="chevron-left"
+                  accessibilityLabel={t("artifact.prevVersion")}
+                  disabled={versionIndex === 0}
+                  onPress={() => {
+                    setCompare(false);
+                    setVersionIndex((i) => Math.max(0, i - 1));
+                  }}
+                />
+                <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 14 }}>
+                  {t("artifact.version", { current: versionIndex + 1, total: versions.length })}
+                </Text>
+                <IconButton
+                  icon="chevron-right"
+                  accessibilityLabel={t("artifact.nextVersion")}
+                  disabled={versionIndex >= versions.length - 1}
+                  onPress={() => {
+                    setCompare(false);
+                    setVersionIndex((i) => Math.min(versions.length - 1, i + 1));
+                  }}
+                />
+                <View style={{ flex: 1 }} />
+                <Button
+                  title={compare ? t("artifact.compareOff") : t("artifact.compare")}
+                  variant="ghost"
+                  onPress={() => setCompare((on) => !on)}
+                />
+              </View>
+            ) : null}
+            {compare && versions && versions[otherIndex] ? (
+              <View style={{ flex: 1, flexDirection: "row" }}>
+                <View style={{ flex: 1 }}>
+                  <ArtifactWebView
+                    key={`cmp-${otherIndex}`}
+                    kind={versions[otherIndex].kind}
+                    html={versions[otherIndex].code}
+                    name={name}
+                    onFallback={() => setArtifactFallback(true)}
+                  />
+                </View>
+                <View style={{ width: 1, backgroundColor: th.colors.border }} />
+                <View style={{ flex: 1 }}>
+                  <ArtifactWebView
+                    key={`cmp-${versionIndex}`}
+                    kind={viewKind}
+                    html={viewHtml}
+                    name={name}
+                    onFallback={() => setArtifactFallback(true)}
+                  />
+                </View>
+              </View>
+            ) : (
+              <ArtifactWebView
+                kind={viewKind}
+                uri={versions ? "" : uri}
+                html={viewHtml}
+                name={name}
+                fileSize={activeVersion ? (viewHtml?.length ?? 0) : fileSize}
+                onFallback={() => setArtifactFallback(true)}
+              />
+            )}
+          </View>
         );
       }
     }
@@ -623,7 +689,7 @@ export function FileViewer({ uri, name }: FileViewerProps) {
             },
           ]}
         >
-          {name}
+          {activeVersion?.title || opened?.title || name}
         </Text>
 
         {allowed ? (

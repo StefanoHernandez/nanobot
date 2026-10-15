@@ -73,7 +73,7 @@ export function MessageList({ chatKey, messages, running, notices, forkBoundary 
               <View style={{ flex: 1, height: 1, backgroundColor: th.colors.border }} />
             </View>
           ) : (
-            <MessageRow unit={item} live={running && index === 0} onLongPress={chatKey ? onLongPress : undefined} />
+            <MessageRow unit={item} live={running && index === 0} chatKey={chatKey} onLongPress={chatKey ? onLongPress : undefined} />
           )
         }
         ListHeaderComponent={<>{notices.map((n, i) => <NoticeRow key={`${n.kind}:${i}`} notice={n} />)}</>}

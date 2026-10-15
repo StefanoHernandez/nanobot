@@ -319,6 +319,11 @@
   },
   "artifact": {
     "preview": "Preview",
+    "version": "v{{current}}/{{total}}",
+    "prevVersion": "Previous version",
+    "nextVersion": "Next version",
+    "compare": "Compare",
+    "compareOff": "Single",
     "previewAnyway": "Preview anyway",
     "largeFileNotice": "Large file ({{size}} MB): preview may take a while",
     "openPreview": "Open preview",
