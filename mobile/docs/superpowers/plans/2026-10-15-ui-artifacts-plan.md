@@ -18,7 +18,7 @@ Design references: `mobile/docs/design/companion.md` (identity) and the impeccab
 | **U-C3** | Thread header: overflow "⋮" menu | **done** on `claude/projects` | **F-A merged** | `src/screens/thread/ThreadScreen.tsx` |
 | **U-D1** | Chat list grouped by date, Projects on top | **done** on `claude/projects` | **P-A merged** | `src/screens/chats/ChatDrawer.tsx` |
 | **U-S1** | Material snackbar instead of toasts | agy | none (shared UI kit, so check every caller) | `src/ui/components/Toast*.tsx` |
-| **A-1** | Artifact identity and versions (+ server skill) | Claude (design + skill), then agy (UI) | none | new `src/artifacts/**`; fork skill under `nanobot/skills/` |
+| **A-1** | Artifact identity and versions (+ server skill) | **done** on `claude/projects` | none | `src/artifacts/collect.ts`, viewer version bar, `nanobot/skills/artifacts/` |
 | **A-2** | "Correggi" and "Chiedi modifica" from the artifact | agy | none (A-1 makes it better, not required) | `ArtifactWebView.tsx`, `FileViewer.tsx`, viewer route |
 | **A-3** | Zoom/pan, landscape, artifact theme, export PNG/PDF | agy | none | `ArtifactWebView.tsx` (shell HTML), viewer route |
 | **A-4** | Offline: bundle the viewer libraries in the APK | Claude (CSP/security) | **done** on `claude/projects` | `ArtifactWebView.tsx`, `assets/viewers/` |

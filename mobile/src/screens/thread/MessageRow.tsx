@@ -12,9 +12,9 @@ import { ActivityRow } from "./ActivityRow";
 import { MediaList } from "./media/MediaViews";
 import { ReasoningBlock } from "./ReasoningBlock";
 
-type Props = { unit: TurnUnit; live: boolean; onLongPress?: (m: UIMessage) => void };
+type Props = { unit: TurnUnit; live: boolean; chatKey?: string; onLongPress?: (m: UIMessage) => void };
 
-function MessageRowImpl({ unit, live, onLongPress }: Props) {
+function MessageRowImpl({ unit, live, chatKey, onLongPress }: Props) {
   const t = useT();
   const th = useTheme();
   const m = unit.type === "message" ? unit.message : null;
@@ -46,7 +46,7 @@ function MessageRowImpl({ unit, live, onLongPress }: Props) {
       {...(finished ? { onLongPress: () => onLongPress!(m) } : {})}
     >
       {m.reasoning ? <ReasoningBlock text={m.reasoning} streaming={!!m.reasoningStreaming} /> : null}
-      {m.content ? <Markdown text={m.content} /> : null}
+      {m.content ? <Markdown text={m.content} chatKey={chatKey} messageId={m.id} /> : null}
       {m.media?.length ? <MediaList media={m.media} /> : null}
       {isFinishedAnswer && audioOn ? (
         <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 4 }}>
@@ -71,7 +71,7 @@ const shallowEq = (a: object, b: object) => {
 /** The vendor projection re-creates derived rows (split reasoning, merged answers) on every call, so identity
  * is useless; compare the messages field by field (their nested arrays keep identity while unchanged). */
 const same = (a: Props, b: Props) => {
-  if (a.live !== b.live || a.onLongPress !== b.onLongPress || a.unit.type !== b.unit.type) return false;
+  if (a.chatKey !== b.chatKey || a.live !== b.live || a.onLongPress !== b.onLongPress || a.unit.type !== b.unit.type) return false;
   if (a.unit.type === "message") return shallowEq(a.unit.message, (b.unit as typeof a.unit).message);
   const x = a.unit.messages;
   const y = (b.unit as typeof a.unit).messages;

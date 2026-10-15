@@ -8,6 +8,8 @@ import { toast } from "../components/Toast";
 import { syntaxColors } from "../syntaxTheme";
 import { useTheme } from "../ThemeProvider";
 import { artifactStore } from "../../screens/viewer/artifactStore";
+import { collectArtifacts, fenceCode, isPreviewKind, locateVersion, parseFenceInfo } from "../../artifacts/collect";
+import { threadStore } from "../../state/threadStore";
 
 // ponytail: one generic regex tokenizer (comments, strings, numbers, common keywords) for all C-like/python/shell-ish
 // languages instead of highlight.js (~100KB+ and an HTML-to-RN mapping). Per-language grammars if accuracy matters.
@@ -33,7 +35,7 @@ export function tokenize(code: string): Seg[] {
   return out;
 }
 
-export function CodeBlock({ code, lang }: { code: string; lang?: string }) {
+export function CodeBlock({ code, lang, chatKey, messageId }: { code: string; lang?: string; chatKey?: string; messageId?: string }) {
   const th = useTheme();
   const t = useT();
   const plain = code.length > MAX_HIGHLIGHT;
@@ -44,23 +46,27 @@ export function CodeBlock({ code, lang }: { code: string; lang?: string }) {
     toast.show(t("thread.copied"));
   };
 
-  const normalizedLang = lang?.toLowerCase();
-  const canPreview =
-    normalizedLang === "html" ||
-    normalizedLang === "svg" ||
-    normalizedLang === "mermaid";
+  const info = parseFenceInfo(lang);
+  const canPreview = isPreviewKind(info.lang);
 
   const openPreview = () => {
-    const ext = normalizedLang === "mermaid" ? "mmd" : normalizedLang;
+    const ext = info.lang === "mermaid" ? "mmd" : info.lang;
     const name = `preview.${ext}`;
-    artifactStore.set(code, name);
+    const messages = chatKey ? threadStore.getState().threads[chatKey]?.messages ?? [] : [];
+    const found = locateVersion(collectArtifacts(messages), { id: info.id, code, messageId });
+    const versions = found?.artifact.explicit && found.artifact.versions.length > 1 ? found.artifact.versions : undefined;
+    artifactStore.set(fenceCode(code), name, {
+      title: found?.artifact.title ?? info.title,
+      versions,
+      index: versions ? found?.index : undefined,
+    });
     router.push({ pathname: "/viewer", params: { name } });
   };
 
   return (
     <View style={{ marginVertical: 6, backgroundColor: th.colors.muted, borderRadius: th.radius.md, overflow: "hidden" }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 12 }}>
-        <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{lang ?? ""}</Text>
+        <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{info.title ?? info.lang}</Text>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           {canPreview && (
             <IconButton
