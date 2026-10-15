@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { ChatRow, chatTitle } from "./ChatRow";
 import { BotFace } from "../../ui/BotFace";
 import { outboxStore, pendingByChat } from "../../extras/outbox";
+import { projectsStore } from "../../projects/store";
 
 const chatPath = (key: string) => `/chat/${encodeURIComponent(key)}` as const;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -58,6 +59,10 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   const [renaming, setRenaming] = useState<ChatSummary | null>(null);
   const [deleting, setDeleting] = useState<ChatSummary | null>(null);
   const [title, setTitle] = useState("");
+
+  React.useEffect(() => {
+    void projectsStore.getState().refresh({ ifStaleMs: 60_000 });
+  }, []);
 
   const rows = q.trim() ? search(q) : chats;
   const label = (c: ChatSummary) => chatTitle(c, t("chats.untitled"));

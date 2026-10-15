@@ -14,6 +14,7 @@ import {
   archiveProject,
   listProjects,
   getProject,
+  projectErrorText,
   type Project,
   type FileEntry,
   type ProjectDetail,
@@ -26,6 +27,7 @@ import { ChatRow } from "../../src/screens/chats/ChatRow";
 import { chatsStore } from "../../src/state/chatsStore";
 import { sessionStore } from "../../src/state/sessionStore";
 import type { ChatSummary } from "@/lib/types";
+import { View } from "react-native";
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
 
@@ -45,17 +47,20 @@ async function renderWithTheme(ui: React.ReactElement) {
 
 // Mock expo-router
 jest.mock("expo-router", () => ({
-  router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn(), canGoBack: jest.fn(() => true) },
   usePathname: () => "/projects",
   useNavigation: () => ({
     addListener: jest.fn(() => () => {}),
   }),
 }));
 
-// Mock BotFace animation to prevent leaked timers
-jest.mock("../../src/ui/BotFace", () => ({
-  BotFace: () => null,
-}));
+// Mock BotFace animation to prevent leaked timers, render testID for assertions
+jest.mock("../../src/ui/BotFace", () => {
+  const { View } = require("react-native");
+  return {
+    BotFace: ({ state }: { state: string }) => <View testID={`botface-${state}`} />,
+  };
+});
 
 // Mock expo-file-system download
 jest.mock("expo-file-system", () => {
@@ -443,17 +448,331 @@ describe("P-A: ProjectDetailScreen", () => {
     // Confirmation dialog appears
     expect(await screen.findByText("Elimina file?")).toBeTruthy();
 
+    // Minor item 16: assert that fetch was NOT called before confirm
+    expect(fetch).not.toHaveBeenCalled();
+
     // Confirm deletion
     const confirmDeleteBtn = screen.getByText("Elimina");
     fireEvent.press(confirmDeleteBtn);
 
-    expect(fetch).toHaveBeenCalledWith(
-      "https://nanobot.local/api/ext/projects/p1/files/delete",
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "https://nanobot.local/api/ext/projects/p1/files/delete",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ path: "spec.pdf" }),
+        })
+      );
+    });
+
+    unmount();
+  });
+});
+
+describe("P-A-fix1: Store & Race", () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    (global as any).fetch = jest.fn();
+    projectsStore.getState().reset();
+    await i18n.changeLanguage("it");
+  });
+
+  test("1. Cross-profile race: start refresh on A, switch to B before it resolves, resolve A -> store is still empty", async () => {
+    let resolveA!: (value: any) => void;
+    const delayedPromiseA = new Promise((resolve) => {
+      resolveA = resolve;
+    });
+
+    const fakeSessionA = {
+      baseUrl: "https://nanobot.local",
+      apiToken: () => "secret-token",
+      get: jest.fn().mockReturnValue(delayedPromiseA),
+    } as any;
+
+    const fakeSessionB = {
+      baseUrl: "https://nanobot.local",
+      apiToken: () => "secret-token",
+      get: jest.fn().mockResolvedValue({ projects: [] }),
+    } as any;
+
+    sessionStore.setState({ session: fakeSessionA, profile: { id: "profile-a" } as any, state: "open" });
+
+    // Start refresh on profile A
+    const refreshPromise = projectsStore.getState().refresh();
+
+    // Switch to profile B before A resolves
+    sessionStore.setState({ session: fakeSessionB, profile: { id: "profile-b" } as any, state: "open" });
+
+    // Resolve A with projects from A
+    resolveA({
+      projects: [
+        {
+          id: "pA",
+          name: "Project of Profile A",
+          path: "/path/pA",
+          created_at: 1000,
+          updated_at: 1000,
+          file_count: 0,
+          size_bytes: 0,
+        },
+      ],
+    });
+
+    await refreshPromise;
+
+    // Store must NOT hold profile A's projects
+    expect(projectsStore.getState().projects).toEqual([]);
+    expect(projectsStore.getState().byPath("/path/pA")).toBeUndefined();
+  });
+
+  test("2. Session opening triggers listProjects", async () => {
+    const fakeSession = {
+      baseUrl: "https://nanobot.local",
+      apiToken: () => "secret-token",
+      get: jest.fn().mockResolvedValue({ projects: [] }),
+    } as any;
+
+    sessionStore.setState({ session: fakeSession, profile: { id: "profile-1" } as any, state: "connecting" });
+    fakeSession.get.mockClear();
+
+    // State transitions to open
+    sessionStore.setState({ state: "open" });
+
+    await waitFor(() => {
+      expect(fakeSession.get).toHaveBeenCalledWith("/api/ext/projects");
+    });
+  });
+});
+
+describe("P-A-fix1: projectErrorText helper & i18n", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("it");
+  });
+
+  test("4. an unknown code maps to generic text, never starts with projects.err.", () => {
+    const t = i18n.t.bind(i18n);
+    const unknownRes = projectErrorText(t, "completely_unknown_error_code_xyz");
+    expect(unknownRes).toBe("Operazione non riuscita");
+    expect(unknownRes.startsWith("projects.err.")).toBe(false);
+
+    const errObjRes = projectErrorText(t, new Error("weird failure"));
+    expect(errObjRes).toBe("Operazione non riuscita");
+    expect(errObjRes.startsWith("projects.err.")).toBe(false);
+
+    // Network error mapping
+    const netRes = projectErrorText(t, "Network request failed");
+    expect(netRes).toBe("Errore di connessione di rete");
+  });
+
+  test("4. known codes map to their translated keys in it and en", async () => {
+    const codes = [
+      "upload_timed_out",
+      "unauthorized",
+      "reserved_path",
+      "path_too_deep",
+      "file_not_found",
+      "invalid_name",
+      "missing_name",
+      "too_many_projects_with_this_name",
+      "length_required",
+      "io_error",
+      "network",
+      "generic",
+      "project_not_found",
+      "file_exists",
+      "file_too_large",
+      "disk_full",
+      "invalid_path",
+      "too_large",
+    ];
+
+    await i18n.changeLanguage("it");
+    for (const c of codes) {
+      const text = projectErrorText(i18n.t.bind(i18n), c);
+      expect(text.startsWith("projects.err.")).toBe(false);
+      expect(text.length).toBeGreaterThan(0);
+    }
+
+    await i18n.changeLanguage("en");
+    for (const c of codes) {
+      const text = projectErrorText(i18n.t.bind(i18n), c);
+      expect(text.startsWith("projects.err.")).toBe(false);
+      expect(text.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("P-A-fix1: ProjectDetailScreen error & editor fixes", () => {
+  let fakeSession: any;
+
+  const defaultDetail: ProjectDetail = {
+    project: {
+      id: "p1",
+      name: "Detail Project",
+      description: "Existing desc",
+      path: "/home/bot/projects/p1",
+      created_at: 1000,
+      updated_at: 1000,
+      file_count: 0,
+      size_bytes: 0,
+    },
+    instructions: "Original instructions",
+    files: [],
+    truncated: false,
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    (global as any).fetch = jest.fn();
+    fakeSession = {
+      baseUrl: "https://nanobot.local",
+      apiToken: () => "secret-token",
+      get: jest.fn().mockImplementation(async (path: string) => {
+        if (path.startsWith("/api/ext/projects/p-missing")) {
+          throw new Error("project_not_found");
+        }
+        if (path.startsWith("/api/ext/projects/p-unique")) {
+          return {
+            project: {
+              id: "p-unique",
+              name: "Unique Title",
+              description: "",
+              path: "/home/bot/projects/p-unique",
+              created_at: 1000,
+              updated_at: 1000,
+              file_count: 0,
+              size_bytes: 0,
+            },
+            instructions: "",
+            files: [],
+            truncated: false,
+          };
+        }
+        if (path.startsWith("/api/ext/projects/p1")) {
+          return defaultDetail;
+        }
+        return { projects: [] };
+      }),
+    };
+    await i18n.changeLanguage("it");
+    projectsStore.getState().reset();
+    sessionStore.setState({ session: fakeSession, state: "open", profile: null });
+    chatsStore.setState({ chats: [] });
+  });
+
+  test("3. Blank detail page on load failure: BotFace in state error, message and Riprova shown, Archive not shown", async () => {
+    const { unmount } = await renderWithTheme(<ProjectDetailScreen id="p-missing" />);
+
+    // BotFace with state error
+    expect(await screen.findByTestId("botface-error")).toBeTruthy();
+
+    // Localized message
+    expect(screen.getByText("Progetto non trovato")).toBeTruthy();
+
+    // Riprova button
+    expect(screen.getByText("Riprova")).toBeTruthy();
+
+    // Archive and Edit are NOT shown
+    expect(screen.queryByText("Archivia progetto")).toBeNull();
+    expect(screen.queryByText("Modifica")).toBeNull();
+
+    unmount();
+  });
+
+  test("6. Failed save of instructions shows inline error while editor stays open", async () => {
+    const { unmount } = await renderWithTheme(<ProjectDetailScreen id="p1" />);
+
+    // Open instructions editor
+    const instructionsBtn = await screen.findByText("Original instructions");
+    fireEvent.press(instructionsBtn);
+
+    // Header of editor modal
+    expect(await screen.findByRole("header", { name: "Modifica istruzioni" })).toBeTruthy();
+
+    // Mock updateProject rejecting with io_error
+    ((global as any).fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: async () => JSON.stringify({ error: "io_error" }),
+      json: async () => ({ error: "io_error" }),
+    });
+
+    // Save
+    const saveBtn = screen.getByText("Salva");
+    fireEvent.press(saveBtn);
+
+    // Editor stays open
+    expect(await screen.findByRole("header", { name: "Modifica istruzioni" })).toBeTruthy();
+
+    // Inline error is shown
+    expect(await screen.findByText("Errore di lettura/scrittura sul server")).toBeTruthy();
+
+    unmount();
+  });
+
+  test("11. clearing description in edit sheet sends empty string", async () => {
+    ((global as any).fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        project: { ...defaultDetail.project, description: "" },
+      }),
+    });
+
+    await updateProject(fakeSession, "p1", {
+      name: "Detail Project",
+      description: "",
+    });
+
+    expect((global as any).fetch).toHaveBeenCalledWith(
+      "https://nanobot.local/api/ext/projects/p1/update",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ path: "spec.pdf" }),
+        body: JSON.stringify({ name: "Detail Project", description: "" }),
       })
     );
+  });
+
+  test("12. archiving project calls router.back() when canGoBack is true", async () => {
+    const { unmount } = await renderWithTheme(<ProjectDetailScreen id="p1" />);
+
+    // Click Archivia progetto
+    const archiveBtn = await screen.findByText("Archivia progetto");
+    fireEvent.press(archiveBtn);
+
+    // Confirm dialog
+    expect(await screen.findByText("Archivia progetto?")).toBeTruthy();
+
+    ((global as any).fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    });
+
+    // Confirm in dialog
+    const confirmBtn = screen.getAllByText("Archivia progetto")[1];
+    fireEvent.press(confirmBtn);
+
+    await waitFor(() => {
+      expect((global as any).fetch).toHaveBeenCalledWith(
+        "https://nanobot.local/api/ext/projects/p1/archive",
+        expect.objectContaining({ method: "POST" })
+      );
+      expect(router.back).toHaveBeenCalled();
+    });
+
+    unmount();
+  });
+
+  test("15. Section 1 shows description or Nessuna descrizione without repeating project name", async () => {
+    const { unmount } = await renderWithTheme(<ProjectDetailScreen id="p-unique" />);
+
+    // Unique Title appears only in the header bar
+    const titles = await screen.findAllByText("Unique Title");
+    expect(titles.length).toBe(1);
+
+    // Fallback description is shown
+    expect(screen.getByText("Nessuna descrizione")).toBeTruthy();
 
     unmount();
   });

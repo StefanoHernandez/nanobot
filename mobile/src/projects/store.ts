@@ -15,17 +15,24 @@ function createByPath(list: Project[]): ByPathLookup {
   return Object.assign(fn, map);
 }
 
+export type RefreshOptions = {
+  ifStaleMs?: number;
+};
+
 export type ProjectsState = {
   projects: Project[];
   loading: boolean;
   error: string | null;
   byPath: ByPathLookup;
-  refresh: () => Promise<void>;
+  refresh: (opts?: RefreshOptions) => Promise<void>;
   reset: () => void;
 };
 
 const initialProjects: Project[] = [];
 const initialByPath = createByPath(initialProjects);
+
+let generation = 0;
+let lastRefreshedAt = 0;
 
 export const projectsStore = createStore<ProjectsState>((set, get) => ({
   projects: initialProjects,
@@ -33,9 +40,15 @@ export const projectsStore = createStore<ProjectsState>((set, get) => ({
   error: null,
   byPath: initialByPath,
 
-  refresh: async () => {
-    const session = sessionStore.getState().session;
+  refresh: async (opts?: RefreshOptions) => {
+    if (opts?.ifStaleMs && Date.now() - lastRefreshedAt < opts.ifStaleMs) {
+      return;
+    }
+
+    const currentGen = generation;
+    const session = sessionStore?.getState ? sessionStore.getState()?.session : null;
     if (!session) {
+      if (currentGen !== generation) return;
       set({ projects: [], byPath: createByPath([]), loading: false, error: null });
       return;
     }
@@ -43,6 +56,8 @@ export const projectsStore = createStore<ProjectsState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const res = await listProjects(session);
+      if (currentGen !== generation) return;
+      lastRefreshedAt = Date.now();
       const list = Array.isArray(res) ? res : (res?.projects ?? []);
       set({
         projects: list,
@@ -51,6 +66,7 @@ export const projectsStore = createStore<ProjectsState>((set, get) => ({
         error: null,
       });
     } catch (e: any) {
+      if (currentGen !== generation) return;
       set({
         loading: false,
         error: e instanceof Error ? e.message : String(e),
@@ -59,6 +75,8 @@ export const projectsStore = createStore<ProjectsState>((set, get) => ({
   },
 
   reset: () => {
+    generation++;
+    lastRefreshedAt = 0;
     set({
       projects: [],
       byPath: createByPath([]),
@@ -68,11 +86,14 @@ export const projectsStore = createStore<ProjectsState>((set, get) => ({
   },
 }));
 
-// Clear on profile switch: subscribe to sessionStore profile id changes
+// Clear on profile switch; load projects once when a session opens
 if (sessionStore && typeof sessionStore.subscribe === "function") {
   sessionStore.subscribe((state, prev) => {
     if (state.profile?.id !== prev?.profile?.id) {
       projectsStore.getState().reset();
+    }
+    if (state.state === "open" && prev?.state !== "open") {
+      void projectsStore.getState().refresh();
     }
   });
 }

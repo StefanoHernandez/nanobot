@@ -805,6 +805,7 @@
     "archiveConfirmTitle": "Archivia progetto?",
     "archiveConfirmMessage": "Il progetto viene spostato in archivio sul server; i file non vengono cancellati",
     "editProject": "Modifica progetto",
+    "noDescription": "Nessuna descrizione",
     "err": {
       "project_not_found": "Progetto non trovato",
       "file_exists": "Il file esiste già",
@@ -812,6 +813,17 @@
       "disk_full": "Spazio su disco insufficiente sul server",
       "invalid_path": "Percorso del file non valido",
       "too_large": "Download troppo grande (max 32 MB)",
+      "upload_timed_out": "Caricamento scaduto: connessione lenta o server occupato",
+      "unauthorized": "Non autorizzato",
+      "reserved_path": "Nome di percorso riservato",
+      "path_too_deep": "Percorso troppo profondo",
+      "file_not_found": "File non trovato",
+      "invalid_name": "Nome del progetto non valido",
+      "missing_name": "Nome del progetto mancante",
+      "too_many_projects_with_this_name": "Troppi progetti con questo nome",
+      "length_required": "Dimensione del file richiesta",
+      "io_error": "Errore di lettura/scrittura sul server",
+      "network": "Errore di connessione di rete",
       "generic": "Operazione non riuscita"
     }
   },

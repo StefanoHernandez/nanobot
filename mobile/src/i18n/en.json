@@ -805,6 +805,7 @@
     "archiveConfirmTitle": "Archive project?",
     "archiveConfirmMessage": "The project will be moved to the archive on the server; files will not be deleted",
     "editProject": "Edit project",
+    "noDescription": "No description",
     "err": {
       "project_not_found": "Project not found",
       "file_exists": "File already exists",
@@ -812,6 +813,17 @@
       "disk_full": "Insufficient disk space on server",
       "invalid_path": "Invalid file path",
       "too_large": "Download too large (max 32 MB)",
+      "upload_timed_out": "Upload timed out: slow connection or server busy",
+      "unauthorized": "Unauthorized",
+      "reserved_path": "Reserved path name",
+      "path_too_deep": "Path too deep",
+      "file_not_found": "File not found",
+      "invalid_name": "Invalid project name",
+      "missing_name": "Missing project name",
+      "too_many_projects_with_this_name": "Too many projects with this name",
+      "length_required": "Content length required",
+      "io_error": "Server I/O error",
+      "network": "Connection error: check your network",
       "generic": "Operation failed"
     }
   },

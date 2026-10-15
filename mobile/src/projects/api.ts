@@ -37,6 +37,42 @@ export type UpdateProjectInput = {
   instructions?: string;
 };
 
+export const KNOWN_PROJECT_ERRORS = new Set([
+  "project_not_found",
+  "file_exists",
+  "file_too_large",
+  "disk_full",
+  "invalid_path",
+  "too_large",
+  "upload_timed_out",
+  "unauthorized",
+  "reserved_path",
+  "path_too_deep",
+  "file_not_found",
+  "invalid_name",
+  "missing_name",
+  "too_many_projects_with_this_name",
+  "length_required",
+  "io_error",
+  "network",
+  "generic",
+]);
+
+export function projectErrorText(t: (key: string, opts?: any) => string, code?: unknown): string {
+  let c = typeof code === "string" ? code.trim() : "";
+  if (code instanceof Error) {
+    c = code.message.trim();
+  }
+  if (!c) return t("projects.err.generic");
+  if (/network|fetch|timeout|econnrefused|failed to fetch/i.test(c)) {
+    return t("projects.err.network");
+  }
+  if (KNOWN_PROJECT_ERRORS.has(c)) {
+    return t(`projects.err.${c}`);
+  }
+  return t("projects.err.generic");
+}
+
 async function parseError(res: Response): Promise<string> {
   let code = `http_${res.status}`;
   try {
