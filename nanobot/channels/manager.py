@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
+import os
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from contextlib import suppress
@@ -48,13 +49,21 @@ if TYPE_CHECKING:
 
 
 def _default_webui_dist() -> Path | None:
-    """Return the absolute path to the bundled webui dist directory if it exists."""
+    """Bundled legacy WebUI, or the exported app when NANOBOT_APP_DIST points at it.
+
+    A missing or unusable override falls back to the legacy folder. Unset keeps the legacy site.
+    """
+    override = os.environ.get("NANOBOT_APP_DIST", "").strip()
+    if override:
+        candidate = Path(override).expanduser().resolve()
+        if candidate.is_dir() and (candidate / "index.html").is_file():
+            return candidate
     try:
         import nanobot.web as web_pkg  # type: ignore[import-not-found]
     except ImportError:
         return None
-    candidate = Path(web_pkg.__file__).resolve().parent / "dist"
-    return candidate if candidate.is_dir() else None
+    legacy = Path(web_pkg.__file__).resolve().parent / "dist"
+    return legacy if legacy.is_dir() else None
 
 
 # Retry delays for message sending (exponential backoff: 1s, 2s, 4s)

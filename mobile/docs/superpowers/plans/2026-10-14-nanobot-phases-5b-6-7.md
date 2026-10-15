@@ -3,6 +3,8 @@
 Date: 2026-10-14
 Author: OpenCode (Gemini 4 Argon Contributor)
 
+Update 2026-10-15: Phase 6 is parked (Dream stays, no vector database). The legacy WebUI will be replaced by a web export of `mobile/` after kanban; see `mobile/docs/roadmap.md`. Do not add a kanban or pairing page to `nanobot/web`.
+
 ## Overview & Execution Order
 This plan specifies the remaining server and mobile work to bring **nanobot mobile + fork** to 100% completion, while keeping upstream `HKUDS/nanobot` merge conflicts near zero.
 
