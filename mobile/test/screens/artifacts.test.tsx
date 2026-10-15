@@ -6,7 +6,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
 import { i18n } from "../../src/i18n";
 import { viewerKind } from "../../src/screens/viewer/formats";
-import { ArtifactWebView, buildShellHtml, escapeHtml } from "../../src/screens/viewer/ArtifactWebView";
+import { ArtifactWebView, buildShellHtml, escapeHtml, CDN_VERSIONS } from "../../src/screens/viewer/ArtifactWebView";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { FileViewer } from "../../src/screens/viewer/FileViewer";
 import { CodeBlock } from "../../src/ui/markdown/CodeBlock";
 import * as FileSystemLegacy from "expo-file-system/legacy";
@@ -120,6 +122,9 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(cspIndex).toBeGreaterThan(headIndex);
     expect(cspIndex).toBeLessThan(contentIndex);
     expect(html).toContain("connect-src 'none'");
+    expect(html).toContain("script-src 'unsafe-inline' 'unsafe-eval'");
+    expect(html).not.toContain("cdn.jsdelivr.net");
+    expect(html).not.toContain("fonts.googleapis.com");
   });
 
   test("The WebView props include allowFileAccess: false, incognito: true and setSupportMultipleWindows: false", async () => {
@@ -533,4 +538,42 @@ test("mermaid follows the app theme and svg/mermaid pages carry the zoom script"
   expect(pdf).not.toContain("prefers-reduced-motion");
   // the sandbox is untouched
   expect(dark).toContain("connect-src 'none'");
+});
+
+test("preview libraries are inlined from the app, never fetched from a CDN", () => {
+  const libs = {
+    mermaid: "window.mermaid = 1;",
+    pdfjs: "/*pdfjs*/",
+    pdfjsWorker: "worker<script>",
+    jszip: "window.JSZip = 1;",
+    pako: "window.pako = 1;",
+    docxPreview: "window.docx = 1;",
+    pptxPreview: "window.pptxPreview = { init: 1 };",
+    xlsx: "window.XLSX = 1;",
+  };
+  for (const kind of ["html", "svg", "mermaid", "pdf", "docx", "pptx", "xlsx"] as const) {
+    const shell = buildShellHtml({ kind, html: "<p>x</p>", fileSize: 1000, libs });
+    expect(shell).not.toContain("cdn.jsdelivr.net");
+    expect(shell).not.toContain("cdnjs.cloudflare.com");
+    expect(shell).not.toContain("unpkg.com");
+    expect(shell).not.toContain("fonts.googleapis.com");
+    expect(shell).not.toContain("fonts.gstatic.com");
+    expect(shell).toContain("connect-src 'none'");
+  }
+  const mermaid = buildShellHtml({
+    kind: "mermaid",
+    html: "A-->B",
+    libs: { mermaid: "var x = '</script><script>alert(1)';" },
+  });
+  expect(mermaid).toContain("var x");
+  expect(mermaid).not.toContain("</script><script>");
+  expect(mermaid).toContain("<\\/script>");
+  const pdf = buildShellHtml({ kind: "pdf", fileSize: 10, libs });
+  expect(pdf).toContain("/*pdfjs*/");
+  expect(pdf).toContain("createObjectURL");
+  expect(pdf).not.toContain("worker<script>");
+  const pins = readFileSync(path.join(__dirname, "../../scripts/fetch-viewer-libs.mjs"), "utf8");
+  for (const version of Object.values(CDN_VERSIONS)) {
+    expect(pins).toContain(version);
+  }
 });
