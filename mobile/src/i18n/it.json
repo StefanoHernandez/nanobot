@@ -735,7 +735,17 @@
     "chatChanged": "Chat modificata",
     "confirm": "Conferma",
     "cancel": "Annulla",
-    "invalidSchedule": "Formato pianificazione non valido"
+    "invalidSchedule": "Formato pianificazione non valido",
+    "date": "Data",
+    "time": "Ora",
+    "minutes": "minuti",
+    "hours": "ore",
+    "days": "giorni",
+    "interval": "Intervallo",
+    "err": {
+      "past": "La data selezionata è nel passato",
+      "invalid": "Valore non valido"
+    }
   },
   "share": {
     "pickChatTitle": "Condividi in nanobot",

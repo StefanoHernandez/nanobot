@@ -282,9 +282,8 @@ describe("P4-U4 Automations UI", () => {
     });
   });
 
-  test("I8: AutomationJobSheet preserves kind and maps at_ms correctly for at job with human date-time", async () => {
-    const atTime = 1770000000000;
-    const atIso = new Date(atTime).toISOString();
+  test("I8: AutomationJobSheet preserves kind and maps at_ms correctly for at job with pickers", async () => {
+    const atTime = Date.now() + 100_000_000;
     const atJob: SessionAutomationJob = {
       id: "j-at",
       name: "One-shot Job",
@@ -304,33 +303,23 @@ describe("P4-U4 Automations UI", () => {
       />,
     );
 
-    // Initial input shows ISO date-time, not raw milliseconds
-    const schedInput = screen.getByDisplayValue(atIso);
-    expect(schedInput).toBeTruthy();
+    // Initial view shows Date and Time buttons
+    expect(screen.getByText("Data")).toBeTruthy();
+    expect(screen.getByText("Ora")).toBeTruthy();
 
-    // Invalid input shows inline error and does NOT call update
-    await fireEvent.changeText(schedInput, "not-a-valid-date");
+    // Valid future date saves to timestamp
     const saveBtn = screen.getByText("Salva");
-    await act(async () => {
-      fireEvent.press(saveBtn);
-    });
-    expect(screen.getByText("Formato pianificazione non valido")).toBeTruthy();
-    expect(onUpdate).not.toHaveBeenCalled();
-
-    // Valid date-time update maps to timestamp
-    const targetDateStr = "2026-02-02T03:00:00.000Z";
-    await fireEvent.changeText(schedInput, targetDateStr);
     await act(async () => {
       fireEvent.press(saveBtn);
     });
 
     expect(onUpdate).toHaveBeenCalledWith("j-at", {
       message: "One-shot message",
-      schedule: { kind: "at", at_ms: Date.parse(targetDateStr) },
+      schedule: { kind: "at", at_ms: atTime },
     });
   });
 
-  test("I8: AutomationJobSheet preserves kind and maps every_ms correctly for every job with number and unit", async () => {
+  test("I8: AutomationJobSheet preserves kind and maps every_ms correctly for every job with number and unit chips", async () => {
     const everyJob: SessionAutomationJob = {
       id: "j-every",
       name: "Interval Job",
@@ -350,21 +339,22 @@ describe("P4-U4 Automations UI", () => {
       />,
     );
 
-    // Initial input shows "1 hour", not "3600000"
-    const schedInput = screen.getByDisplayValue("1 hour");
+    // Initial input shows "1" (whole unit 1 hour)
+    const schedInput = screen.getByDisplayValue("1");
     expect(schedInput).toBeTruthy();
+    expect(screen.getByText("ore")).toBeTruthy();
 
-    // Invalid input without unit or garbage shows inline error
-    await fireEvent.changeText(schedInput, "invalid-unit-123");
+    // Invalid input <= 0 shows inline error and does NOT call update
+    await fireEvent.changeText(schedInput, "0");
     const saveBtn = screen.getByText("Salva");
     await act(async () => {
       fireEvent.press(saveBtn);
     });
-    expect(screen.getByText("Formato pianificazione non valido")).toBeTruthy();
+    expect(screen.getByText("Valore non valido")).toBeTruthy();
     expect(onUpdate).not.toHaveBeenCalled();
 
     // Valid number + unit maps to milliseconds
-    await fireEvent.changeText(schedInput, "2 hours");
+    await fireEvent.changeText(schedInput, "2");
     await act(async () => {
       fireEvent.press(saveBtn);
     });

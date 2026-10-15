@@ -735,7 +735,17 @@
     "chatChanged": "Chat changed",
     "confirm": "Confirm",
     "cancel": "Cancel",
-    "invalidSchedule": "Invalid schedule format"
+    "invalidSchedule": "Invalid schedule format",
+    "date": "Date",
+    "time": "Time",
+    "minutes": "minutes",
+    "hours": "hours",
+    "days": "days",
+    "interval": "Interval",
+    "err": {
+      "past": "Selected time is in the past",
+      "invalid": "Invalid value"
+    }
   },
   "share": {
     "pickChatTitle": "Share to nanobot",
