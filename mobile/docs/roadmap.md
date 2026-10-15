@@ -20,7 +20,7 @@ This is not a copy of the APK into the current site. Expo exports static files, 
 
 Before the legacy site is removed, the native pieces need a browser equivalent: the secret store, the camera scanner, and the preview WebView. The Android widget, notifications, and share sheet stay on the phone.
 
-Kanban for this scope is done. The export has not started. Until the export covers connect, chat, and settings, the legacy site remains the computer UI.
+Kanban for this scope is done. The web export has started: the browser keeps the profile secret in localStorage for that origin, not in SecureStore. Artifact previews must not run in the same document as that secret. Until the export covers connect, chat, and settings, the legacy site remains the computer UI.
 
 Phase 6 is parked. Dream stays the only memory writer. The phone memory screen is read-only. No vector database, no graph, no second fact store.
 
