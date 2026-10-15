@@ -704,11 +704,12 @@ class WebSocketChannel(BaseChannel):
         from nanobot.ext.approvals import approvals_post_handler
         from nanobot.ext.backup import backup_post_handler
         from nanobot.ext.costs import costs_post_handler
-        from nanobot.ext.devices import devices_post_handler
+        from nanobot.ext.devices import devices_post_handler, install_connection_tracking
         from nanobot.ext.kanban import kanban_post_handler
         from nanobot.ext.projects import projects_post_handler
         from nanobot.ext.prompts import prompts_post_handler
 
+        install_connection_tracking()
         secret = (self.config.token_issue_secret or "").strip() or (self.config.token or "").strip()
         chain = projects_post_handler(
             self.gateway.tokens, self.gateway.workspaces, self._uploads.handle

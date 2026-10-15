@@ -236,3 +236,35 @@ async def test_a_phone_token_cannot_pair_new_phones(devices_path):
     master_api = store.issue_api_token(300)  # minted with the master secret
     allowed = await handler(_post("/codes", {}, master_api))
     assert allowed.status != 403  # past the device check (400 here only for the missing Origin)
+
+
+@pytest.mark.asyncio
+async def test_revoke_closes_the_phone_open_websocket(devices_path):
+    import asyncio
+
+    from nanobot.webui.gateway_endpoint import WebUIGatewayEndpoint
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    class _Conn:
+        closed: tuple[int, str] | None = None
+
+        async def close(self, code: int, reason: str) -> None:
+            self.closed = (code, reason)
+
+    dev.install_connection_tracking()
+    dev.install_connection_tracking()  # idempotent
+    store = GatewayTokenStore()
+    _, device_id = _paired_phone(devices_path)
+    ws, other_ws = store.issue_token(300, audience="webui"), store.issue_token(300, audience="webui")
+    dev.remember_device_tokens(device_id, store, ws)
+    endpoint = WebUIGatewayEndpoint(config=SimpleNamespace(), http=None, tokens=store)  # type: ignore[arg-type]
+    phone, laptop = _Conn(), _Conn()
+    assert endpoint.consume_issued_token(phone, ws)
+    assert endpoint.consume_issued_token(laptop, other_ws)  # not a device token: untracked
+
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+    assert (await handler(_post("/revoke", {"id": device_id}, MASTER))).status == 200
+    for _ in range(5):  # close is scheduled thread-safely onto the loop
+        await asyncio.sleep(0)
+    assert phone.closed == (dev.REVOKED_CLOSE_CODE, "device revoked")
+    assert laptop.closed is None

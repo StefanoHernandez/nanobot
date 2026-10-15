@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -10,6 +11,7 @@ import secrets
 import tempfile
 import threading
 import time
+import weakref
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, cast
@@ -322,6 +324,13 @@ def remember_device_tokens(device_id: str, tokens: Any, *issued: str | None) -> 
                 _DEVICE_TOKENS[token] = device_id
 
 
+# Live WebSockets opened with a device-minted token, so revoke can close them.
+_DEVICE_CONNECTIONS: weakref.WeakKeyDictionary[Any, tuple[str, asyncio.AbstractEventLoop]] = (
+    weakref.WeakKeyDictionary()
+)
+REVOKED_CLOSE_CODE = 4003
+
+
 def drop_device_tokens(device_id: str, tokens: Any) -> int:
     with _DEVICE_TOKENS_LOCK:
         mine = [t for t, d in _DEVICE_TOKENS.items() if d == device_id]
@@ -330,7 +339,38 @@ def drop_device_tokens(device_id: str, tokens: Any) -> int:
             tokens.api_tokens.pop(token, None)
             tokens.issued_tokens.pop(token, None)
             tokens.issued_token_audiences.pop(token, None)
-    return len(mine)
+        live = [(c, loop) for c, (d, loop) in list(_DEVICE_CONNECTIONS.items()) if d == device_id]
+        for connection, _ in live:
+            _DEVICE_CONNECTIONS.pop(connection, None)
+    for connection, loop in live:
+        if not loop.is_closed():
+            asyncio.run_coroutine_threadsafe(connection.close(REVOKED_CLOSE_CODE, "device revoked"), loop)
+    return len(mine) + len(live)
+
+
+def install_connection_tracking() -> None:
+    """Remember which WebSocket each device-minted token opened (idempotent class patch)."""
+    from nanobot.webui.gateway_endpoint import WebUIGatewayEndpoint
+
+    original = WebUIGatewayEndpoint.consume_issued_token
+    if getattr(original, "_device_tracked", False):
+        return
+
+    def tracked(self: WebUIGatewayEndpoint, connection: Any, token: str) -> bool:
+        with _DEVICE_TOKENS_LOCK:
+            device_id = _DEVICE_TOKENS.get(token)
+        ok = original(self, connection, token)
+        if ok and device_id:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return ok
+            with _DEVICE_TOKENS_LOCK:
+                _DEVICE_CONNECTIONS[connection] = (device_id, loop)
+        return ok
+
+    setattr(tracked, "_device_tracked", True)
+    WebUIGatewayEndpoint.consume_issued_token = tracked
 
 
 def _is_device_minted(request: Any) -> bool:
