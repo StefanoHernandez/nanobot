@@ -3,6 +3,7 @@ import type { ArtifactVersion } from "../../artifacts/collect";
 export type StoredArtifact = {
   content: string;
   name: string;
+  id?: string;
   title?: string;
   versions?: ArtifactVersion[];
   index?: number;

@@ -112,6 +112,8 @@ export type ArtifactWebViewProps = {
   name?: string;
   fileSize?: number;
   onFallback: () => void;
+  /** Render error with a short message. When set, a `{type:"error"}` message does not call onFallback. */
+  onError?: (info: { message: string; line?: number }) => void;
   isLightPreview?: boolean;
 };
 
@@ -189,9 +191,17 @@ function getChunkProtocolScript(): string {
     }
   }
   function postError(err) {
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "error" }));
+    if (!window.ReactNativeWebView) return;
+    var message = "";
+    var line = null;
+    if (err) {
+      if (typeof err.message === "string") message = err.message;
+      else if (typeof err === "string") message = err;
+      if (typeof err.lineno === "number") line = err.lineno;
+      else if (typeof err.line === "number") line = err.line;
     }
+    message = String(message).replace(/\\s+/g, " ").trim().slice(0, 300);
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: "error", message: message, line: line }));
   }
 
   function requestChunk(offset, length) {
@@ -738,7 +748,7 @@ ${commonHead}
   </div>
   <script>
     window.addEventListener("DOMContentLoaded", function() { postReady(); });
-    window.addEventListener("error", function() { postError(); });
+    window.addEventListener("error", function(ev) { postError(ev); });
     setTimeout(function() { postReady(); }, 300);
   </script>
 </body>
@@ -1204,6 +1214,7 @@ export function ArtifactWebView({
   html,
   fileSize,
   onFallback,
+  onError,
   isLightPreview = false,
 }: ArtifactWebViewProps) {
   const t = useT();
@@ -1213,6 +1224,8 @@ export function ArtifactWebView({
   const isFirstLoadRef = useRef(true);
   const onFallbackRef = useRef(onFallback);
   onFallbackRef.current = onFallback;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
   const isReadyRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
@@ -1366,7 +1379,10 @@ export function ArtifactWebView({
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
-      onFallbackRef.current();
+      const message = typeof data.message === "string" ? data.message.replace(/\s+/g, " ").trim().slice(0, 300) : "";
+      const line = typeof data.line === "number" && Number.isInteger(data.line) && data.line > 0 ? data.line : undefined;
+      if (onErrorRef.current) onErrorRef.current({ message, ...(line != null ? { line } : {}) });
+      else onFallbackRef.current();
       return;
     }
 
