@@ -518,6 +518,11 @@
     "sentByBot": "From bot",
     "emptyImages": "No images in this chat",
     "emptyFiles": "No files in this chat",
+    "tabArtifacts": "Artifacts",
+    "emptyArtifacts": "No artifacts in this chat",
+    "saveToProject": "Save to project",
+    "saved": "Saved to project",
+    "saveFailed": "Could not save to project",
     "share": "Share"
   },
   "system": {

@@ -1,5 +1,5 @@
 import { AnyImage } from "../../ui/AnyImage";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -17,7 +17,15 @@ import type { UIMessage } from "@/lib/types";
 import { useT } from "../../i18n";
 import { useSession } from "../../state/sessionStore";
 import { useThreadSlice } from "../../state/threadStore";
-import { IconButton, toast } from "../../ui/components";
+import { collectArtifacts, type Artifact } from "../../artifacts/collect";
+import { listProjects, uploadProjectFile, type Project } from "../../projects/api";
+import {
+  artifactRowTitle,
+  latestArtifactVersion,
+  openGalleryArtifactPreview,
+  writeGalleryArtifactUpload,
+} from "./galleryArtifacts";
+import { IconButton, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { withAlpha } from "../../ui/theme";
 import {
@@ -132,6 +140,76 @@ type FileRowItemProps = {
   onShare: (item: ThreadFile) => void;
 };
 
+type ArtifactRowItemProps = {
+  item: Artifact;
+  saveBusy: boolean;
+  onOpen: (item: Artifact) => void;
+  onSave: (item: Artifact) => void;
+};
+
+function ArtifactRowItem({ item, saveBusy, onOpen, onSave }: ArtifactRowItemProps) {
+  const th = useTheme();
+  const t = useT();
+  const latest = latestArtifactVersion(item);
+  const title = artifactRowTitle(item);
+  const kind = latest?.kind ?? "html";
+
+  return (
+    <Pressable
+      testID="gallery-artifact-row"
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${kind}`}
+      onPress={() => onOpen(item)}
+      style={[
+        styles.fileRow,
+        {
+          backgroundColor: th.colors.card,
+          borderRadius: th.radius.md,
+        },
+      ]}
+    >
+      <View style={styles.iconContainer}>
+        <MaterialCommunityIcons name="file-code-outline" size={28} color={th.colors.foreground} />
+      </View>
+      <View style={styles.fileInfo}>
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="middle"
+          style={[
+            styles.fileName,
+            {
+              color: th.colors.foreground,
+              fontFamily: th.font.medium,
+            },
+          ]}
+        >
+          {title}
+        </Text>
+        <Text
+          style={[
+            styles.fileSubtitle,
+            {
+              color: th.colors.mutedForeground,
+              fontFamily: th.font.regular,
+            },
+          ]}
+        >
+          {kind}
+        </Text>
+      </View>
+      <IconButton
+        icon="folder-upload-outline"
+        size={22}
+        color={th.colors.mutedForeground}
+        loading={saveBusy}
+        disabled={saveBusy}
+        onPress={() => onSave(item)}
+        accessibilityLabel={t("gallery.saveToProject")}
+      />
+    </Pressable>
+  );
+}
+
 function FileRowItem({ item, busy, onOpen, onShare }: FileRowItemProps) {
   const th = useTheme();
   const t = useT();
@@ -210,7 +288,7 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
   const t = useT();
   const insets = useSafeAreaInsets();
   const { messages } = useThreadSlice(chatKey);
-  const { profile } = useSession();
+  const { profile, session } = useSession();
   const baseUrl = profile?.baseUrl ?? "";
 
   const files = useMemo(
@@ -219,13 +297,40 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
   );
   const images = useMemo(() => files.filter((f) => f.kind === "image"), [files]);
   const otherFiles = useMemo(() => files.filter((f) => f.kind !== "image"), [files]);
+  const artifacts = useMemo(() => collectArtifacts(messages), [messages]);
 
-  const [manualTab, setManualTab] = useState<"images" | "files" | null>(null);
+  const [manualTab, setManualTab] = useState<"images" | "files" | "artifacts" | null>(null);
   const activeTab = manualTab ?? (images.length === 0 && otherFiles.length > 0 ? "files" : "images");
 
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [busyUrls, setBusyUrls] = useState<Record<string, boolean>>({});
   const busyRef = useRef<Record<string, boolean>>({});
+  const [saveArtifact, setSaveArtifact] = useState<Artifact | null>(null);
+  const [saveProjects, setSaveProjects] = useState<Project[]>([]);
+  const [saveProjectsLoading, setSaveProjectsLoading] = useState(false);
+  const [saveUploadBusy, setSaveUploadBusy] = useState(false);
+
+  useEffect(() => {
+    if (!saveArtifact || !session) {
+      setSaveProjects([]);
+      return;
+    }
+    let cancelled = false;
+    setSaveProjectsLoading(true);
+    void listProjects(session)
+      .then((res) => {
+        if (!cancelled) setSaveProjects(res.projects);
+      })
+      .catch(() => {
+        if (!cancelled) setSaveProjects([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSaveProjectsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [saveArtifact, session]);
 
   const numColumns = 3;
   const screenWidth = Dimensions.get("window").width;
@@ -259,6 +364,37 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
         delete next[item.url];
         return next;
       });
+    }
+  };
+
+  const handleOpenArtifact = (item: Artifact) => {
+    openGalleryArtifactPreview(item, chatKey);
+  };
+
+  const handleSaveArtifactPress = (item: Artifact) => {
+    if (!session) {
+      toast.show(t("common.operationFailed"));
+      return;
+    }
+    setSaveArtifact(item);
+  };
+
+  const handleConfirmSaveToProject = async (project: Project) => {
+    if (!session || !saveArtifact || saveUploadBusy) return;
+    const local = writeGalleryArtifactUpload(saveArtifact);
+    if (!local) {
+      toast.show(t("gallery.saveFailed"));
+      return;
+    }
+    setSaveUploadBusy(true);
+    try {
+      await uploadProjectFile(session, project.id, local.name, local, true);
+      toast.show(t("gallery.saved"));
+      setSaveArtifact(null);
+    } catch {
+      toast.show(t("gallery.saveFailed"));
+    } finally {
+      setSaveUploadBusy(false);
     }
   };
 
@@ -368,6 +504,32 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
             {t("gallery.tabFiles")}
           </Text>
         </Pressable>
+
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === "artifacts" }}
+          accessibilityLabel={t("gallery.tabArtifacts")}
+          onPress={() => setManualTab("artifacts")}
+          style={[
+            styles.tabButton,
+            activeTab === "artifacts" && [
+              styles.tabButtonActive,
+              { backgroundColor: th.colors.card },
+            ],
+          ]}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              {
+                color: activeTab === "artifacts" ? th.colors.foreground : th.colors.mutedForeground,
+                fontFamily: activeTab === "artifacts" ? th.font.medium : th.font.regular,
+              },
+            ]}
+          >
+            {t("gallery.tabArtifacts")}
+          </Text>
+        </Pressable>
       </View>
 
       {/* Tab Content */}
@@ -416,7 +578,35 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
             )}
           />
         )
-      ) : otherFiles.length === 0 ? (
+      ) : activeTab === "files" ? (
+        otherFiles.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text
+              style={[
+                styles.emptyText,
+                { color: th.colors.mutedForeground, fontFamily: th.font.regular },
+              ]}
+            >
+              {t("gallery.emptyFiles")}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            key="gallery-files"
+            data={otherFiles}
+            keyExtractor={(item) => item.url}
+            contentContainerStyle={[styles.filesListContainer, { paddingBottom: insets.bottom + 16 }]}
+            renderItem={({ item }) => (
+              <FileRowItem
+                item={item}
+                busy={!!busyUrls[item.url]}
+                onOpen={handleOpenFile}
+                onShare={handleShare}
+              />
+            )}
+          />
+        )
+      ) : artifacts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text
             style={[
@@ -424,27 +614,76 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
               { color: th.colors.mutedForeground, fontFamily: th.font.regular },
             ]}
           >
-            {t("gallery.emptyFiles")}
+            {t("gallery.emptyArtifacts")}
           </Text>
         </View>
       ) : (
         <FlatList
-          key="gallery-files"
-          data={otherFiles}
-          keyExtractor={(item) => item.url}
+          key="gallery-artifacts"
+          data={artifacts}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.filesListContainer, { paddingBottom: insets.bottom + 16 }]}
           renderItem={({ item }) => (
-            <FileRowItem
+            <ArtifactRowItem
               item={item}
-              busy={!!busyUrls[item.url]}
-              onOpen={handleOpenFile}
-              onShare={handleShare}
+              saveBusy={saveUploadBusy && saveArtifact?.id === item.id}
+              onOpen={handleOpenArtifact}
+              onSave={handleSaveArtifactPress}
             />
           )}
         />
       )}
 
       {/* Full screen viewer */}
+      <Sheet
+        open={saveArtifact !== null}
+        title={t("gallery.saveToProject")}
+        onClose={() => {
+          if (!saveUploadBusy) setSaveArtifact(null);
+        }}
+      >
+        {saveProjectsLoading ? (
+          <View style={styles.sheetLoading}>
+            <ActivityIndicator size="small" color={th.colors.primary} />
+          </View>
+        ) : saveProjects.length === 0 ? (
+          <View style={styles.sheetEmpty}>
+            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15, textAlign: "center" }}>
+              {t("projects.emptyTitle")}
+            </Text>
+          </View>
+        ) : (
+          saveProjects.map((project) => (
+            <Pressable
+              key={project.id}
+              testID="gallery-save-project-row"
+              accessibilityRole="button"
+              accessibilityLabel={project.name}
+              disabled={saveUploadBusy}
+              onPress={() => void handleConfirmSaveToProject(project)}
+              style={({ pressed }) => [
+                styles.projectRow,
+                {
+                  backgroundColor: pressed ? th.colors.accent : th.colors.card,
+                  borderRadius: th.radius.md,
+                },
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: th.colors.foreground,
+                  fontFamily: th.font.medium,
+                  fontSize: 16,
+                }}
+              >
+                {project.name}
+              </Text>
+            </Pressable>
+          ))
+        )}
+      </Sheet>
+
       {viewerIndex !== null ? (
         <Modal
           visible
@@ -599,6 +838,24 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     textAlign: "center",
+  },
+  sheetLoading: {
+    minHeight: 96,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetEmpty: {
+    minHeight: 96,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  projectRow: {
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 8,
+    justifyContent: "center",
   },
   modalBackdrop: {
     flex: 1,
