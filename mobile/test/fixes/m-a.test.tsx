@@ -206,21 +206,14 @@ describe("M-A: I8 Automation schedule pickers", () => {
     expect(onUpdate).toHaveBeenCalledWith("j-every-odd", expect.objectContaining({ schedule: expect.objectContaining({ every_ms: 1000 }) }));
   });
 
-  test("the formatter round-trips local time with fixed timezone", () => {
-    const originalTZ = process.env.TZ;
-    process.env.TZ = "Europe/Rome";
-    try {
-      // 2026-10-15T10:30:00.000Z in UTC is 12:30 in Europe/Rome (CEST, UTC+2)
-      const epochMs = Date.UTC(2026, 9, 15, 10, 30, 0);
-      const formatted = formatAtLocal(epochMs, "it");
-      expect(formatted).toBeTruthy();
-
-      // Check date and time components are present
-      expect(formatted).toMatch(/15/);
-      expect(formatted).toMatch(/12:30/);
-    } finally {
-      process.env.TZ = originalTZ;
-    }
+  test("the formatter shows the local wall-clock time", () => {
+    // Runner timezone varies (CI is UTC, this PC Europe/Rome): expect whatever local time the epoch maps to.
+    const epochMs = Date.UTC(2026, 9, 15, 10, 30, 0);
+    const d = new Date(epochMs);
+    const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const formatted = formatAtLocal(epochMs, "it");
+    expect(formatted).toMatch(String(d.getDate()));
+    expect(formatted).toContain(hhmm);
   });
 
   test("sub-minute values are kept as decimals and not rounded away", async () => {
