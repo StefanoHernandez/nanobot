@@ -627,6 +627,28 @@
     "automations": "Automations",
     "comingSoon": "Coming soon"
   },
+  "kanban": {
+    "title": "Board",
+    "subtitle": "Tasks and bots",
+    "unavailable": "This server has no board yet.",
+    "add": "New task",
+    "empty": "No tasks.",
+    "status": {
+      "triage": "Triage",
+      "todo": "To do",
+      "ready": "Ready",
+      "running": "Running",
+      "review": "Review",
+      "blocked": "Blocked",
+      "done": "Done"
+    },
+    "priority": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "urgent": "Urgent"
+    }
+  },
   "memory": {
     "title": "Memory",
     "subtitle": "What Dream remembers",

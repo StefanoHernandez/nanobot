@@ -50,6 +50,14 @@ export default function EcosystemIndex() {
         </View>
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem
+            title={t("kanban.title")}
+            subtitle={t("kanban.subtitle")}
+            left={<MaterialCommunityIcons name="view-column-outline" size={24} color={th.colors.foreground} />}
+            onPress={() => router.push("/ecosystem/kanban")}
+          />
+        </View>
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem
             title={t("ecosystem.automations")}
             left={<MaterialCommunityIcons name="robot-outline" size={24} color={th.colors.foreground} />}
             onPress={() => router.push("/ecosystem/automations")}

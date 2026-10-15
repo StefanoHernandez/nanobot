@@ -627,6 +627,28 @@
     "automations": "Automazioni",
     "comingSoon": "Presto"
   },
+  "kanban": {
+    "title": "Lavagna",
+    "subtitle": "Schede e bot",
+    "unavailable": "Il server non ha ancora la lavagna.",
+    "add": "Nuova scheda",
+    "empty": "Nessuna scheda.",
+    "status": {
+      "triage": "Triage",
+      "todo": "Da fare",
+      "ready": "Pronta",
+      "running": "In corso",
+      "review": "Revisione",
+      "blocked": "Bloccata",
+      "done": "Fatto"
+    },
+    "priority": {
+      "low": "Bassa",
+      "medium": "Media",
+      "high": "Alta",
+      "urgent": "Urgente"
+    }
+  },
   "memory": {
     "title": "Memoria",
     "subtitle": "Quello che Dream ricorda",
