@@ -164,7 +164,7 @@ describe("M-A: I8 Automation schedule pickers", () => {
     );
   });
 
-  test("an at in the past shows the error and does not call the mutate", async () => {
+  test("an already-past one-shot job stays editable: unchanged at_ms is sent as-is", async () => {
     const onUpdate = jest.fn().mockResolvedValue(true);
     const pastTime = Date.now() - 3600 * 1000;
     const job: SessionAutomationJob = {
@@ -185,8 +185,25 @@ describe("M-A: I8 Automation schedule pickers", () => {
       fireEvent.press(saveBtn);
     });
 
-    expect(screen.getByText(i18n.t("automations.err.past"))).toBeTruthy();
-    expect(onUpdate).not.toHaveBeenCalled();
+    expect(screen.queryByText(i18n.t("automations.err.past"))).toBeNull();
+    expect(onUpdate).toHaveBeenCalledWith("j-at-past", expect.objectContaining({ schedule: expect.objectContaining({ kind: "at", at_ms: pastTime }) }));
+  });
+
+  test("an untouched sub-minute interval is sent unchanged (no rounding drift)", async () => {
+    const onUpdate = jest.fn().mockResolvedValue(true);
+    const job: SessionAutomationJob = {
+      id: "j-every-odd",
+      name: "Odd",
+      enabled: true,
+      schedule: { kind: "every", every_ms: 1000 },
+      payload: { message: "tick" },
+      state: { run_history: [] },
+    };
+    await renderWithTheme(<AutomationJobSheet open={true} job={job} onClose={jest.fn()} onUpdate={onUpdate} />);
+    await act(async () => {
+      fireEvent.press(screen.getByText(i18n.t("automations.save")));
+    });
+    expect(onUpdate).toHaveBeenCalledWith("j-every-odd", expect.objectContaining({ schedule: expect.objectContaining({ every_ms: 1000 }) }));
   });
 
   test("the formatter round-trips local time with fixed timezone", () => {
