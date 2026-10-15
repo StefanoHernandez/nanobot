@@ -701,20 +701,25 @@ class WebSocketChannel(BaseChannel):
 
         # Fork extensions (nanobot/ext) take their POST paths; the rest stays upstream's.
         # Imported here, not at the top, so upstream import edits never conflict with the fork.
+        from nanobot.ext.approvals import approvals_post_handler
         from nanobot.ext.devices import devices_post_handler
         from nanobot.ext.kanban import kanban_post_handler
         from nanobot.ext.projects import projects_post_handler
 
         secret = (self.config.token_issue_secret or "").strip() or (self.config.token or "").strip()
         bridge = BinaryHTTPBridge(
-            kanban_post_handler(
+            approvals_post_handler(
                 secret,
                 self.gateway.tokens,
-                devices_post_handler(
+                kanban_post_handler(
                     secret,
                     self.gateway.tokens,
-                    projects_post_handler(
-                        self.gateway.tokens, self.gateway.workspaces, self._uploads.handle
+                    devices_post_handler(
+                        secret,
+                        self.gateway.tokens,
+                        projects_post_handler(
+                            self.gateway.tokens, self.gateway.workspaces, self._uploads.handle
+                        ),
                     ),
                 ),
             )
