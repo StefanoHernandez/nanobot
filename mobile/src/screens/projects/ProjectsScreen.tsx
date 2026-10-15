@@ -16,7 +16,7 @@ import { Button, IconButton, Sheet, TextField, toast } from "../../ui/components
 import { BotFace } from "../../ui/BotFace";
 import { useSession } from "../../state/sessionStore";
 import { useChats } from "../../state/chatsStore";
-import { createProject, type Project } from "../../projects/api";
+import { createProject, projectErrorText, type Project } from "../../projects/api";
 import { projectsStore, useProjects } from "../../projects/store";
 
 export function ProjectsScreen() {
@@ -75,8 +75,7 @@ export function ProjectsScreen() {
       setSheetOpen(false);
       router.push(`/projects/${res.project.id}`);
     } catch (e: any) {
-      const code = e?.message || "generic";
-      toast.show(t(`projects.err.${code}`, t("projects.err.generic")));
+      toast.show(projectErrorText(t, e));
     } finally {
       setCreating(false);
     }
@@ -108,7 +107,7 @@ export function ProjectsScreen() {
       {error ? (
         <View style={[styles.errorCard, { backgroundColor: th.colors.card, borderColor: th.colors.destructive }]}>
           <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 14 }}>
-            {t(`projects.err.${error}`, error)}
+            {projectErrorText(t, error)}
           </Text>
           <Button title={t("common.retry")} variant="secondary" onPress={() => void refresh()} loading={loading} />
         </View>

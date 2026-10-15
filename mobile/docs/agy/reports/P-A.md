@@ -79,3 +79,119 @@ Ran all test suites.
 ```text
 (exited with code 0, no output)
 ```
+
+---
+
+## fix1 Review Fixes
+
+- **Verification:**
+  - `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest`: PASS (64 test suites, 568 passed, 0 failed)
+  - `npx tsc --noEmit`: PASS (0 errors)
+- **Focused Test Suite:** `mobile/test/projects/projects.test.tsx` (20 passed)
+
+### Files Touched in fix1
+1. `mobile/src/projects/api.ts` — Centralized `projectErrorText(t, code)` helper and `KNOWN_PROJECT_ERRORS` set.
+2. `mobile/src/projects/store.ts` — Added `generation` counter for cross-profile race prevention, `lastRefreshedAt` with `opts?.ifStaleMs` throttle, safe `sessionStore` access, and subscription on `sessionStore` `state === "open"`.
+3. `mobile/src/screens/chats/ChatDrawer.tsx` — Added mount `useEffect` refreshing projects when stale (`ifStaleMs: 60_000`).
+4. `mobile/src/screens/projects/ProjectsScreen.tsx` — Replaced raw error strings with centralized `projectErrorText(t, error)`.
+5. `mobile/src/screens/projects/ProjectDetailScreen.tsx` — Handled blank detail error state with `BotFace state="error"` + retry; inline instructions error banner; discard dialog mounted inside modal; fixed `behavior="padding"` on `KeyboardAvoidingView`; upload 409 conflict handling; upload progress preservation during overwrite; `File` stat fallback for undefined size; empty description sent as `""`; archive navigation via `canGoBack()`; ghost destructive archive button; deduped mount `loadData()`; removed duplicate title in Section 1.
+6. `mobile/src/ui/components/Button.tsx` — Added optional `color?: string` prop to allow custom foreground color overrides (e.g. destructive ghost button).
+7. `mobile/src/i18n/it.json` — Added error codes (`upload_timed_out`, `unauthorized`, `reserved_path`, `path_too_deep`, `file_not_found`, `invalid_name`, `missing_name`, `too_many_projects_with_this_name`, `length_required`, `io_error`, `network`, `generic`) and `noDescription`.
+8. `mobile/src/i18n/en.json` — Added error codes and `noDescription`.
+9. `mobile/test/projects/projects.test.tsx` — Added tests for cross-profile race, session open refresh, `projectErrorText`, blank detail error state, inline instructions error, description clearing, archive navigation, and unconfirmed delete assertion.
+
+### Implementation Matrix
+
+| Item | Description | Implementation Details | File:Line |
+|---|---|---|---|
+| **1** | Cross-profile race condition | `generation` counter incremented on `reset()`; if generation changed before fetch resolves, results are discarded | `mobile/src/projects/store.ts:8,48-69,78` |
+| **2** | Sincronizzazione con sessionStore | `lastRefreshedAt` + `ifStaleMs` throttle; `sessionStore.subscribe` triggers refresh on `state === "open"`; `ChatDrawer` refreshes with `ifStaleMs: 60_000` | `mobile/src/projects/store.ts:9,44,95-97`<br>`mobile/src/screens/chats/ChatDrawer.tsx:63-65` |
+| **3** | Blank detail screen on network error | Dedicated error state when `error && !detail` with `BotFace state="error"`, localized message, and `common.retry` button; actions hidden | `mobile/src/screens/projects/ProjectDetailScreen.tsx:382-411` |
+| **4** | Codici errore API non mappati | Added all missing error keys to `it.json` and `en.json` | `mobile/src/i18n/it.json:808,814-826`<br>`mobile/src/i18n/en.json:808,814-826` |
+| **5** | Centralizzare mapping errori API | Centralized helper `projectErrorText(t, code)` with known codes set, regex network fallback, and generic fallback | `mobile/src/projects/api.ts:54-75`<br>`mobile/src/screens/projects/ProjectsScreen.tsx:78,110`<br>`mobile/src/screens/projects/ProjectDetailScreen.tsx:156,182,212,238,287,302,321,344,376,403` |
+| **6** | Modal di scarto istruzioni occluso | Discard `Dialog` moved inside `<Modal visible={editorOpen}>`; instructions save failure displays inline error banner below header with destructive text | `mobile/src/screens/projects/ProjectDetailScreen.tsx:101,173-194,632-638,649-662` |
+| **7** | KeyboardAvoidingView behavior "padding" | Set `behavior="padding"` unconditionally on editor `KeyboardAvoidingView` | `mobile/src/screens/projects/ProjectDetailScreen.tsx:640` |
+| **8** | Riconoscere errore 409 file_exists su upload | Catch `file_exists` error during upload to trigger conflict replace dialog | `mobile/src/screens/projects/ProjectDetailScreen.tsx:232-237` |
+| **9** | Upload progress con overwrite | Preserved original `total` and `currentIndex` across conflict states; progress shows during overwrite upload | `mobile/src/screens/projects/ProjectDetailScreen.tsx:105-115,221-224,254-275` |
+| **10** | Dimensione file indefinita | Fallback stat check via `new File(currentAsset.uri).size` before 100MB check | `mobile/src/screens/projects/ProjectDetailScreen.tsx:202-215` |
+| **11** | Svuotamento descrizione in edit sheet | Send empty string `""` (`editDescription.trim()`) instead of `undefined` in patch payload | `mobile/src/screens/projects/ProjectDetailScreen.tsx:149` |
+| **12** | Navigazione post-archiviazione | Uses `router.canGoBack() ? router.back() : router.replace("/projects")` | `mobile/src/screens/projects/ProjectDetailScreen.tsx:327-331` |
+| **13** | Stile pulsante 'Archivia progetto' | Changed to `variant="ghost"` with `color={th.colors.destructive}`; added `color` prop to `ButtonProps` | `mobile/src/ui/components/Button.tsx:22,39`<br>`mobile/src/screens/projects/ProjectDetailScreen.tsx:595-596` |
+| **14** | Doppia invocazione di loadData() | Added `setLoading(true)` in `loadData()`; guarded focus listener with `isFirstRender` ref | `mobile/src/screens/projects/ProjectDetailScreen.tsx:91,115,131-135` |
+| **15** | Header dettaglio senza nome duplicato | Removed duplicate title from Section 1; shows description or `projects.noDescription` ("Nessuna descrizione") in muted italic style | `mobile/src/screens/projects/ProjectDetailScreen.tsx:453-471` |
+| **16** | Test eliminazione file prima di conferma | Asserted `expect(fetch).not.toHaveBeenCalled()` prior to dialog confirmation | `mobile/test/projects/projects.test.tsx:452` |
+
+### What Could Not Be Verified
+- Physical mobile device interaction (gestures, hardware back button, native keyboard animations).
+- Real remote backend network timeouts and server responses.
+- Verified in Jest environment (SDK 57 components and hooks mocked) with complete test suite passing (64 test suites, 568 tests) and TypeScript typecheck (0 errors).
+
+### Raw Output of Verification Tools
+
+#### `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest`
+
+```text
+PASS test/fixes/fix-a.test.tsx
+PASS test/screens/ecosystem-channels.test.tsx
+PASS test/screens/settings.test.tsx
+PASS test/screens/models-settings.test.tsx
+PASS test/screens/attachments.test.tsx
+PASS test/screens/ecosystem-automations.test.tsx
+PASS test/screens/capabilities-settings.test.tsx
+PASS test/fixes/m-a.test.tsx
+PASS test/fixes/fix-a-fix1.test.tsx
+PASS test/screens/media.test.tsx (5.139 s)
+PASS test/extras/speech.test.tsx (5.211 s)
+PASS test/ui/components.test.tsx
+PASS test/state/fork-temp-workspace.test.ts
+PASS test/screens/artifacts.test.tsx
+PASS test/ecosystem/apps-skills-automations.test.ts
+PASS test/screens/ecosystem-skills.test.tsx
+PASS test/settings/store.test.ts
+PASS test/extras/widget.test.tsx
+PASS test/ecosystem/channels.test.ts
+PASS test/screens/history-error.test.tsx (5.467 s)
+PASS test/extras/voice.test.ts
+PASS test/screens/connect.test.tsx
+PASS test/extras/useEffort.test.tsx
+PASS test/extras/native.test.tsx
+PASS test/state/chats.test.ts
+PASS test/screens/composer.test.tsx
+PASS test/settings/models-providers.test.ts
+PASS test/core/session.test.ts
+PASS test/state/thread.test.ts
+PASS test/ui/math.test.tsx
+PASS test/core/upload.test.ts
+PASS test/core/profiles.test.ts
+PASS test/state/thread.integration.test.ts
+PASS test/state/sessionStore.test.ts
+PASS test/state/subagents.test.ts
+PASS test/vendor-smoke.test.ts
+PASS test/extras/notifier.test.ts
+PASS test/ui/theme.test.ts
+PASS test/state/usage.test.ts
+PASS test/settings/runtime-capabilities.test.ts
+PASS test/platform.test.ts
+PASS test/extras/logic.test.ts
+PASS test/ui/botface.test.tsx
+PASS test/vendorVersion.test.ts
+PASS test/ui/anyimage.test.tsx
+PASS test/extras/effort.test.ts
+PASS test/screens/thread.test.tsx (6.06 s)
+PASS test/screens/mainLayout.test.tsx (6.086 s)
+PASS test/extras/outbox.test.tsx (6.088 s)
+PASS test/projects/projects.test.tsx
+
+Test Suites: 64 passed, 64 total
+Tests:       568 passed, 568 total
+Snapshots:   0 total
+Time:        7.319 s
+Ran all test suites.
+```
+
+#### `npx tsc --noEmit`
+
+```text
+(exited with code 0, no output)
+```
+

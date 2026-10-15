@@ -5,21 +5,23 @@ export type ButtonProps = {
   title: string;
   onPress: () => void;
   variant?: "primary" | "secondary" | "ghost" | "destructive";
+  color?: string;
   disabled?: boolean;
   loading?: boolean;
   accessibilityRole?: AccessibilityRole;
   accessibilityState?: AccessibilityState;
 };
 
-export function Button({ title, onPress, variant = "primary", disabled, loading, accessibilityRole, accessibilityState }: ButtonProps) {
+export function Button({ title, onPress, variant = "primary", color, disabled, loading, accessibilityRole, accessibilityState }: ButtonProps) {
   const th = useTheme();
   const c = th.colors;
-  const [bg, fg] = {
+  let [bg, fg] = {
     primary: [c.primary, c.primaryForeground],
     secondary: [c.secondary, c.secondaryForeground],
     ghost: ["transparent", c.foreground],
     destructive: [c.destructive, c.destructiveForeground],
   }[variant];
+  if (color) fg = color;
   const inactive = disabled || loading;
   return (
     <Pressable

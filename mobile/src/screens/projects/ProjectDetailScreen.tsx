@@ -16,9 +16,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useNavigation } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { File } from "expo-file-system";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, Dialog, IconButton, Sheet, TextField, toast } from "../../ui/components";
+import { BotFace } from "../../ui/BotFace";
 import { useSession } from "../../state/sessionStore";
 import { chatsStore, useChats } from "../../state/chatsStore";
 import {
@@ -26,6 +28,7 @@ import {
   deleteProjectFile,
   downloadProjectFile,
   getProject,
+  projectErrorText,
   updateProject,
   uploadProjectFile,
   type FileEntry,
@@ -85,6 +88,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isFirstRender = React.useRef(true);
 
   // Edit metadata sheet
   const [editSheetOpen, setEditSheetOpen] = useState(false);
@@ -96,14 +100,20 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [instructionsDraft, setInstructionsDraft] = useState("");
   const [savingInstructions, setSavingInstructions] = useState(false);
+  const [instructionsError, setInstructionsError] = useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // File actions
+  type ConflictState = {
+    asset: DocumentPicker.DocumentPickerAsset;
+    rest: DocumentPicker.DocumentPickerAsset[];
+    total: number;
+    currentIndex: number;
+  };
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
   const [fileToDelete, setFileToDelete] = useState<FileEntry | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
-  const [conflictAsset, setConflictAsset] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
-  const [remainingAssets, setRemainingAssets] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
+  const [conflictState, setConflictState] = useState<ConflictState | null>(null);
 
   // Archive project dialog
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
@@ -111,6 +121,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
 
   const loadData = async () => {
     if (!session) return;
+    setLoading(true);
     try {
       setError(null);
       const res = await getProject(session, id);
@@ -128,6 +139,10 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
 
   useEffect(() => {
     const unsub = nav?.addListener?.("focus", () => {
+      if (isFirstRender.current) {
+        isFirstRender.current = false;
+        return;
+      }
       void loadData();
     });
     return () => unsub?.();
@@ -147,13 +162,13 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
     try {
       const res = await updateProject(session, id, {
         name: editName.trim(),
-        description: editDescription.trim() || undefined,
+        description: editDescription.trim(),
       });
       setDetail((prev) => (prev ? { ...prev, project: res.project } : null));
       await projectsStore.getState().refresh();
       setEditSheetOpen(false);
     } catch (e: any) {
-      toast.show(t(`projects.err.${e?.message || "generic"}`));
+      toast.show(projectErrorText(t, e));
     } finally {
       setSavingMeta(false);
     }
@@ -162,6 +177,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
   // Handle Instructions
   const handleOpenInstructionsEditor = () => {
     setInstructionsDraft(detail?.instructions || "");
+    setInstructionsError(null);
     setEditorOpen(true);
   };
 
@@ -177,6 +193,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
   const handleSaveInstructions = async () => {
     if (!session || !detail) return;
     setSavingInstructions(true);
+    setInstructionsError(null);
     try {
       const res = await updateProject(session, id, {
         instructions: instructionsDraft,
@@ -184,7 +201,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
       setDetail((prev) => (prev ? { ...prev, instructions: res.instructions } : null));
       setEditorOpen(false);
     } catch (e: any) {
-      toast.show(t(`projects.err.${e?.message || "generic"}`));
+      setInstructionsError(projectErrorText(t, e));
     } finally {
       setSavingInstructions(false);
     }
@@ -205,9 +222,17 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
     const currentAsset = assets[0];
     const rest = assets.slice(1);
 
-    // Refuse files over 100 MB
-    if (currentAsset.size && currentAsset.size > 100 * 1024 * 1024) {
-      toast.show(t("projects.err.file_too_large"));
+    // Refuse files over 100 MB (with File stat fallback)
+    let size = currentAsset.size;
+    if (size === undefined || size === null) {
+      try {
+        size = new File(currentAsset.uri).size;
+      } catch {
+        // ignore
+      }
+    }
+    if (size && size > 100 * 1024 * 1024) {
+      toast.show(projectErrorText(t, "file_too_large"));
       await processNextUpload(rest, total, currentIndex + 1);
       return;
     }
@@ -216,8 +241,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
     const name = currentAsset.name;
     const exists = detail?.files.some((f) => f.path === name);
     if (exists) {
-      setConflictAsset(currentAsset);
-      setRemainingAssets(rest);
+      setConflictState({ asset: currentAsset, rest, total, currentIndex });
       return;
     }
 
@@ -237,7 +261,12 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
         false
       );
     } catch (e: any) {
-      toast.show(t(`projects.err.${e?.message || "generic"}`));
+      const msg = e?.message;
+      if (msg === "file_exists") {
+        setConflictState({ asset: currentAsset, rest, total, currentIndex });
+        return;
+      }
+      toast.show(projectErrorText(t, e));
     }
 
     await processNextUpload(rest, total, currentIndex + 1);
@@ -252,36 +281,36 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
       if (!res.canceled && res.assets && res.assets.length > 0) {
         await processNextUpload(res.assets, res.assets.length, 0);
       }
-    } catch {
-      toast.show(t("projects.err.generic"));
+    } catch (e: any) {
+      toast.show(projectErrorText(t, e));
     }
   };
 
   const handleConfirmReplace = async (overwrite: boolean) => {
-    const current = conflictAsset;
-    const rest = remainingAssets;
-    setConflictAsset(null);
-    setRemainingAssets([]);
+    if (!conflictState) return;
+    const { asset, rest, total, currentIndex } = conflictState;
+    setConflictState(null);
 
-    if (overwrite && current && session) {
+    if (overwrite && session) {
+      setUploadProgress(t("projects.uploadProgress", { current: currentIndex + 1, total }));
       try {
         await uploadProjectFile(
           session,
           id,
-          current.name,
+          asset.name,
           {
-            uri: current.uri,
-            name: current.name,
-            mime: current.mimeType,
+            uri: asset.uri,
+            name: asset.name,
+            mime: asset.mimeType,
           },
           true
         );
       } catch (e: any) {
-        toast.show(t(`projects.err.${e?.message || "generic"}`));
+        toast.show(projectErrorText(t, e));
       }
     }
 
-    await processNextUpload(rest, rest.length + 1, 1);
+    await processNextUpload(rest, total, currentIndex + 1);
   };
 
   // Handle File Download / Open
@@ -297,8 +326,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
         await openLocal(localUri, ext);
       }
     } catch (e: any) {
-      const code = e?.message || "generic";
-      toast.show(t(`projects.err.${code}`, t("projects.err.generic")));
+      toast.show(projectErrorText(t, e));
     } finally {
       setDownloadingPath(null);
     }
@@ -313,7 +341,7 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
       await deleteProjectFile(session, id, path);
       await loadData();
     } catch (e: any) {
-      toast.show(t(`projects.err.${e?.message || "generic"}`));
+      toast.show(projectErrorText(t, e));
     }
   };
 
@@ -339,13 +367,47 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
     try {
       await archiveProject(session, id);
       await projectsStore.getState().refresh();
-      router.replace("/projects");
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/projects");
+      }
     } catch (e: any) {
-      toast.show(t(`projects.err.${e?.message || "generic"}`));
+      toast.show(projectErrorText(t, e));
     } finally {
       setArchiving(false);
     }
   };
+
+  if (error && !detail) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
+        <View style={styles.header}>
+          <IconButton icon="arrow-left" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
+          <Text
+            accessibilityRole="header"
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              color: th.colors.foreground,
+              fontFamily: th.font.display,
+              fontSize: 22,
+              lineHeight: 28,
+            }}
+          >
+            {t("projects.title")}
+          </Text>
+        </View>
+        <View style={[styles.centerLoading, { gap: 12, paddingHorizontal: 24 }]}>
+          <BotFace state="error" size={48} />
+          <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 14, textAlign: "center" }}>
+            {projectErrorText(t, error)}
+          </Text>
+          <Button title={t("common.retry")} variant="secondary" onPress={() => void loadData()} loading={loading} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading && !detail) {
     return (
@@ -388,18 +450,19 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void loadData()} />}
       >
-        {/* Section 1: Header */}
+        {/* Section 1: Description and Edit */}
         <View style={styles.section}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.mainTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
-                {detail?.project.name}
-              </Text>
+            <View style={{ flex: 1, paddingRight: 8 }}>
               {detail?.project.description ? (
                 <Text style={[styles.mainDescription, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                   {detail.project.description}
                 </Text>
-              ) : null}
+              ) : (
+                <Text style={[styles.mainDescription, { color: th.colors.mutedForeground, fontFamily: th.font.regular, fontStyle: "italic" }]}>
+                  {t("projects.noDescription")}
+                </Text>
+              )}
             </View>
             <Button title={t("common.edit")} variant="secondary" onPress={handleOpenEditMeta} />
           </View>
@@ -529,7 +592,8 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
         <View style={[styles.section, { borderTopColor: th.colors.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 24 }]}>
           <Button
             title={t("projects.archive")}
-            variant="destructive"
+            variant="ghost"
+            color={th.colors.destructive}
             onPress={() => setShowArchiveDialog(true)}
             loading={archiving}
           />
@@ -567,11 +631,22 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
             />
           </View>
 
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          {instructionsError ? (
+            <View style={[styles.instructionsErrorBanner, { backgroundColor: th.colors.card, borderBottomColor: th.colors.border }]}>
+              <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13 }}>
+                {instructionsError}
+              </Text>
+            </View>
+          ) : null}
+
+          <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
             <TextInput
               multiline
               value={instructionsDraft}
-              onChangeText={setInstructionsDraft}
+              onChangeText={(text) => {
+                setInstructionsDraft(text);
+                if (instructionsError) setInstructionsError(null);
+              }}
               style={[
                 styles.instructionsEditor,
                 {
@@ -584,23 +659,23 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
               autoFocus
             />
           </KeyboardAvoidingView>
+
+          {/* Discard Instructions Confirmation inside Modal (Item 6) */}
+          <Dialog
+            open={showDiscardConfirm}
+            title={t("projects.discardChangesTitle")}
+            message={t("projects.discardChangesMessage")}
+            confirmLabel={t("projects.discard")}
+            cancelLabel={t("common.cancel")}
+            destructive
+            onConfirm={() => {
+              setShowDiscardConfirm(false);
+              setEditorOpen(false);
+            }}
+            onCancel={() => setShowDiscardConfirm(false)}
+          />
         </SafeAreaView>
       </Modal>
-
-      {/* Discard Instructions Confirmation */}
-      <Dialog
-        open={showDiscardConfirm}
-        title={t("projects.discardChangesTitle")}
-        message={t("projects.discardChangesMessage")}
-        confirmLabel={t("projects.discard")}
-        cancelLabel={t("common.cancel")}
-        destructive
-        onConfirm={() => {
-          setShowDiscardConfirm(false);
-          setEditorOpen(false);
-        }}
-        onCancel={() => setShowDiscardConfirm(false)}
-      />
 
       {/* Delete File Confirmation */}
       <Dialog
@@ -616,9 +691,9 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
 
       {/* Replace File Conflict Dialog */}
       <Dialog
-        open={!!conflictAsset}
+        open={!!conflictState}
         title={t("projects.replaceFileTitle")}
-        message={t("projects.replaceFileMessage", { name: conflictAsset?.name || "" })}
+        message={t("projects.replaceFileMessage", { name: conflictState?.asset.name || "" })}
         confirmLabel={t("projects.replace")}
         cancelLabel={t("common.cancel")}
         onConfirm={() => void handleConfirmReplace(true)}
@@ -711,5 +786,10 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 15,
     lineHeight: 22,
+  },
+  instructionsErrorBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });
