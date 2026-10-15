@@ -6,6 +6,8 @@ import type { LocalFile } from "../core/upload";
 import { i18n } from "../i18n";
 import { chatsStore } from "../state/chatsStore";
 import { threadStore } from "../state/threadStore";
+import { sessionStore } from "../state/sessionStore";
+import { DEFAULT_LIMITS } from "../core/session";
 import { toast } from "../ui/components";
 import { chatPath } from "./notifications";
 
@@ -13,6 +15,20 @@ export type SharedFile = { path: string; mimeType: string; fileName: string; siz
 export type Intent = { type?: string | null; text?: string | null; files?: SharedFile[] | null };
 
 export type PendingShare = { text: string; files: LocalFile[] };
+
+export function mergePendingShare(current: PendingShare | null, incoming: PendingShare): PendingShare {
+  if (!current) return incoming;
+  const mergedText = [current.text, incoming.text].filter((t) => t && t.trim().length > 0).join("\n\n");
+  const seenUris = new Set(current.files.map((f) => f.uri));
+  const mergedFiles = [...current.files];
+  for (const f of incoming.files) {
+    if (!seenUris.has(f.uri)) {
+      seenUris.add(f.uri);
+      mergedFiles.push(f);
+    }
+  }
+  return { text: mergedText, files: mergedFiles };
+}
 
 export type ShareState = {
   pending: PendingShare | null;
@@ -45,7 +61,10 @@ const real: ShareDeps = {
   setDraft: (k, t) => threadStore.getState().setDraft(k, t),
   setPendingFiles: (k, f) => threadStore.getState().setPendingFiles(k, f),
   toast: (m) => toast.show(m),
-  openPicker: (p) => shareStore.setState({ pending: p }),
+  openPicker: (p) => {
+    const cur = shareStore.getState().pending;
+    shareStore.setState({ pending: mergePendingShare(cur, p) });
+  },
 };
 
 /**
@@ -102,14 +121,31 @@ export async function handleShare(intent: Intent, d: ShareDeps = real): Promise<
     return;
   }
   const text = intent.text?.trim() || "";
-  const files: LocalFile[] = (intent.files ?? []).filter((f) => isSharedPathAllowed(f.path)).map((f) => ({
-    uri: f.path.startsWith("/") ? `file://${f.path}` : f.path,
-    name: f.fileName || "file",
-    mime: f.mimeType || "application/octet-stream",
-    size: f.size ?? sizeOf(f.path),
-  }));
+  const limits = sessionStore.getState().session?.limits ?? DEFAULT_LIMITS;
+  const rawFiles = intent.files ?? [];
+  const files: LocalFile[] = [];
+  let hadOversized = false;
+  for (const f of rawFiles) {
+    if (!isSharedPathAllowed(f.path)) continue;
+    const name = f.fileName || "file";
+    const size = f.size ?? sizeOf(f.path);
+    if (size > limits.max_file_bytes) {
+      hadOversized = true;
+      d.toast(i18n.t("extras.shareTooLarge", { name }));
+      continue;
+    }
+    files.push({
+      uri: f.path.startsWith("/") ? `file://${f.path}` : f.path,
+      name,
+      mime: f.mimeType || "application/octet-stream",
+      size,
+    });
+  }
+
   if (!text && !files.length) {
-    d.toast(i18n.t("extras.shareFailed"));
+    if (!hadOversized) {
+      d.toast(i18n.t("extras.shareFailed"));
+    }
     return;
   }
   const payload: PendingShare = { text, files };
