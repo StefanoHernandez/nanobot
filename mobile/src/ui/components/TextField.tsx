@@ -1,5 +1,5 @@
 import React from "react";
-import { KeyboardTypeOptions, StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
+import { KeyboardTypeOptions, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextStyle, View, ViewStyle } from "react-native";
 import { useTheme } from "../ThemeProvider";
 
 export type TextFieldProps = {
@@ -13,19 +13,22 @@ export type TextFieldProps = {
   autoCapitalize?: TextInputProps["autoCapitalize"];
   keyboardType?: KeyboardTypeOptions;
   right?: React.ReactNode;
-} & Pick<TextInputProps, "autoCorrect" | "spellCheck" | "autoComplete" | "multiline" | "editable" | "onBlur">;
+  mono?: boolean;
+  inputStyle?: StyleProp<TextStyle>;
+  rowStyle?: StyleProp<ViewStyle>;
+} & Pick<TextInputProps, "autoCorrect" | "spellCheck" | "autoComplete" | "multiline" | "editable" | "onBlur" | "numberOfLines">;
 
-export function TextField({ label, value, onChangeText, secureTextEntry, helper, error, placeholder, autoCapitalize, keyboardType, right, ...passThrough }: TextFieldProps) {
+export function TextField({ label, value, onChangeText, secureTextEntry, helper, error, placeholder, autoCapitalize, keyboardType, right, mono, inputStyle, rowStyle, ...passThrough }: TextFieldProps) {
   const th = useTheme();
   const c = th.colors;
   const msg = error ?? helper;
   return (
     <View style={styles.wrap}>
       <Text style={{ color: c.foreground, fontFamily: th.font.medium, fontSize: 14, marginBottom: 6 }}>{label}</Text>
-      <View style={[styles.row, { borderColor: error ? c.destructive : c.input, borderRadius: th.radius.sm, backgroundColor: c.card }]}>
+      <View style={[styles.row, { borderColor: error ? c.destructive : c.input, borderRadius: th.radius.sm, backgroundColor: c.card }, rowStyle]}>
         <TextInput
           accessibilityLabel={label}
-          style={[styles.input, { color: c.foreground, fontFamily: th.font.regular }]}
+          style={[styles.input, { color: c.foreground, fontFamily: mono ? th.font.mono : th.font.regular }, inputStyle]}
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry}
