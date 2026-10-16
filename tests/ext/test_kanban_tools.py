@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timedelta
+
 import pytest
 
 from nanobot.agent.tools import kanban_tools as kt
@@ -62,3 +65,114 @@ async def test_one_tool_covers_every_action(store):
     )
     blocked = await _as("kanban:t1:coder", tool, action="block", task_id="t1", reason="waiting")
     assert '"status":"blocked"' in str(blocked)
+
+
+def _local_when() -> tuple[str, int]:
+    moment = (datetime.now() + timedelta(days=1)).replace(microsecond=0)
+    text = moment.strftime("%Y-%m-%dT%H:%M:%S")
+    return text, int(moment.astimezone().timestamp() * 1000)
+
+
+def test_when_and_every_helpers():
+    text, expected = _local_when()
+    assert kt._when_to_ms(text) == expected
+    aware = "2026-10-17T07:00:00+00:00"
+    assert kt._when_to_ms(aware) == int(datetime.fromisoformat(aware).timestamp() * 1000)
+    with pytest.raises(ValueError, match="invalid_when"):
+        kt._when_to_ms("tomorrow morning")
+    assert kt._every_to_expr("30m") == "every:1800s"
+    assert kt._every_to_expr("1h") == "every:3600s"
+    assert kt._every_to_expr("1d") == "every:86400s"
+    assert kt._every_to_expr("1w") == "every:604800s"
+    assert kt._every_to_expr("nope") == "nope"
+
+
+async def test_create_from_chat_saves_name_when_and_daily_repeat(store):
+    tool = kt.KanbanTool()
+    when, expected_ms = _local_when()
+    await _as(
+        "websocket:abc",
+        tool,
+        action="create",
+        title="NAS offers",
+        bot="Coder",
+        when=when,
+        every="1d",
+    )
+    task = next(row for row in store.board_snapshot("main")["tasks"] if row["title"] == "NAS offers")
+    assert task["assignee_bot_id"] == "coder"
+    assert task["scheduled_at_ms"] == expected_ms
+    assert task["recurrence_expr"] == "every:86400s"
+    assert task["status"] == "todo"
+
+    await _as("websocket:abc", tool, action="create", title="Start now", bot="coder", start=True)
+    started = next(row for row in store.board_snapshot("main")["tasks"] if row["title"] == "Start now")
+    assert started["status"] == "ready"
+
+
+async def test_start_needs_a_known_bot(store):
+    tool = kt.KanbanTool()
+    missing = await _as("websocket:abc", tool, action="create", title="Now", start=True)
+    assert "needs_bot" in str(missing)
+    unknown = await _as("websocket:abc", tool, action="create", title="Now", bot="Nope", start=True)
+    assert "unknown_bot" in str(unknown)
+    assert "Coder" in str(unknown)
+
+
+async def test_update_changes_only_the_fields_passed(store):
+    tool = kt.KanbanTool()
+    when, expected_ms = _local_when()
+    await _as("websocket:abc", tool, action="create", title="NAS offers", bot="coder", when=when, every="1d")
+    task = next(row for row in store.board_snapshot("main")["tasks"] if row["title"] == "NAS offers")
+    await _as("websocket:abc", tool, action="update", task_id=task["id"], title="NAS later")
+    updated = store.get_task_detail(task["id"])["task"]
+    assert updated["title"] == "NAS later"
+    assert updated["scheduled_at_ms"] == expected_ms
+    assert updated["recurrence_expr"] == "every:86400s"
+    assert updated["assignee_bot_id"] == "coder"
+    await _as("websocket:abc", tool, action="update", task_id=task["id"], when="")
+    cleared = store.get_task_detail(task["id"])["task"]
+    assert cleared["scheduled_at_ms"] is None
+    assert cleared["title"] == "NAS later"
+
+
+async def test_list_skips_archived_and_includes_bots(store):
+    store.save_task({
+        "id": "old",
+        "board_id": "main",
+        "title": "Old",
+        "description": "secret",
+        "status": "archived",
+        "parent_ids": [],
+    })
+    out = await _as("websocket:abc", kt.KanbanTool(), action="list")
+    data = json.loads(str(out))
+    assert data["board"] == {"id": "main", "title": "Board"}
+    assert {bot["id"] for bot in data["bots"]} == {"coder", "reviewer"}
+    assert all(set(bot) == {"id", "name"} for bot in data["bots"])
+    titles = [task["title"] for task in data["tasks"]]
+    assert "Old" not in titles
+    assert "t1" in titles
+    assert "description" not in data["tasks"][0]
+    assert "messages" not in data
+
+
+async def test_a_run_cannot_create_or_update(store):
+    tool = kt.KanbanTool()
+    created = await _as("kanban:t1:coder", tool, action="create", title="extra")
+    assert "not_from_a_run" in str(created)
+    updated = await _as("kanban:t1:coder", tool, action="update", task_id="t1", title="nope")
+    assert "not_from_a_run" in str(updated)
+    woken = await _as("kanban:wake:w1:coder", tool, action="create", title="extra")
+    assert "not_from_a_run" in str(woken)
+    assert store.get_task_detail("t1")["task"]["title"] == "t1"
+
+
+async def test_list_and_create_do_not_need_a_task_id(store):
+    tool = kt.KanbanTool()
+    listed = await _as("websocket:abc", tool, action="list")
+    assert "task_id is required" not in str(listed)
+    created = await _as("websocket:abc", tool, action="create", title="Loose")
+    assert "task_id is required" not in str(created)
+    missing = await _as("kanban:t1:coder", tool, action="complete", summary="done")
+    assert "task_id is required" in str(missing)
