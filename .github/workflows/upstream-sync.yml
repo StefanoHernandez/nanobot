@@ -39,9 +39,8 @@ jobs:
           if git merge --no-edit "$sha"; then
             echo "conflict=false" >> "$GITHUB_OUTPUT"
             # keep the app's vendored WebUI client on the same upstream commit
-            bash mobile/scripts/sync-nanobot.sh .
-            printf 'commit: %s\ndate: %s\n' "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > mobile/vendor/nanobot/VERSION
-            git add mobile/vendor
+            SYNC_COMMIT="$sha" bash mobile/scripts/sync-nanobot.sh .
+            git add mobile/vendor mobile/src/platform/vendorVersion.ts
             git commit -q -m "chore(mobile): re-sync vendor to upstream ${sha:0:8}" || true
           else
             # keep the conflict visible in the PR instead of failing silently

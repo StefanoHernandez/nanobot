@@ -13,7 +13,8 @@ import { Trans, useTranslation } from "react-i18next";
 import { channelUiPresentation } from "@/channel-plugins/registry";
 import { StarPrompt } from "@/components/StarPrompt";
 import { Sidebar } from "@/components/Sidebar";
-import { RemoteInstances, useRemoteConnections } from "@/components/remote/RemoteInstances";
+import { RemoteInstances } from "@/components/remote/RemoteInstances";
+import { useRemoteConnections } from "@/components/remote/remote-context";
 import { RemoteConnectionsPage } from "@/components/remote/RemoteConnectionsPage";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SidebarResizeHandle, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/components/SidebarResizeHandle";
@@ -48,6 +49,7 @@ import { floatingSurfaceElevationClassName } from "@/components/ui/floating-surf
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 import { useSessions } from "@/hooks/useSessions";
+import { useReconnectRuns } from "@/hooks/useReconnectRuns";
 import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
 import { useSidebarState } from "@/hooks/useSidebarState";
 import { useSkills } from "@/hooks/useSkills";
@@ -1193,6 +1195,7 @@ function Shell({
   const remoteConnectionsRef = useRef(remoteConnections);
   remoteConnectionsRef.current = remoteConnections;
   const { client, getToken } = useClient();
+  useReconnectRuns(client, getToken);
   const {
     sessions,
     loading,
@@ -1699,25 +1702,6 @@ function Shell({
     for (const chatId of activeRunIds) {
       client.attach(chatId);
     }
-    setRunningChatIds((current) => {
-      let changed = false;
-      const next = new Set(current);
-      for (const chatId of activeRunIds) {
-        if (!next.has(chatId)) changed = true;
-        next.add(chatId);
-      }
-      if (!changed) return current;
-      runningChatIdsRef.current = next;
-      return next;
-    });
-    setUpdatedChatIds((current) => {
-      let changed = false;
-      const next = new Set(current);
-      for (const chatId of activeRunIds) {
-        if (next.delete(chatId)) changed = true;
-      }
-      return changed ? next : current;
-    });
   }, [client, loading, sessions]);
 
   const openHostSidebar = useCallback(() => {
