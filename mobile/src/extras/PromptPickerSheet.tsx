@@ -98,10 +98,15 @@ export function PromptPickerSheet({
   const [editingPrompt, setEditingPrompt] = useState<PromptItem | null>(null);
   const [editorInitialBody, setEditorInitialBody] = useState<string | undefined>(undefined);
 
+  const currentProjectId = resolvedProjectId;
+  const visiblePrompts = prompts.filter(
+    (p) => p.project_id == null || p.project_id === currentProjectId,
+  );
+
   const hasSearch = search.trim().length > 0;
-  const filtered = prompts.filter((p) => {
+  const filtered = visiblePrompts.filter((p) => {
     if (!hasSearch) return true;
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
     return p.title.toLowerCase().includes(q) || p.body.toLowerCase().includes(q);
   });
 
@@ -206,7 +211,7 @@ export function PromptPickerSheet({
                     { color: th.colors.mutedForeground, fontFamily: th.font.regular },
                   ]}
                 >
-                  {hasSearch ? t("prompts.noMatches") : t("prompts.empty")}
+                  {visiblePrompts.length === 0 ? t("prompts.empty") : t("prompts.noMatches")}
                 </Text>
               </View>
             ) : (

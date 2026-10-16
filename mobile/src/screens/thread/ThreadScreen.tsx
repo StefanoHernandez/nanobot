@@ -12,6 +12,7 @@ import { threadStore, useThread } from "../../state/threadStore";
 import { useStore } from "zustand";
 import { sessionStore, useSession } from "../../state/sessionStore";
 import { Button } from "../../ui/components/Button";
+import { toast } from "../../ui/components";
 import { BotFace, faceStateOf } from "../../ui/BotFace";
 import { CommandDrawerButton } from "../../extras/CommandDrawer";
 import { OutboxBar } from "../../extras/OutboxBar";
@@ -48,6 +49,22 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const showCommands = isWritable(chatKey);
   const [menu, setMenu] = useState(false);
   const [panel, setPanel] = useState<null | "workspace" | "subagents" | "commands">(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format: "md" | "pdf") => {
+    if (!session || exporting) return;
+    setMenu(false);
+    setExporting(true);
+    try {
+      const title = chatsStore.getState().chats.find((c) => c.key === chatKey)?.title || t("chats.untitled");
+      await exportChat({ session, chatKey, title, format });
+    } catch {
+      toast.show(t("common.operationFailed"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const openPanel = (next: NonNullable<typeof panel>) => {
     setMenu(false);
     setPanel(next);
@@ -69,7 +86,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
         </View>
         {temporary ? <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{t("temporary.label")}</Text> : null}
         <View>
-          <IconButton icon="dots-vertical" accessibilityLabel={t("thread.more")} onPress={() => setMenu(true)} />
+          <IconButton icon="dots-vertical" accessibilityLabel={t("thread.more")} loading={exporting} disabled={exporting} onPress={() => setMenu(true)} />
           {running || activeSubs > 0 ? (
             <View
               testID="thread-menu-dot"
@@ -111,24 +128,14 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
         <ListItem
           title={t("export.markdown")}
           left={<MaterialCommunityIcons name="file-document-outline" size={22} color={th.colors.foreground} />}
-          onPress={() => {
-            setMenu(false);
-            if (session) {
-              const title = chatsStore.getState().chats.find((c) => c.key === chatKey)?.title || t("chats.untitled");
-              void exportChat({ session, chatKey, title, format: "md" });
-            }
-          }}
+          disabled={exporting}
+          onPress={() => void handleExport("md")}
         />
         <ListItem
           title={t("export.pdf")}
           left={<MaterialCommunityIcons name="file-pdf-box" size={22} color={th.colors.foreground} />}
-          onPress={() => {
-            setMenu(false);
-            if (session) {
-              const title = chatsStore.getState().chats.find((c) => c.key === chatKey)?.title || t("chats.untitled");
-              void exportChat({ session, chatKey, title, format: "pdf" });
-            }
-          }}
+          disabled={exporting}
+          onPress={() => void handleExport("pdf")}
         />
       </Sheet> : null}
       {showWorkspace ? (

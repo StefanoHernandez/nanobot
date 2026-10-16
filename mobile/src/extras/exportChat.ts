@@ -6,7 +6,7 @@ import { threadStore } from "../state/threadStore";
 import type { UIMessage } from "@/lib/types";
 import { chatsStore } from "../state/chatsStore";
 import type { ProjectDetail } from "../projects/api";
-import { markdownToPrintHtml } from "../screens/viewer/readingPages";
+import { Marked } from "marked";
 import { i18n } from "../i18n";
 
 export type ExportFormat = "md" | "pdf";
@@ -167,16 +167,51 @@ export function chatToMarkdown(
   return lines.join("\n") + "\n";
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function exportMarkdownToHtml(markdown: string): string {
+  const markedInstance = new Marked().use({
+    renderer: {
+      html({ text }) {
+        return escapeHtml(text);
+      },
+      image({ href, text, title }) {
+        if (href && href.startsWith("data:")) {
+          const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+          const altAttr = text ? ` alt="${escapeHtml(text)}"` : "";
+          return `<img src="${href}"${altAttr}${titleAttr} />`;
+        }
+        return `[image: ${text || ""}]`;
+      },
+    },
+  });
+
+  const bodyHtml = markedInstance.parse(markdown, { async: false }) as string;
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">`;
+  return `<!DOCTYPE html><html><head>${csp}<meta charset="utf-8"></head><body style="margin:24px;font-family:sans-serif;line-height:1.5">${bodyHtml}</body></html>`;
+}
+
 export async function ensureChatMessages(
   session: NanobotSession,
   chatKey: string,
 ): Promise<UIMessage[]> {
   const existing = threadStore.getState().threads[chatKey];
-  if (existing?.loaded) {
+  if (existing?.loaded && !existing.loadError) {
     return existing.messages;
   }
   await threadStore.getState().load(session, chatKey);
-  return threadStore.getState().threads[chatKey]?.messages ?? [];
+  const thread = threadStore.getState().threads[chatKey];
+  if (!thread?.loaded || thread.loadError) {
+    throw new Error("thread_load_failed");
+  }
+  return thread.messages;
 }
 
 export async function shareMarkdown(
@@ -186,7 +221,7 @@ export async function shareMarkdown(
   now: Date = new Date(),
 ): Promise<string> {
   if (format === "pdf") {
-    const html = markdownToPrintHtml(markdown);
+    const html = exportMarkdownToHtml(markdown);
     const res = await Print.printToFileAsync({ html });
     await Sharing.shareAsync(res.uri, {
       mimeType: "application/pdf",

@@ -187,7 +187,6 @@ export const backupStore = createStore<BackupState>((set, get) => ({
   },
 
   create: async () => {
-    const thisGen = ++generation;
     const session = sessionStore.getState().session;
     const profileId = sessionStore.getState().profile?.id;
     if (!session) return false;
@@ -195,21 +194,21 @@ export const backupStore = createStore<BackupState>((set, get) => ({
     set({ creating: true, error: null });
     try {
       await createBackupRequest(session, CREATE_BACKUP_TIMEOUT_MS);
-      if (thisGen !== generation) return false;
       if (sessionStore.getState().profile?.id !== profileId) return false;
-      set({ creating: false });
       await get().refresh();
       return true;
     } catch (err) {
-      if (thisGen !== generation) return false;
       if (sessionStore.getState().profile?.id !== profileId) return false;
-      set({ creating: false, error: backupErrorKey(err) });
+      set({ error: backupErrorKey(err) });
       return false;
+    } finally {
+      if (sessionStore.getState().profile?.id === profileId) {
+        set({ creating: false });
+      }
     }
   },
 
   remove: async (name: string) => {
-    const thisGen = ++generation;
     const session = sessionStore.getState().session;
     const profileId = sessionStore.getState().profile?.id;
     if (!session) return false;
@@ -217,21 +216,21 @@ export const backupStore = createStore<BackupState>((set, get) => ({
     set({ acting: name, error: null });
     try {
       await deleteBackupRequest(session, name);
-      if (thisGen !== generation) return false;
       if (sessionStore.getState().profile?.id !== profileId) return false;
-      set({ acting: null });
       await get().refresh();
       return true;
     } catch (err) {
-      if (thisGen !== generation) return false;
       if (sessionStore.getState().profile?.id !== profileId) return false;
-      set({ acting: null, error: backupErrorKey(err) });
+      set({ error: backupErrorKey(err) });
       return false;
+    } finally {
+      if (sessionStore.getState().profile?.id === profileId) {
+        set({ acting: null });
+      }
     }
   },
 
   restore: async (name: string) => {
-    const thisGen = ++generation;
     const session = sessionStore.getState().session;
     const profileId = sessionStore.getState().profile?.id;
     if (!session) return null;
@@ -239,15 +238,16 @@ export const backupStore = createStore<BackupState>((set, get) => ({
     set({ acting: name, error: null });
     try {
       const res = await restoreBackupRequest(session, name);
-      if (thisGen !== generation) return null;
       if (sessionStore.getState().profile?.id !== profileId) return null;
-      set({ acting: null });
       return res;
     } catch (err) {
-      if (thisGen !== generation) return null;
       if (sessionStore.getState().profile?.id !== profileId) return null;
-      set({ acting: null, error: backupErrorKey(err) });
+      set({ error: backupErrorKey(err) });
       return null;
+    } finally {
+      if (sessionStore.getState().profile?.id === profileId) {
+        set({ acting: null });
+      }
     }
   },
 

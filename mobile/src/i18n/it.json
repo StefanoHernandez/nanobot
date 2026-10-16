@@ -1109,6 +1109,7 @@
     "deleteConfirmTitle": "Elimina prompt?",
     "deleteConfirmMessage": "Eliminare \"{{title}}\"? L'operazione non può essere annullata.",
     "tooMany": "Limite prompt raggiunto (massimo 500)",
+    "tooLong": "Titolo o testo troppo lungo",
     "sectionTitle": "Prompt"
   }
 }
