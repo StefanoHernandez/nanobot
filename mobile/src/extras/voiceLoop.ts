@@ -576,6 +576,7 @@ export function useVoiceLoop(chatKey: string) {
       if (code === "language-not-supported" || code === "service-not-allowed") {
         toast.show(i18n.t(`voice.error.${code}`, { defaultValue: i18n.t("voice.error.transcription") }));
         const canFallback = await checkServerConfigured();
+        if (token !== loopTokenRef.current) return; // Termina while asking the server
         if (canFallback) {
           void startRecording();
           return;
@@ -585,7 +586,7 @@ export function useVoiceLoop(chatKey: string) {
       } else if (code === "speech-timeout" || code === "no-match") {
         dispatch({ type: "transcript", text: "" });
       } else {
-        toast.show(i18n.t("voice.error.transcription"));
+        toast.show(i18n.t(code === "not-allowed" ? "voice.error.permission" : "voice.error.transcription"));
         await stopAll();
         dispatch({ type: "stop" });
       }

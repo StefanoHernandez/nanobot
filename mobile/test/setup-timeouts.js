@@ -6,6 +6,7 @@ configure({ asyncUtilTimeout: 5000 });
 jest.mock("expo-speech-recognition", () => ({
   ExpoSpeechRecognitionModule: {
     isRecognitionAvailable: jest.fn(() => false),
+    requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
     getSupportedLocales: jest.fn(async () => ({ installedLocales: [], locales: [] })),
     addListener: jest.fn(() => ({ remove: jest.fn() })),
     start: jest.fn(),

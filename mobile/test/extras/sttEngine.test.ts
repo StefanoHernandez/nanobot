@@ -9,6 +9,7 @@ const mockStart = jest.fn();
 const mockStop = jest.fn();
 const mockAbort = jest.fn();
 const mockIsRecognitionAvailable = jest.fn(() => true);
+const mockRequestPermissions = jest.fn(async () => ({ granted: true }));
 const mockGetSupportedLocales = jest.fn(async (_opts?: any) => ({
   locales: ["it-IT", "en-US"],
   installedLocales: ["it-IT"],
@@ -22,6 +23,7 @@ jest.mock("expo-speech-recognition", () => ({
     stop: () => mockStop(),
     abort: () => mockAbort(),
     isRecognitionAvailable: () => mockIsRecognitionAvailable(),
+    requestPermissionsAsync: () => mockRequestPermissions(),
     getSupportedLocales: (opts: any) => mockGetSupportedLocales(opts),
     addListener: (eventName: string, listener: (event: any) => void) => {
       if (!listeners[eventName]) listeners[eventName] = [];
@@ -221,5 +223,79 @@ describe("sttEngine: Speech-to-text engines", () => {
         (Platform as any).OS = origOs;
       }
     });
+  });
+});
+
+
+describe("DeviceSttEngine turn lifecycle", () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    Object.keys(listeners).forEach((k) => delete listeners[k]);
+    mockRequestPermissions.mockResolvedValue({ granted: true });
+    mockGetSupportedLocales.mockResolvedValue({ locales: ["it-IT"], installedLocales: ["it-IT"] });
+    await i18n.changeLanguage("it");
+  });
+
+  test("a finished turn stops listening, so the next engine's turn is not heard twice", async () => {
+    const first = new DeviceSttEngine();
+    const firstEnds = jest.fn();
+    first.on("end", firstEnds);
+    await first.start();
+    emitNativeEvent("end", {});
+
+    const second = new DeviceSttEngine();
+    await second.start();
+    emitNativeEvent("end", {});
+    expect(firstEnds).toHaveBeenCalledTimes(1);
+    expect(listeners.end ?? []).toHaveLength(0);
+  });
+
+  test("the end that follows an error is ignored", async () => {
+    const engine = new DeviceSttEngine();
+    const onError = jest.fn();
+    const onEnd = jest.fn();
+    engine.on("error", onError);
+    engine.on("end", onEnd);
+    await engine.start();
+    emitNativeEvent("error", { error: "no-match" });
+    emitNativeEvent("end", {});
+    expect(onError).toHaveBeenCalledWith("no-match");
+    expect(onEnd).not.toHaveBeenCalled();
+  });
+
+  test("a denied microphone permission fails the turn without starting the recognizer", async () => {
+    mockRequestPermissions.mockResolvedValue({ granted: false });
+    const engine = new DeviceSttEngine();
+    const onError = jest.fn();
+    engine.on("error", onError);
+    await engine.start();
+    expect(onError).toHaveBeenCalledWith("not-allowed");
+    expect(mockStart).not.toHaveBeenCalled();
+  });
+
+  test("continuous dictation keeps every final sentence", async () => {
+    const engine = new DeviceSttEngine();
+    const finals: string[] = [];
+    const partials: string[] = [];
+    engine.on("final", (t) => finals.push(t));
+    engine.on("partial", (t) => partials.push(t));
+    await engine.start({ continuous: true });
+    emitNativeEvent("result", { isFinal: true, results: [{ transcript: "prima frase" }] });
+    emitNativeEvent("result", { isFinal: false, results: [{ transcript: "seco" }] });
+    emitNativeEvent("result", { isFinal: true, results: [{ transcript: "seconda frase" }] });
+    expect(partials.at(-1)).toBe("prima frase seco");
+    expect(finals.at(-1)).toBe("prima frase seconda frase");
+    const stopped = engine.stop();
+    emitNativeEvent("end", {});
+    await expect(stopped).resolves.toBe("prima frase seconda frase");
+  });
+
+  test("another variant of the language is not taken as the offline pack", async () => {
+    // English: earlier tests cached an it-IT hit, and a cached hit is trusted.
+    await i18n.changeLanguage("en");
+    mockGetSupportedLocales.mockResolvedValue({ locales: ["en-GB"], installedLocales: ["en-GB"] });
+    const engine = new DeviceSttEngine();
+    await engine.start();
+    expect(mockStart).toHaveBeenCalledWith(expect.objectContaining({ requiresOnDeviceRecognition: false }));
   });
 });
