@@ -528,6 +528,10 @@ class AgentLoop:
         from nanobot.ext.approvals import install
 
         install()
+        # Fork extension (nanobot/ext/prompt_cache.py): cache marker lifetime.
+        from nanobot.ext.prompt_cache import configure
+
+        configure(defaults.prompt_cache_ttl)
         return loop
 
     def _sync_subagent_runtime_limits(self) -> None:

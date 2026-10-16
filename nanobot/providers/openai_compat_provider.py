@@ -627,7 +627,10 @@ class OpenAICompatProvider(LLMProvider):
         tools: list[dict[str, Any]] | None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]] | None]:
         """Inject cache_control markers for prompt caching."""
-        cache_marker = {"type": "ephemeral"}
+        # Fork (nanobot/ext/prompt_cache.py): configurable TTL.
+        from nanobot.ext.prompt_cache import marker
+
+        cache_marker = marker()
         new_messages = list(messages)
 
         def _mark(msg: dict[str, Any]) -> dict[str, Any]:
@@ -644,8 +647,9 @@ class OpenAICompatProvider(LLMProvider):
 
         if new_messages and new_messages[0].get("role") == "system":
             new_messages[0] = _mark(new_messages[0])
-        if len(new_messages) >= 3:
-            new_messages[-2] = _mark(new_messages[-2])
+        # Fork: mark the newest message (see anthropic_provider._apply_cache_control).
+        if len(new_messages) >= 2:
+            new_messages[-1] = _mark(new_messages[-1])
 
         new_tools = tools
         if tools:
