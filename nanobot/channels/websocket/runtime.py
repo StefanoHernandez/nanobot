@@ -731,7 +731,6 @@ class WebSocketChannel(BaseChannel):
             self.gateway.tokens,
             chain,
             cron=self.gateway.cron_service,
-            workspace=self.gateway.skills_workspace_path,
             sessions=self.gateway.session_manager,
         )
         bridge = BinaryHTTPBridge(chain)

@@ -915,7 +915,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
             size={22}
             color={network ? th.colors.primaryForeground : th.colors.mutedForeground}
           />
-          {windowWidth >= 400 ? (
+          {windowWidth >= 360 ? (
             <Text
               style={{
                 color: network ? th.colors.primaryForeground : th.colors.mutedForeground,

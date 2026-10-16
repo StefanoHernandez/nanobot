@@ -264,6 +264,9 @@ async def test_run_journal_job_writes_the_turn_and_does_not_deliver(tmp_path):
     journal.local_today = lambda _tz: monkey_day  # type: ignore[assignment]
     try:
         await journal.run_journal_job(_Agent(), tz_name="UTC")
+        assert calls == []  # off by default: a leftover job writes nothing
+        journal.save_settings(workspace, {"enabled": True, "hour": 22})
+        await journal.run_journal_job(_Agent(), tz_name="UTC")
     finally:
         journal.local_today = original
     assert calls and "open question about backups" in calls[0]

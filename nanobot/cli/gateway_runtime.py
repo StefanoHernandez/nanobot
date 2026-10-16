@@ -864,10 +864,12 @@ def _run_gateway(
         _advance_dream_cursor_if_behind(agent.context.memory)
         cron.remove_system_job("dream")
 
-    # Fork (nanobot/ext/journal.py): schedule the journal only when it is enabled.
-    from nanobot.ext.journal import sync_journal_job
+    # Fork (nanobot/ext/journal.py): schedule the journal only when it is enabled; "write today" uses the same turn.
+    from nanobot.ext.journal import agent_turn, bind_journal_turn, load_settings, sync_journal_job
 
-    sync_journal_job(cron, config.workspace_path, config.agents.defaults.timezone)
+    if load_settings(config.workspace_path)["enabled"]:
+        sync_journal_job(cron, config.workspace_path, config.agents.defaults.timezone)
+    bind_journal_turn(agent_turn(agent))
 
     # Register Heartbeat system job (idempotent on restart)
     if hb_cfg.enabled:
