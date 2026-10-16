@@ -22,6 +22,7 @@ export function AppearanceSection() {
   const [lock, setLock] = useState(lockSettings.enabled());
   const [lang, setLang] = useState<Language>(prefs.language());
   const [sound, setSound] = useState(prefs.notificationSound());
+  const [kanbanNotify, setKanbanNotify] = useState(prefs.kanbanNotifications());
   const [voiceAutoRead, setVoiceAutoRead] = useState(prefs.voiceAutoRead?.() ?? false);
   const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(prefs.voiceEngine?.() ?? "device");
   const [offlineReady, setOfflineReady] = useState<boolean | null>(null);
@@ -89,6 +90,22 @@ export function AppearanceSection() {
             />
           }
         />
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem
+            title={t("settings.kanbanNotifications")}
+            subtitle={t("settings.kanbanNotificationsHelp")}
+            right={
+              <Switch
+                accessibilityLabel={t("settings.kanbanNotifications")}
+                value={kanbanNotify}
+                onValueChange={(v) => {
+                  prefs.setKanbanNotifications(v);
+                  setKanbanNotify(v);
+                }}
+              />
+            }
+          />
+        </View>
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem
             title={t("settings.audioReplies")}

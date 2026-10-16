@@ -82,6 +82,21 @@ export type KanbanSnapshot = {
   messages: KanbanMessage[];
 };
 
+export type KanbanEventKind = "done" | "failed" | "review" | "blocked";
+
+export type KanbanEvent = {
+  key: string;
+  kind: KanbanEventKind;
+  task_id: string;
+  board_id: string;
+  title: string;
+};
+
+export type KanbanEventsPayload = {
+  now: number;
+  events: KanbanEvent[];
+};
+
 export const DEFAULT_BOARD_ID = "main";
 
 export function validateTaskTitle(title: string): boolean {
@@ -125,6 +140,7 @@ function proseOk(text: string): boolean {
 
 const PRIORITIES = new Set<KanbanPriority>(["low", "medium", "high", "urgent"]);
 const STATUSES = new Set<KanbanStatus>([...KANBAN_COLUMNS, "archived"]);
+const EVENT_KINDS = new Set<KanbanEventKind>(["done", "failed", "review", "blocked"]);
 const WORKSPACES = new Set<KanbanWorkspace>(["scratch", "worktree", "dir"]);
 const RECURRENCE_MIN_SECONDS = 60;
 const RECURRENCE_MAX_SECONDS = 2_592_000;
@@ -309,6 +325,38 @@ export async function fetchKanban(session: NanobotSession, boardId: string): Pro
 
 export async function fetchKanbanTask(session: NanobotSession, id: string): Promise<KanbanTaskDetail> {
   return normalizeTaskDetail(await session.get<unknown>(`/api/ext/kanban/task?id=${encodeURIComponent(id)}`));
+}
+
+function normalizeKanbanEvents(raw: unknown): KanbanEventsPayload {
+  const rec = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const now = typeof rec.now === "number" && Number.isFinite(rec.now) ? Math.trunc(rec.now) : 0;
+  const events: KanbanEvent[] = [];
+  if (Array.isArray(rec.events)) {
+    for (const row of rec.events) {
+      if (!row || typeof row !== "object") continue;
+      const item = row as Partial<KanbanEvent>;
+      if (typeof item.key !== "string" || !item.key) continue;
+      if (typeof item.kind !== "string" || !EVENT_KINDS.has(item.kind as KanbanEventKind)) continue;
+      if (typeof item.task_id !== "string" || !item.task_id) continue;
+      if (typeof item.board_id !== "string" || !item.board_id) continue;
+      if (typeof item.title !== "string") continue;
+      events.push({
+        key: item.key,
+        kind: item.kind as KanbanEventKind,
+        task_id: item.task_id,
+        board_id: item.board_id,
+        title: item.title,
+      });
+    }
+  }
+  return { now, events };
+}
+
+export async function fetchKanbanEvents(session: NanobotSession, since: number): Promise<KanbanEventsPayload> {
+  const safeSince = Number.isFinite(since) && since >= 0 ? Math.trunc(since) : 0;
+  return normalizeKanbanEvents(
+    await session.get<unknown>(`/api/ext/kanban/events?since=${encodeURIComponent(String(safeSince))}`),
+  );
 }
 
 function failedRequest(status: number, code: string): Error {

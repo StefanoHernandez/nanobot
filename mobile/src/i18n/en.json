@@ -197,6 +197,8 @@
     "language": "Language",
     "sound": "Notification sound",
     "soundHelp": "Play a sound for notifications",
+    "kanbanNotifications": "Board notifications",
+    "kanbanNotificationsHelp": "Notify when a board task finishes, fails, or needs attention",
     "voiceAutoRead": "Read aloud replies to voice messages",
     "voiceAutoReadHelp": "Automatically reads the reply after you use voice dictation",
     "usage30": "Usage, last 30 days",
@@ -759,6 +761,12 @@
       "invalid_id": "That task is not valid.",
       "not_found": "Task not found.",
       "invalid_parent_ids": "That dependency is not valid."
+    },
+    "notify": {
+      "done": "Task finished",
+      "failed": "Task failed",
+      "review": "Needs review",
+      "blocked": "Task blocked"
     }
   },
   "memory": {

@@ -7,11 +7,13 @@ import { useTheme } from "../../src/ui/ThemeProvider";
 import { ApprovalCard } from "../../src/extras/ApprovalCard";
 import { useApprovalsPolling } from "../../src/extras/approvals";
 import { useCostsBackgroundWatcher } from "../../src/extras/costs";
+import { useKanbanNotifications } from "../../src/extras/kanbanNotify";
 
 export default function MainLayout() {
   const { colors, font } = useTheme();
   useApprovalsPolling();
   useCostsBackgroundWatcher();
+  useKanbanNotifications();
   // Banner above the drawer: visible on Home and in threads (a thread has its own header; both sit below it).
   return (
     <View style={{ flex: 1 }}>
