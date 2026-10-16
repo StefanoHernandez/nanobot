@@ -381,7 +381,11 @@ describe("P-A: ProjectDetailScreen", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    (global as any).fetch = jest.fn();
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ prompts: [] }),
+    });
     fakeSession = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",
@@ -434,13 +438,14 @@ describe("P-A: ProjectDetailScreen", () => {
   });
 
   test("deleting a file opens confirmation dialog before delete", async () => {
+    const { unmount } = await renderWithTheme(<ProjectDetailScreen id="p1" />);
+    const fileRowText = await screen.findByText("spec.pdf");
+
+    ((global as any).fetch as jest.Mock).mockClear();
     ((global as any).fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ ok: true }),
     });
-
-    const { unmount } = await renderWithTheme(<ProjectDetailScreen id="p1" />);
-    const fileRowText = await screen.findByText("spec.pdf");
 
     // Long press to trigger delete confirmation
     fireEvent(fileRowText, "longPress");
@@ -623,7 +628,11 @@ describe("P-A-fix1: ProjectDetailScreen error & editor fixes", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    (global as any).fetch = jest.fn();
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ prompts: [] }),
+    });
     fakeSession = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",

@@ -149,6 +149,7 @@
       "appearance": "Aspetto",
       "models": "Modelli",
       "capabilities": "Funzionalità",
+      "prompts": "Prompt",
       "system": "Sistema",
       "machine": "Macchina",
       "advanced": "Avanzate",
@@ -1039,5 +1040,27 @@
     "restartConfirmTitle": "Riavvia gateway",
     "restartConfirmMessage": "Vuoi davvero riavviare il processo gateway?",
     "restartConfirm": "Riavvia"
+  },
+  "prompts": {
+    "title": "Prompt",
+    "promptTitle": "Titolo",
+    "open": "Libreria prompt",
+    "empty": "Nessun prompt presente",
+    "noMatches": "Nessun prompt trovato",
+    "newPrompt": "Nuovo prompt",
+    "saveDraftAsPrompt": "Salva bozza come prompt",
+    "projectBadge": "Progetto",
+    "projectScope": "Solo questo progetto",
+    "body": "Testo del prompt",
+    "search": "Cerca prompt",
+    "variables": "Variabili",
+    "insert": "Inserisci",
+    "save": "Salva",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "deleteConfirmTitle": "Elimina prompt?",
+    "deleteConfirmMessage": "Eliminare \"{{title}}\"? L'operazione non può essere annullata.",
+    "tooMany": "Limite prompt raggiunto (massimo 500)",
+    "sectionTitle": "Prompt"
   }
 }
