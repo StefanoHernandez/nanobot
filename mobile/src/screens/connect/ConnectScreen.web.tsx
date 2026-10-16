@@ -245,6 +245,7 @@ export function ConnectScreen() {
               autoCorrect={false}
               spellCheck={false}
               autoComplete="off"
+              onSubmitEditing={() => void submit()}
               helper={t("connect.pairingCodeHelp")}
             />
             <TextField
@@ -255,6 +256,7 @@ export function ConnectScreen() {
               autoCorrect={false}
               spellCheck={false}
               autoComplete="off"
+              onSubmitEditing={() => void submit()}
             />
           </>
         ) : (
@@ -268,6 +270,7 @@ export function ConnectScreen() {
               autoCorrect={false}
               spellCheck={false}
               autoComplete="off"
+              onSubmitEditing={() => void submit()}
               helper={t("connect.secretHelp")}
               right={
                 <IconButton
@@ -285,6 +288,7 @@ export function ConnectScreen() {
               autoCorrect={false}
               spellCheck={false}
               autoComplete="off"
+              onSubmitEditing={() => void submit()}
             />
           </>
         )}

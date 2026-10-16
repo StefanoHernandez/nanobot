@@ -185,6 +185,20 @@ describe("Web Login Screen (ConnectScreen.web)", () => {
     expect(router.replace).toHaveBeenCalledWith("/");
   });
 
+  test("Enter in the secret field logs in", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ id: "d-enter", name: "B" }) });
+    await show();
+    await fireEvent.press(screen.getByText(i18n.t("connect.serverSecretTab")));
+    const secretInput = screen.getByLabelText(i18n.t("connect.secret"));
+    await fireEvent.changeText(secretInput, "s3cret");
+    await act(async () => {
+      fireEvent(secretInput, "submitEditing");
+    });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("http://localhost:8765/api/ext/devices/web-login", expect.anything()),
+    );
+  });
+
   test("deleting a cookie profile revokes this browser on the server first", async () => {
     for (const p of profiles.list()) await profiles.remove(p.id);
     await profiles.save({ id: "p1", name: "Browser", baseUrl: "http://localhost:8765", auth: "cookie" });
