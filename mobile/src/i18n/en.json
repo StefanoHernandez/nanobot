@@ -151,6 +151,7 @@
       "capabilities": "Capabilities",
       "system": "System",
       "machine": "Machine",
+      "backup": "Backup",
       "advanced": "Advanced",
       "about": "About"
     },
@@ -939,6 +940,8 @@
     "archiveConfirmMessage": "The project will be moved to the archive on the server; files will not be deleted",
     "editProject": "Edit project",
     "noDescription": "No description",
+    "exportProject": "Export project",
+    "exportProgress": "Chat {{current}}/{{total}}",
     "err": {
       "project_not_found": "Project not found",
       "file_exists": "File already exists",
@@ -1057,5 +1060,32 @@
     "restartConfirmTitle": "Restart gateway",
     "restartConfirmMessage": "Do you really want to restart the gateway process?",
     "restartConfirm": "Restart"
+  },
+  "export": {
+    "markdown": "Export as Markdown",
+    "pdf": "Export as PDF",
+    "project": "Export project",
+    "exportedAt": "Exported on {{date}}",
+    "exporting": "Exporting…",
+    "progress": "Chat {{current}}/{{total}}"
+  },
+  "backup": {
+    "title": "Backup",
+    "createNow": "Create backup now",
+    "creating": "Creating backup…",
+    "latest": "latest",
+    "diskFree": "Free disk space",
+    "workspaceExcludedWarning": "The workspace folder is outside ~/.nanobot and is not included in the backup",
+    "empty": "No backups yet",
+    "restore": "Restore",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete backup?",
+    "deleteConfirmMessage": "Do you really want to delete backup {{name}}?",
+    "restoreConfirmTitle": "Restore backup?",
+    "restoreConfirmMessage": "Backup from {{date}} will be restored. Current data is kept on the server as a safety copy, the gateway will restart, and running chats will stop.",
+    "restoreConfirm": "Restore",
+    "inProgress": "Backup already in progress",
+    "notNanobot": "The file is not a nanobot backup",
+    "unsafe": "Unsafe archive"
   }
 }
