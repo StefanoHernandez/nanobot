@@ -775,14 +775,13 @@ describe("PL-A: prompts", () => {
     const f = fakeSession();
     sessionStore.setState({ session: f.session, state: "open" as never });
     const promptList = [
-      { id: "p-global", title: "Global Prompt", body: "Hello", variables: [], created_at: 1, updated_at: 1 },
-      { id: "p-other", project_id: "other-project", title: "Other Project Prompt", body: "Secret", variables: [], created_at: 2, updated_at: 2 },
+      { id: "p-global", project_id: null, title: "Global Prompt", body: "Hello", variables: [], created_at: 1, updated_at: 1, used_at: null },
+      { id: "p-other", project_id: "other-project", title: "Other Project Prompt", body: "Secret", variables: [], created_at: 2, updated_at: 2, used_at: null },
     ];
-    global.fetch = jest.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ prompts: promptList }),
-    } as Response)) as never;
+    // Seed promptsStore with project A's prompts before the fetch
+    promptsStore.setState({ prompts: promptList });
+    // Make the fetch never resolve
+    global.fetch = jest.fn(() => new Promise(() => {})) as never;
 
     await wrap(
       <PromptPickerSheet

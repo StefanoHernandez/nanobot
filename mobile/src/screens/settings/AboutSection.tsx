@@ -64,7 +64,7 @@ export function AboutSection() {
           {session ? (
             Platform.OS === "web" ? (
               <View style={{ gap: 4 }}>
-                <Button title={t("settings.pairPhone")} variant="secondary" disabled onPress={() => {}} />
+                <Button title={t("about.pairDevice", { defaultValue: t("settings.pairDevice") })} variant="secondary" disabled onPress={() => {}} />
                 <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
                   {t("devices.pairFromServer")}
                 </Text>

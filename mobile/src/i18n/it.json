@@ -25,6 +25,12 @@
     "logoutBrowser": "Esci da questo browser",
     "logoutConfirm": "Verrai disconnesso da questo browser."
   },
+  "about": {
+    "devices": "Telefoni collegati",
+    "devicesAll": "Dispositivi collegati",
+    "pairPhone": "Collega un telefono",
+    "pairDevice": "Collega un dispositivo"
+  },
   "thread": {
     "reasoning": "Ragionamento",
     "activityWorkingFor": "Sto lavorando da {{duration}}",
@@ -144,7 +150,9 @@
     "server": "Server",
     "changeServer": "Cambia server",
     "pairPhone": "Collega un telefono",
+    "pairDevice": "Collega un dispositivo",
     "devices": "Telefoni collegati",
+    "devicesAll": "Dispositivi collegati",
     "devicesEmpty": "Nessun altro telefono.",
     "deviceNever": "Mai visto",
     "revokeDevice": "Revoca",

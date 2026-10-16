@@ -730,10 +730,10 @@ describe("BK-A: Backup and Export", () => {
       });
 
       // Dialog confirmation
-      const restoreButtons = screen.getAllByRole("button", {
+      const dialog = screen.getByText(i18n.t("backup.restoreConfirmTitle")).parent!;
+      const confirmDialogBtn = within(dialog).getByRole("button", {
         name: new RegExp(i18n.t("backup.restoreConfirm"), "i"),
       });
-      const confirmDialogBtn = restoreButtons[restoreButtons.length - 1];
 
       await act(async () => {
         fireEvent.press(confirmDialogBtn);
@@ -831,9 +831,8 @@ describe("BK-A: Backup and Export", () => {
       // Confirm dialog is open
       expect(screen.getByText(i18n.t("backup.deleteConfirmTitle"))).toBeTruthy();
 
-      const deleteButtons = screen.getAllByRole("button", { name: i18n.t("common.delete") });
-      // The last one is the Dialog confirm button
-      const confirmBtn = deleteButtons[deleteButtons.length - 1];
+      const dialog = screen.getByText(i18n.t("backup.deleteConfirmTitle")).parent!;
+      const confirmBtn = within(dialog).getByRole("button", { name: i18n.t("common.delete") });
       await act(async () => {
         fireEvent.press(confirmBtn);
       });
@@ -892,8 +891,8 @@ describe("BK-A: Backup and Export", () => {
       );
       expect(screen.getByText(i18n.t("backup.restoreConfirmTitle"))).toBeTruthy();
 
-      const restoreButtons = screen.getAllByRole("button", { name: i18n.t("backup.restoreConfirm") });
-      const confirmBtn = restoreButtons[restoreButtons.length - 1];
+      const dialog = screen.getByText(i18n.t("backup.restoreConfirmTitle")).parent!;
+      const confirmBtn = within(dialog).getByRole("button", { name: i18n.t("backup.restoreConfirm") });
       await act(async () => {
         fireEvent.press(confirmBtn);
       });
