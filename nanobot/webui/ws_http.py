@@ -625,6 +625,13 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        # Fork (nanobot/ext/journal.py): read the daily journal.
+        from nanobot.ext.journal import dispatch_journal_get
+
+        response = dispatch_journal_get(self, request, got)
+        if response is not None:
+            return response
+
         from nanobot.ext.devices import dispatch_devices_get
 
         response = dispatch_devices_get(self, request, got)

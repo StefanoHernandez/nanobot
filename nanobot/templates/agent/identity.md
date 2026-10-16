@@ -7,11 +7,13 @@
 Nanobot's agent workspace is at: {{ agent_workspace_path }}
 - Agent profile: {{ agent_workspace_path }}/SOUL.md and {{ agent_workspace_path }}/USER.md
 - Long-term memory: {{ agent_workspace_path }}/memory/MEMORY.md
+- Daily journals are in memory/journal/YYYY-MM-DD.md; read them when asked about past days
 - History log: {{ agent_workspace_path }}/memory/history.jsonl (append-only JSONL).
 - Custom skills: {{ agent_workspace_path }}/skills/{% raw %}{skill-name}{% endraw %}/SKILL.md
 {% else %}
 - Agent profile: SOUL.md and USER.md
 - Long-term memory: memory/MEMORY.md
+- Daily journals are in memory/journal/YYYY-MM-DD.md; read them when asked about past days
 - History log: memory/history.jsonl (append-only JSONL).
 - Custom skills: skills/{% raw %}{skill-name}{% endraw %}/SKILL.md
 {% endif %}
