@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
 import { i18n } from "../../src/i18n";
@@ -562,9 +562,8 @@ describe("PL-A: prompts", () => {
     expect(screen.getByText(/elimina prompt\?|delete prompt\?/i)).toBeTruthy();
     expect(screen.getByText(/Old Prompt/)).toBeTruthy();
 
-    const deleteBtns = screen.getAllByRole("button", { name: /^delete$|^elimina$/i });
-    // The dialog's confirm button is the second Delete button currently mounted
-    const confirmDeleteBtn = deleteBtns[deleteBtns.length - 1];
+    const dialogCard = screen.getByText(/elimina prompt\?|delete prompt\?/i).parent!;
+    const confirmDeleteBtn = within(dialogCard).getByRole("button", { name: /^delete$|^elimina$/i });
     await act(async () => {
       fireEvent.press(confirmDeleteBtn);
     });
@@ -770,5 +769,106 @@ describe("PL-A: prompts", () => {
 
     // Data was dropped by the profileId guard
     expect(promptsStore.getState().prompts).toEqual([]);
+  });
+
+  test("prompts from other projects do not leak into global picker (resolvedProjectId == null)", async () => {
+    const f = fakeSession();
+    sessionStore.setState({ session: f.session, state: "open" as never });
+    const promptList = [
+      { id: "p-global", title: "Global Prompt", body: "Hello", variables: [], created_at: 1, updated_at: 1 },
+      { id: "p-other", project_id: "other-project", title: "Other Project Prompt", body: "Secret", variables: [], created_at: 2, updated_at: 2 },
+    ];
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ prompts: promptList }),
+    } as Response)) as never;
+
+    await wrap(
+      <PromptPickerSheet
+        open={true}
+        onClose={jest.fn()}
+        chatKey="webui:global"
+        projectId={null}
+      />,
+    );
+
+    expect(screen.getByText("Global Prompt")).toBeTruthy();
+    expect(screen.queryByText("Other Project Prompt")).toBeNull();
+  });
+
+  test("PromptEditorSheet enforces maxLength on title (120) and body (20000), and shows prompts.tooLong on invalid_title error", async () => {
+    const f = fakeSession();
+    sessionStore.setState({ session: f.session });
+
+    const fetchMock = jest.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "invalid_title" }),
+    } as Response));
+    global.fetch = fetchMock as never;
+
+    await wrap(<PromptEditorSheet open={true} onClose={jest.fn()} />);
+
+    const titleInput = screen.getByLabelText(/title|titolo/i);
+    const bodyInput = screen.getByLabelText(/prompt body|testo del prompt/i);
+
+    expect(titleInput.props.maxLength).toBe(120);
+    expect(bodyInput.props.maxLength).toBe(20000);
+
+    await act(async () => {
+      fireEvent.changeText(titleInput, "Valid Title");
+      fireEvent.changeText(bodyInput, "Valid Body");
+    });
+
+    const saveBtn = screen.getByRole("button", { name: /^save$|^salva$/i });
+    await act(async () => {
+      fireEvent.press(saveBtn);
+    });
+
+    expect(toast.show).toHaveBeenCalledWith(i18n.t("prompts.tooLong"));
+  });
+
+  test("PromptPickerSheet trims search query trailing whitespace", async () => {
+    const f = fakeSession();
+    sessionStore.setState({ session: f.session, state: "open" as never });
+    const promptList = [
+      { id: "p1", title: "Review Code", body: "Review body", variables: [], created_at: 1, updated_at: 1 },
+    ];
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ prompts: promptList }),
+    } as Response)) as never;
+
+    await wrap(<PromptPickerSheet open={true} onClose={jest.fn()} projectId={null} />);
+
+    const searchInput = screen.getByPlaceholderText(i18n.t("prompts.search"));
+    await act(async () => {
+      fireEvent.changeText(searchInput, "Review   ");
+    });
+
+    // Still matches because search is trimmed
+    expect(screen.getByText("Review Code")).toBeTruthy();
+  });
+
+  test("PromptPickerSheet shows prompts.empty when library is empty, even when search query is typed", async () => {
+    const f = fakeSession();
+    sessionStore.setState({ session: f.session, state: "open" as never });
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ prompts: [] }),
+    } as Response)) as never;
+
+    await wrap(<PromptPickerSheet open={true} onClose={jest.fn()} projectId={null} />);
+
+    const searchInput = screen.getByPlaceholderText(i18n.t("prompts.search"));
+    await act(async () => {
+      fireEvent.changeText(searchInput, "anything");
+    });
+
+    expect(screen.getByText(i18n.t("prompts.empty"))).toBeTruthy();
+    expect(screen.queryByText(i18n.t("prompts.noMatches"))).toBeNull();
   });
 });

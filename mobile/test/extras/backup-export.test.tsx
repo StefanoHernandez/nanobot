@@ -1,7 +1,8 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
+import { toast } from "../../src/ui/components";
 import { i18n } from "../../src/i18n";
 import { sessionStore } from "../../src/state/sessionStore";
 import { threadStore } from "../../src/state/threadStore";
@@ -241,8 +242,7 @@ describe("BK-A: Backup and Export", () => {
       expect(Sharing.shareAsync).toHaveBeenCalledWith(writtenFiles[0].uri, expect.anything());
     });
 
-    test("Chat export PDF goes through markdownToPrintHtml and Print.printToFileAsync, then shares the PDF URI", async () => {
-      const spyHtml = jest.spyOn(readingPages, "markdownToPrintHtml");
+    test("Chat export PDF goes through Print.printToFileAsync, then shares the PDF URI", async () => {
       const f = fakeSession();
       sessionStore.setState({ session: f.session });
       threadStore.setState({
@@ -272,14 +272,73 @@ describe("BK-A: Backup and Export", () => {
         format: "pdf",
       });
 
-      expect(spyHtml).toHaveBeenCalled();
       expect(Print.printToFileAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           html: expect.stringContaining("<!DOCTYPE html>"),
         }),
       );
       expect(Sharing.shareAsync).toHaveBeenCalledWith("file:///cache/printed.pdf", expect.anything());
-      spyHtml.mockRestore();
+    });
+
+    test("Chat export PDF sanitizes raw HTML, escapes tags, converts remote images to text links, and injects strict CSP", async () => {
+      const f = fakeSession();
+      sessionStore.setState({ session: f.session });
+      threadStore.setState({
+        threads: {
+          "webui:c1": {
+            messages: [
+              {
+                id: "1",
+                role: "assistant",
+                content:
+                  'Check this: <img src="https://x/y?q=secret">\n\n<style>body { color: red; }</style>\n\n<meta http-equiv=refresh content="0; url=https://evil.com">\n\n![remote pic](https://remote.server/pic.png)\n\n![inline data](data:image/png;base64,iVBORw0KGgo=)',
+                createdAt: new Date("2026-10-16T08:00:00Z").getTime(),
+              },
+            ],
+            loaded: true,
+            running: false,
+            model: null,
+            preset: null,
+            notices: [],
+            draft: "",
+            stopped: false,
+            sendError: null,
+            uploading: false,
+            pendingFiles: [],
+            forkBoundary: null,
+            temporary: false,
+          },
+        },
+      });
+
+      await exportChat({
+        session: f.session,
+        chatKey: "webui:c1",
+        title: "Security Check",
+        format: "pdf",
+      });
+
+      const printedHtml = (Print.printToFileAsync as jest.Mock).mock.calls[0][0].html as string;
+      expect(printedHtml).not.toContain("https://remote.server/pic.png");
+      expect(printedHtml).not.toMatch(/<style\b/i);
+      expect(printedHtml).not.toMatch(/<meta\b[^>]*refresh/i);
+      expect(printedHtml).not.toMatch(/<img\b[^>]*https:/i);
+      expect(printedHtml).toContain("[image: remote pic]");
+      expect(printedHtml).toContain('data:image/png;base64,iVBORw0KGgo=');
+      expect(printedHtml).toContain('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'">');
+    });
+
+    test("ensureChatMessages throws when threadStore.load fails or thread is not loaded", async () => {
+      const f = fakeSession({
+        "/api/sessions/webui%3Afail/webui-thread": () => {
+          throw { status: 500, message: "server error" };
+        },
+      });
+      sessionStore.setState({ session: f.session });
+      threadStore.setState({ threads: {} });
+
+      const { ensureChatMessages } = require("../../src/extras/exportChat");
+      await expect(ensureChatMessages(f.session, "webui:fail")).rejects.toThrow();
     });
   });
 
@@ -452,6 +511,48 @@ describe("BK-A: Backup and Export", () => {
       expect(writtenFiles).toHaveLength(0);
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
     });
+
+    test("ProjectDetailScreen export error shows common.operationFailed, not the raw e.message", async () => {
+      const spyToast = jest.spyOn(toast, "show").mockImplementation(() => {});
+      const exportProjectMock = jest.spyOn(require("../../src/extras/exportChat"), "exportProject").mockRejectedValueOnce(new Error("Raw secret crash message"));
+
+      const f = fakeSession({
+        "/api/ext/projects/p1": {
+          project: sampleDetail.project,
+          files: sampleDetail.files,
+          instructions: sampleDetail.instructions,
+          truncated: false,
+        },
+      });
+      sessionStore.setState({ session: f.session, state: "open" as never });
+
+      await wrap(<ProjectDetailScreen id="p1" />);
+
+      // Wait for project details to load
+      await waitFor(() => {
+        expect(screen.getByText("Progetto Alfa")).toBeTruthy();
+      });
+
+      // Press Esporta progetto
+      const exportBtn = screen.getByRole("button", { name: new RegExp(i18n.t("projects.exportProject"), "i") });
+      await act(async () => {
+        fireEvent.press(exportBtn);
+      });
+
+      // Press Esporta in Markdown in sheet
+      const exportMdBtn = screen.getByText(i18n.t("export.markdown"));
+      await act(async () => {
+        fireEvent.press(exportMdBtn);
+      });
+
+      await waitFor(() => {
+        expect(spyToast).toHaveBeenCalledWith(i18n.t("common.operationFailed"));
+        expect(spyToast).not.toHaveBeenCalledWith("Raw secret crash message");
+      });
+
+      exportProjectMock.mockRestore();
+      spyToast.mockRestore();
+    });
   });
 
   // 4. Backup section
@@ -542,8 +643,8 @@ describe("BK-A: Backup and Export", () => {
         fireEvent.press(createBtn);
       });
 
-      // Spinner shown while pending
-      expect(screen.getByTestId("backup-creating-spinner")).toBeTruthy();
+      // Button in loading state while creating
+      expect(createBtn.props.accessibilityState?.busy).toBe(true);
 
       // Finish create
       await act(async () => {
@@ -552,6 +653,105 @@ describe("BK-A: Backup and Export", () => {
 
       await waitFor(() => {
         expect(screen.getAllByTestId("backup-item")).toHaveLength(3);
+      });
+    });
+
+    test("A stale generation from refresh does not leave creating stuck at true", async () => {
+      let resolveCreate: ((v: any) => void) | null = null;
+      const f = fakeSession();
+      sessionStore.setState({ session: f.session });
+
+      global.fetch = jest.fn(async (url: string) => {
+        if (url.endsWith("/api/ext/backup/create")) {
+          return new Promise((res) => {
+            resolveCreate = () => res({ ok: true, json: async () => ({ backup: { name: "nb.tar.gz", size: 10, created_at: 100 } }) });
+          });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => sampleBackupPayload,
+        };
+      }) as never;
+
+      // Start create
+      const createPromise = backupStore.getState().create();
+      expect(backupStore.getState().creating).toBe(true);
+
+      // Refresh called in between bumps generation
+      await backupStore.getState().refresh();
+
+      // Resolve create
+      (resolveCreate as any)?.(null);
+      await createPromise;
+
+      // creating is false and not stuck
+      expect(backupStore.getState().creating).toBe(false);
+    });
+
+    test("Restore succeeds and gateway restarts even if refresh() ran in between", async () => {
+      let resolveRestore: ((v: any) => void) | null = null;
+      const f = fakeSession();
+      sessionStore.setState({ session: f.session });
+
+      global.fetch = jest.fn(async (url: string) => {
+        if (url.endsWith("/api/ext/backup/restore")) {
+          return new Promise((res) => {
+            resolveRestore = () =>
+              res({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  ok: true,
+                  restored: "b1.tar.gz",
+                  previous: "b0.tar.gz",
+                  restart_required: true,
+                }),
+              });
+          });
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => sampleBackupPayload,
+        };
+      }) as never;
+
+      await wrap(<BackupSection />);
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId("backup-item")).toHaveLength(2);
+      });
+
+      // Press restore icon on first item
+      const restoreBtn = within(screen.getAllByTestId("backup-restore-btn")[0]).getByRole("button");
+      await act(async () => {
+        fireEvent.press(restoreBtn);
+      });
+
+      // Dialog confirmation
+      const restoreButtons = screen.getAllByRole("button", {
+        name: new RegExp(i18n.t("backup.restoreConfirm"), "i"),
+      });
+      const confirmDialogBtn = restoreButtons[restoreButtons.length - 1];
+
+      await act(async () => {
+        fireEvent.press(confirmDialogBtn);
+      });
+
+      // Call refresh while restore is in flight
+      await act(async () => {
+        await backupStore.getState().refresh();
+      });
+
+      // Resolve restore
+      await act(async () => {
+        resolveRestore?.(null);
+      });
+
+      // Restart was called once
+      await waitFor(() => {
+        expect(mockRunRestart).toHaveBeenCalledTimes(1);
       });
     });
 

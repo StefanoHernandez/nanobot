@@ -15,13 +15,30 @@ jest.mock("../../src/ui/markdown/Markdown", () => {
   return { Markdown: ({ text }: { text: string }) => { seen.push(text); return <Text>{text}</Text>; } };
 });
 
+jest.mock("../../src/ui/components/Toast", () => {
+  const actual = jest.requireActual("../../src/ui/components/Toast");
+  return {
+    ...actual,
+    toast: {
+      show: jest.fn(),
+      setLift: jest.fn(),
+    },
+  };
+});
+
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
 const KEY = "websocket:c1";
 const T = { turn_id: "t1" };
 
 async function mount(key = KEY, history = thread([])) {
   const f = fakeSession({ [`/api/sessions/${encodeURIComponent(key)}/webui-thread`]: () => history });
   sessionStore.setState({ session: f.session, state: "open" as never });
-  await render(<ThemeProvider><ThreadScreen chatKey={key} onBack={() => {}} /></ThemeProvider>);
+  await render(
+    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 360, height: 640 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+      <ThemeProvider><ThreadScreen chatKey={key} onBack={() => {}} /></ThemeProvider>
+    </SafeAreaProvider>
+  );
   return f;
 }
 const emit = (f: ReturnType<typeof fakeSession>, ev: Record<string, unknown>) => act(() => f.emit("c1", ev));
@@ -119,4 +136,26 @@ test("mounting ThreadScreen loads once and replays vendor-buffered events", asyn
   expect(f.get.mock.calls.filter(([p]) => p === path)).toHaveLength(1);
   expect(f.attached.filter((id) => id === "c1")).toHaveLength(1);
   expect(seen).toContain("queued reply");
+});
+
+test("export failure in ThreadScreen shows common.operationFailed toast and clears busy state", async () => {
+  const { toast } = require("../../src/ui/components");
+  const exportChatMock = jest.spyOn(require("../../src/extras/exportChat"), "exportChat").mockRejectedValueOnce(new Error("Disk error"));
+
+  await mount();
+  await act(flush);
+
+  // Open menu
+  await act(async () => {
+    fireEvent.press(screen.getByLabelText(i18n.t("thread.more")));
+  });
+
+  // Press export markdown
+  const exportBtn = screen.getByText(i18n.t("export.markdown"));
+  await act(async () => {
+    fireEvent.press(exportBtn);
+  });
+
+  expect(toast.show).toHaveBeenCalledWith(i18n.t("common.operationFailed"));
+  exportChatMock.mockRestore();
 });
