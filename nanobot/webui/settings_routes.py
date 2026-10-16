@@ -23,7 +23,6 @@ from nanobot.webui import settings_models as model_domain
 from nanobot.webui import settings_system as system_domain
 from nanobot.webui.cli_apps_api import cli_apps_action, cli_apps_payload
 from nanobot.webui.http_utils import http_response as _http_response
-from nanobot.webui.http_utils import is_local_browser_request as _is_local_browser_request
 from nanobot.webui.mcp_oauth_api import McpOAuthManager
 from nanobot.webui.mcp_presets_api import (
     ensure_mcp_oauth_server,
@@ -405,11 +404,14 @@ class WebUISettingsRouter:
         *,
         needs_local_browser: bool,
     ) -> SettingsRequest:
+        from nanobot.ext.devices import privileged_request  # Fork: full-power devices
+
         return SettingsRequest(
             query=self._query(request),
             payload=_mutation_payload(request),
             local_browser=(
-                _is_local_browser_request(connection, request.headers)
+                # Fork (nanobot/ext/devices.py): a device granted full power counts as local.
+                privileged_request(connection, request.headers)
                 if needs_local_browser
                 else False
             ),

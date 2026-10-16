@@ -16,6 +16,7 @@ import weakref
 from collections.abc import Awaitable, Callable
 from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 from aiohttp import web
@@ -27,6 +28,7 @@ from nanobot.webui.http_utils import (
     case_insensitive_header,
     http_error,
     http_json_response,
+    is_local_browser_request,
     issue_route_secret_matches,
     safe_host_header,
 )
@@ -160,6 +162,7 @@ def _load_raw(path: Path) -> dict[str, Any]:
                 "created": int(entry.get("created") or 0),
                 "last_seen": entry.get("last_seen"),
                 "revoked": bool(entry.get("revoked")),
+                "full_power": bool(entry.get("full_power")) and not entry.get("revoked"),
             }
         )
     return {"codes": cleaned_codes, "devices": cleaned_devices}
@@ -230,6 +233,7 @@ def _add_device(state: dict[str, Any], name: str) -> tuple[str, str]:
             "created": int(time.time()),
             "last_seen": None,
             "revoked": False,
+            "full_power": False,
         }
     )
     return device_token, device_id
@@ -276,6 +280,7 @@ def revoke_device(device_id: str, path: Path | None = None) -> None:
         for device in state["devices"]:
             if device.get("id") == device_id:
                 device["revoked"] = True
+                device["full_power"] = False
                 return
         raise DeviceError(404, "not_found")
 
@@ -295,9 +300,25 @@ def list_devices_public(path: Path | None = None) -> list[dict[str, Any]]:
                 "created": entry.get("created"),
                 "last_seen": entry.get("last_seen"),
                 "revoked": entry.get("revoked"),
+                "full_power": entry.get("full_power"),
             }
         )
     return devices
+
+
+def set_full_power(device_id: str, enabled: bool, path: Path | None = None) -> None:
+    """Full power: a device may do what otherwise needs a browser on the server itself
+    (install or delete skills and features, local-only settings). Granted only from there."""
+    target = path or devices_file_path()
+
+    def mutate(state: dict[str, Any]) -> None:
+        for device in state["devices"]:
+            if device.get("id") == device_id and not device.get("revoked"):
+                device["full_power"] = enabled
+                return
+        raise DeviceError(404, "not_found")
+
+    _with_state(target, mutate)
 
 
 def _cookie_token(headers: Any) -> str | None:
@@ -413,6 +434,29 @@ def _is_device_minted(request: Any) -> bool:
     raw = _auth_token(request.headers)
     with _DEVICE_TOKENS_LOCK:
         return bool(raw) and raw in _DEVICE_TOKENS
+
+
+def privileged_request(connection: Any, headers: Any, path: Path | None = None) -> bool:
+    """A browser on the server itself, or a live device it granted full power.
+
+    Callers must have already authenticated the request: this only decides the privilege."""
+    if is_local_browser_request(connection, headers):
+        return True
+    # HTTP calls carry the device-minted token; socket mutations come on the socket it opened.
+    raw = _auth_token(headers)
+    with _DEVICE_TOKENS_LOCK:
+        device_id = _DEVICE_TOKENS.get(raw) if raw else None
+        if device_id is None:
+            try:
+                opened = _DEVICE_CONNECTIONS.get(connection)
+            except TypeError:  # not weak-referenceable, so never a tracked socket
+                opened = None
+            device_id = opened[0] if opened else None
+    if not device_id:
+        return False
+    with _lock:
+        state = _load_raw(path or devices_file_path())
+    return any(d["id"] == device_id and d["full_power"] for d in state["devices"])
 
 
 def router_admin_authorized(secret: str, router: Any, request: WsRequest) -> bool:
@@ -567,6 +611,17 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
             origin = _request_origin(request.headers)
             qr = json.dumps({"v": 1, "url": origin, "code": code}, separators=(",", ":"))
             return web.json_response({"code": code, "expires_in": expires_in, "qr": qr}, status=201)
+        if path == PREFIX + "/full-power":
+            # aiohttp exposes the peer as request.remote; the check wants a remote_address.
+            peer = SimpleNamespace(remote_address=(request.remote, 0))
+            if not is_local_browser_request(peer, request.headers):
+                return web.json_response({"error": "local_browser_only"}, status=403)
+            body = await read_json(request)
+            device_id, enabled = body.get("id"), body.get("enabled")
+            if not isinstance(device_id, str) or not device_id.strip() or not isinstance(enabled, bool):
+                return web.json_response({"error": "invalid_request"}, status=400)
+            set_full_power(device_id.strip(), enabled)
+            return web.json_response({"ok": True})
         if path == PREFIX + "/revoke":
             body = await read_json(request)
             device_id = body.get("id")

@@ -133,7 +133,7 @@ def test_list_payload_has_no_hash(devices_path):
     code, _ = dev.create_pairing_code(devices_path)
     dev.claim_pairing_code(code, "listed", devices_path)
     listed = dev.list_devices_public(devices_path)
-    assert listed and set(listed[0]) == {"id", "name", "created", "last_seen", "revoked"}
+    assert listed and set(listed[0]) == {"id", "name", "created", "last_seen", "revoked", "full_power"}
     resp = dev.dispatch_devices_get(_router(), _get("/api/ext/devices"), "/api/ext/devices")
     assert resp is not None and resp.status_code == 200
     payload = _json(resp)
@@ -335,3 +335,57 @@ async def test_web_login_refuses_cross_origin_and_brute_force(devices_path, monk
         assert (await handler(_web("/web-login", {"secret": "wrong", "name": "x"}))).status == 401
     blocked = await handler(_web("/web-login", {"secret": MASTER, "name": "x"}))
     assert blocked.status == 429
+
+
+def _full_power_post(body: dict, auth: str, *, remote: str, host: str):
+    req = _post("/full-power", body, auth)
+    req.headers["Host"] = host
+    req.remote = remote
+    return req
+
+
+_REMOTE_PEER = SimpleNamespace(remote_address=("100.64.0.7", 50000))
+
+
+@pytest.mark.asyncio
+async def test_full_power_is_granted_only_from_the_server_browser(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    _, device_id = _paired_phone(devices_path)
+    phone_api = store.issue_api_token(300)
+    dev.remember_device_tokens(device_id, store, phone_api)
+    phone = {"Authorization": f"Bearer {phone_api}", "Host": "arduino.tail.ts.net:8765"}
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+    grant = {"id": device_id, "enabled": True}
+
+    assert not dev.privileged_request(_REMOTE_PEER, phone)
+    denied = await handler(_full_power_post(grant, MASTER, remote="100.64.0.7", host="arduino.tail.ts.net:8765"))
+    assert denied.status == 403
+    assert not dev.privileged_request(_REMOTE_PEER, phone)
+
+    allowed = await handler(_full_power_post(grant, MASTER, remote="127.0.0.1", host="127.0.0.1:8765"))
+    assert allowed.status == 200
+    assert dev.list_devices_public()[0]["full_power"] is True
+    assert dev.privileged_request(_REMOTE_PEER, phone)
+
+    dev.revoke_device(device_id)
+    assert dev.list_devices_public()[0]["full_power"] is False
+    assert not dev.privileged_request(_REMOTE_PEER, phone)
+
+
+def test_privileged_request_needs_a_device_token_or_the_local_browser(devices_path):
+    local = SimpleNamespace(remote_address=("127.0.0.1", 50000))
+    assert dev.privileged_request(local, {"Host": "localhost:8765"})
+    assert not dev.privileged_request(_REMOTE_PEER, {"Authorization": f"Bearer {MASTER}"})
+
+
+def test_full_power_follows_the_socket_the_device_opened(devices_path, monkeypatch):
+    _, device_id = _paired_phone(devices_path)
+    class _Socket:
+        remote_address = ("100.64.0.7", 50000)
+
+    socket = _Socket()
+    monkeypatch.setitem(dev._DEVICE_CONNECTIONS, socket, (device_id, None))
+    dev.set_full_power(device_id, True)
+    assert dev.privileged_request(socket, {"Host": "arduino.tail.ts.net:8765"})

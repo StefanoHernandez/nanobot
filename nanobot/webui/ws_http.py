@@ -1871,7 +1871,9 @@ class GatewayHTTPHandler:
         })
 
     def _allow_webui_package_install(self, connection: Any, request: WsRequest) -> bool:
-        if _is_local_browser_request(connection, request.headers):
+        from nanobot.ext.devices import privileged_request  # Fork: full-power devices
+
+        if privileged_request(connection, request.headers):
             return True
         try:
             return bool(
@@ -1914,7 +1916,9 @@ class GatewayHTTPHandler:
     ) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
-        if not _is_local_browser_request(connection, request.headers):
+        from nanobot.ext.devices import privileged_request  # Fork: full-power devices
+
+        if not privileged_request(connection, request.headers):
             return _http_error(403, "remote skill deletion is disabled")
         name = _query_first(_request_query(request), "name") or ""
         try:
