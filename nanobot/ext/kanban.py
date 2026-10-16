@@ -1108,6 +1108,7 @@ class KanbanStore:
         return _task_public(row)
 
     def events_since(self, since_ms: int) -> dict[str, Any]:
+        now = _now_ms()
         with self._lock, self._connect() as conn:
             run_rows = conn.execute(
                 """
@@ -1115,18 +1116,20 @@ class KanbanStore:
                        t.id AS task_id, t.board_id AS board_id, t.title AS title
                 FROM task_runs r
                 JOIN tasks t ON t.id = r.task_id
-                WHERE r.finished_at_ms > ? AND r.status IN ('done', 'failed')
+                WHERE r.finished_at_ms > ? AND r.finished_at_ms <= ?
+                  AND r.status IN ('done', 'failed')
                 """,
-                (since_ms,),
+                (since_ms, now),
             ).fetchall()
             task_rows = conn.execute(
                 """
                 SELECT t.id AS task_id, t.status AS kind, t.updated_at_ms AS event_ms,
                        t.board_id AS board_id, t.title AS title
                 FROM tasks t
-                WHERE t.status IN ('review', 'blocked') AND t.updated_at_ms > ?
+                WHERE t.status IN ('review', 'blocked')
+                  AND t.updated_at_ms > ? AND t.updated_at_ms <= ?
                 """,
-                (since_ms,),
+                (since_ms, now),
             ).fetchall()
         events: list[dict[str, Any]] = []
         for row in run_rows:
@@ -1155,9 +1158,16 @@ class KanbanStore:
                 }
             )
         events.sort(key=lambda e: (e["_ms"], e["key"]))
-        trimmed = events[:50]
+        if len(events) > 50:
+            trimmed = events[:50]
+            # Cursor sits 1 ms before the cut. The next poll retries that
+            # millisecond; the phone drops keys it already showed.
+            cursor = int(trimmed[-1]["_ms"]) - 1
+        else:
+            trimmed = events
+            cursor = now
         return {
-            "now": _now_ms(),
+            "now": cursor,
             "events": [{k: v for k, v in e.items() if k != "_ms"} for e in trimmed],
         }
 
