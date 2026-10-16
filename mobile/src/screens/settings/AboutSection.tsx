@@ -90,7 +90,7 @@ export function AboutSection() {
   return (
     <>
       <Head>{t("settings.server")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem title={profile?.name ?? "-"} subtitle={profile?.baseUrl} />
         <View style={{ padding: 16, paddingTop: 4, gap: 8 }}>
           <Button title={t("settings.changeServer")} variant="secondary" onPress={() => router.push("/connect")} />
@@ -154,7 +154,7 @@ export function AboutSection() {
       {session ? <DevicesCard session={session} /> : null}
 
       <Head>{t("settings.about")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 16, gap: 6, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 16, gap: 6, overflow: "hidden" }}>
         <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
           {`${t("settings.appName")} - ${t("settings.version", { v: appVersion })}`}
         </Text>
@@ -179,7 +179,7 @@ export function AboutSection() {
         {check.startsWith("v:") ? <Text style={{ color: th.colors.brand, fontFamily: th.font.medium, fontSize: 13, paddingTop: 4 }}>{t("settings.updateAvailable", { v: check.slice(2) })}</Text> : null}
       </View>
 
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
         <ListItem title={t("settings.repo")} subtitle={REPO} onPress={open(REPO)} />
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem title={t("settings.docs")} subtitle={data?.docs?.base_url ?? DOCS} onPress={open(data?.docs?.base_url ?? DOCS)} />

@@ -9,9 +9,10 @@ test("light and dark differ", () => {
   expect(lightTheme.colors.background).not.toBe(darkTheme.colors.background);
 });
 
-test("all colors are 6-digit hex", () => {
+test("colors are 6-digit hex; only the hairlines carry alpha", () => {
   for (const t of [lightTheme, darkTheme])
-    for (const c of Object.values(t.colors)) expect(c).toMatch(/^#[0-9a-f]{6}$/);
+    for (const [k, c] of Object.entries(t.colors))
+      expect(c).toMatch(k === "border" || k === "input" ? /^#[0-9a-f]{8}$/ : /^#[0-9a-f]{6}$/);
 });
 
 const lum = (hex: string) => {
@@ -45,8 +46,8 @@ test("chart series read against the panel (3:1, non-text graphics) and differ fr
 });
 
 test("dark is black, purple, and gold, and surfaces step up", () => {
-  expect(darkTheme.colors.background).toBe("#0c0b10");
-  expect(darkTheme.colors.userBubble).toBe("#6b4589");
+  expect(darkTheme.colors.background).toBe("#08070b");
+  expect(darkTheme.colors.userBubble).toBe("#5d3b7c");
   expect(darkTheme.colors.brand).toBe("#f0b429");
   expect(darkTheme.colors.background).not.toBe(darkTheme.colors.card);
   expect(lum(darkTheme.colors.background)).toBeLessThan(lum(darkTheme.colors.card));

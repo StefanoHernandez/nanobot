@@ -78,7 +78,7 @@ export function MachineSection() {
       ) : null}
 
       <Head>{t("machine.cpu")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <GaugeRow label={t("machine.cpu")} value={cpuText} pct={data?.cpu_percent} />
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <GaugeRow label={t("machine.memory")} value={ramText} pct={ramPct} />
@@ -97,7 +97,7 @@ export function MachineSection() {
       </View>
 
       <Head>{t("machine.load")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem
           title={loadText}
           subtitle={coresText}
@@ -105,7 +105,7 @@ export function MachineSection() {
       </View>
 
       <Head>{t("machine.uptime")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem
           title={t("machine.uptime")}
           right={<Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 14 }}>{machineUptime}</Text>}
@@ -119,7 +119,7 @@ export function MachineSection() {
       </View>
 
       <Head>{t("machine.gateway")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem
           title={t("machine.restart")}
           subtitle={t("machine.restartHint")}
@@ -128,7 +128,7 @@ export function MachineSection() {
       </View>
 
       <Head>{t("machine.recentErrors")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden", marginBottom: 16 }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden", marginBottom: 16 }}>
         {logErrors.length === 0 ? (
           <View style={{ padding: 16, minHeight: 48, justifyContent: "center" }}>
             <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>

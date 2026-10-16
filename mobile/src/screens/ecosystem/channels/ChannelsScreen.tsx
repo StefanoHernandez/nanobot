@@ -84,7 +84,7 @@ export function ChannelsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void handleRefresh()} />}
       >
-        <View style={[styles.card, { backgroundColor: th.colors.card, borderRadius: th.radius.md }]}>
+        <View style={[styles.card, { ...th.surface }]}>
           {channels.map((ch, idx) => (
             <View
               key={ch.name}

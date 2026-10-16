@@ -30,7 +30,7 @@ export function SettingsScreen() {
   const th = useTheme();
   return (
     <SettingsShell title={t("settings.title")} onBack={() => goBackOr(router)} guard>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
         {SECTIONS.map((s, idx) => (
           <View key={s} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
             <ListItem

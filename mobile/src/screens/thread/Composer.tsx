@@ -354,7 +354,8 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
     return (
       <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
-      <View style={[styles.container, { backgroundColor: th.colors.card, borderRadius: th.radius.lg }]}>
+      <View style={[styles.container, th.bezel]}>
+      <View style={[th.surface, { borderRadius: th.radius.lg, padding: 4 }]}>
         {isSlash ? (
           <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
         ) : isMention && activeMention ? (
@@ -489,6 +490,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
             chatKey={chatKey}
           />
         ) : null}
+      </View>
       </View>
       </View>
     );
