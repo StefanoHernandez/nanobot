@@ -9,6 +9,7 @@ import { toast } from "../../../ui/components/Toast";
 import { useSettings } from "../../../settings/store";
 import { useSkills } from "../../../ecosystem/skills";
 import { installGate, isPolicyError, toastEcosystemError } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
 import { SkillDetailSheet } from "./SkillDetailSheet";
 import { SkillItem, SkillRow } from "./SkillRow";
 import type { MarketplaceSkillSummary } from "@/lib/types";
@@ -42,7 +43,8 @@ export function SkillsScreen() {
     return () => unsub?.();
   }, [nav, refreshSettings]);
 
-  const gateAllowed = installGate(settings).allowed;
+  const privileged = usePrivileged();
+  const gateAllowed = installGate(settings, privileged).allowed;
 
   const [tab, setTab] = useState<SkillsTab>("installed");
   const [searchQuery, setSearchQuery] = useState("");

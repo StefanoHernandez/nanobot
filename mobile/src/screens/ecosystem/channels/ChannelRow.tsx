@@ -6,6 +6,7 @@ import { channelDisable, channelEnable } from "../../../ecosystem/channels";
 import { Dialog, toast } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { installGate, toastEcosystemError } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
 import type { NanobotFeatureInfo } from "@/lib/types";
 
 export type ChannelRowProps = {
@@ -21,7 +22,8 @@ export function ChannelRow({ channel, onPress, onRefresh }: ChannelRowProps) {
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const gateAllowed = installGate(settings).allowed;
+  const privileged = usePrivileged();
+  const gateAllowed = installGate(settings, privileged).allowed;
 
   const isFailed = !!channel.runtime_error || channel.runtime_status === "failed";
   const isRunning = !!channel.running || channel.runtime_status === "running";

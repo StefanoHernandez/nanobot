@@ -481,7 +481,13 @@ def dispatch_devices_get(router: Any, request: WsRequest, got: str) -> Response 
     secret = router.config.token_issue_secret.strip() or router.config.token.strip()
     if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
-    payload = {"devices": list_devices_public()}
+    devices = list_devices_public()
+    # Who is asking: the app shows install buttons to a full-power device even with the host flag off.
+    raw = _auth_token(request.headers)
+    with _DEVICE_TOKENS_LOCK:
+        self_id = _DEVICE_TOKENS.get(raw) if raw else None
+    full_power = any(d["id"] == self_id and d["full_power"] for d in devices) if self_id else False
+    payload = {"devices": devices, "self": {"id": self_id, "full_power": full_power}}
     return http_json_response(payload, extra_headers=[("Cache-Control", "no-store")])
 
 

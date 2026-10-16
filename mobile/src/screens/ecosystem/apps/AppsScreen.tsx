@@ -7,6 +7,7 @@ import { IconButton, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { useSettings } from "../../../settings/store";
 import { installGate } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
 import { CliAppsTab } from "./CliAppsTab";
 import { McpTab } from "./McpTab";
 import { PluginsTab } from "./PluginsTab";
@@ -31,7 +32,8 @@ export function AppsScreen() {
     return () => unsub?.();
   }, [nav, refreshSettings]);
 
-  const gateAllowed = installGate(settings).allowed;
+  const privileged = usePrivileged();
+  const gateAllowed = installGate(settings, privileged).allowed;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: th.colors.background }]}>

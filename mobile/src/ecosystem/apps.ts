@@ -3,6 +3,7 @@ import type { CliAppInfo, CliAppsPayload, NanobotFeatureInfo, NanobotFeaturesPay
 import { useSession } from "../state/sessionStore";
 import { useSettings } from "../settings/store";
 import { installGate, longMutation } from "./common";
+import { usePrivileged } from "./privilege";
 
 const policyError = () =>
   Object.assign(new Error("Remote package installation is disabled on the host"), { policy: true, status: 403 });
@@ -10,6 +11,7 @@ const policyError = () =>
 export function useCliApps() {
   const { session } = useSession();
   const { data: settings, mutate } = useSettings();
+  const privileged = usePrivileged();
   const [apps, setApps] = useState<CliAppInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export function useCliApps() {
 
   const mutateWithGate = useCallback(
     async (action: "install" | "update" | "uninstall", name: string) => {
-      if (!installGate(settings).allowed) {
+      if (!installGate(settings, privileged).allowed) {
         throw policyError();
       }
       const res = await longMutation<CliAppsPayload>(mutate, `settings.cli_app.${action}`, { name });
@@ -49,7 +51,7 @@ export function useCliApps() {
       }
       return res;
     },
-    [settings, mutate, refresh],
+    [settings, privileged, mutate, refresh],
   );
 
   const install = useCallback((name: string) => mutateWithGate("install", name), [mutateWithGate]);
@@ -71,6 +73,7 @@ export function useCliApps() {
 export function useFeatures() {
   const { session } = useSession();
   const { data: settings, mutate } = useSettings();
+  const privileged = usePrivileged();
   const [payload, setPayload] = useState<NanobotFeaturesPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +102,7 @@ export function useFeatures() {
 
   const enable = useCallback(
     async (name: string, instanceId?: string) => {
-      if (!installGate(settings).allowed) {
+      if (!installGate(settings, privileged).allowed) {
         throw policyError();
       }
       const res = await longMutation<NanobotFeaturesPayload>(mutate, "settings.feature.enable", {
@@ -113,7 +116,7 @@ export function useFeatures() {
       }
       return res;
     },
-    [settings, mutate, refresh],
+    [settings, privileged, mutate, refresh],
   );
 
   const disable = useCallback(

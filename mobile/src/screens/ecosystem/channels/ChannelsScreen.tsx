@@ -8,6 +8,7 @@ import { useChannels, usePairing } from "../../../ecosystem/channels";
 import { Button, IconButton, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { installGate } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
 import { ChannelRow } from "./ChannelRow";
 import { ChannelSheet } from "./ChannelSheet";
 import { PairingSection } from "./PairingSection";
@@ -25,7 +26,8 @@ export function ChannelsScreen() {
   const [selectedChannel, setSelectedChannel] = useState<NanobotFeatureInfo | null>(null);
 
   const isRestarting = restartState === "restarting";
-  const gateAllowed = installGate(settings).allowed;
+  const privileged = usePrivileged();
+  const gateAllowed = installGate(settings, privileged).allowed;
 
   useEffect(() => {
     const unsub = nav?.addListener?.("focus", () => {
