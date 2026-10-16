@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { useT, i18n } from "../../i18n";
+import { useT } from "../../i18n";
 import { useRestart } from "../../settings/store";
 import { Dialog, ListItem } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
@@ -45,8 +45,6 @@ export function MachineSection() {
   const { run } = useRestart();
   const [confirmRestart, setConfirmRestart] = useState(false);
 
-  const lang = i18n.language.startsWith("it") ? "it" : "en";
-
   const cpuText = data?.cpu_percent != null ? `${data.cpu_percent}%` : "—";
   const ramText = data?.memory ? `${data.memory.used_mb} / ${data.memory.total_mb} MB` : "—";
   const ramPct = data?.memory?.total_mb ? (data.memory.used_mb / data.memory.total_mb) * 100 : null;
@@ -63,11 +61,11 @@ export function MachineSection() {
   const tempText = data?.temperature_c != null ? `${data.temperature_c} °C` : "—";
   const tempColor = temperatureColor(data?.temperature_c, th);
 
-  const loadText = data?.load ? data.load.join("  ·  ") : "—";
+  const loadText = Array.isArray(data?.load) ? data.load.join("  ·  ") : "—";
   const coresText = data?.cores != null ? t("machine.cores", { count: data.cores }) : undefined;
 
-  const machineUptime = formatDuration(data?.uptime_s, lang);
-  const gatewayUptime = formatDuration(data?.gateway_uptime_s, lang);
+  const machineUptime = formatDuration(data?.uptime_s, t);
+  const gatewayUptime = formatDuration(data?.gateway_uptime_s, t);
 
   const logErrors = Array.isArray(data?.log_errors) ? [...data.log_errors].reverse().slice(0, 20) : [];
 
