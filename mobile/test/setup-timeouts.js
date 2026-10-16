@@ -2,3 +2,14 @@
 const { configure } = require("@testing-library/react-native");
 
 configure({ asyncUtilTimeout: 5000 });
+
+jest.mock("expo-speech-recognition", () => ({
+  ExpoSpeechRecognitionModule: {
+    isRecognitionAvailable: jest.fn(() => false),
+    getSupportedLocales: jest.fn(async () => ({ installedLocales: [], locales: [] })),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    start: jest.fn(),
+    stop: jest.fn(),
+    abort: jest.fn(),
+  },
+}));

@@ -210,7 +210,8 @@
     "docs": "Documentation",
     "license": "MIT License - based on HKUDS/nanobot",
     "audioReplies": "Audio replies",
-    "audioRepliesHelp": "Shows a Listen button on replies. Uses the phone's voice: free, no credits."
+    "audioRepliesHelp": "Shows a Listen button on replies. Uses the phone's voice: free, no credits.",
+    "voiceEngine": "Speech recognition"
   },
   "chats": {
     "empty": "Pick or start a chat",
@@ -279,13 +280,21 @@
     "stop": "Stop recording",
     "cancel": "Cancel recording",
     "transcribing": "Transcribing…",
+    "engineDevice": "On-device (recommended)",
+    "engineServer": "On server",
+    "engineUnavailable": "On-device speech recognition unavailable, using server",
+    "offlineHint": "For offline use, download the language in Android Settings → Speech recognition",
+    "offlineReady": "Offline ready",
+    "offlineMissing": "Online only (download language for offline use)",
     "error": {
       "permission": "Microphone permission denied",
       "tooShort": "Recording too short",
       "tooLong": "Recording too long",
       "tooBig": "Recording too large to send",
       "transcription": "Transcription failed",
-      "unavailable": "Voice input unavailable"
+      "unavailable": "Voice input unavailable",
+      "language-not-supported": "Language not supported by speech recognition",
+      "service-not-allowed": "Speech recognition service not allowed"
     }
   },
   "subagents": {

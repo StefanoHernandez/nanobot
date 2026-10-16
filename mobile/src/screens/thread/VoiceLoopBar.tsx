@@ -9,16 +9,17 @@ export type VoiceLoopBarProps = {
   level: number;
   onStop: () => void;
   onInterrupt: () => void;
+  partialText?: string;
 };
 
-export function VoiceLoopBar({ state, level, onStop, onInterrupt }: VoiceLoopBarProps) {
+export function VoiceLoopBar({ state, level, onStop, onInterrupt, partialText }: VoiceLoopBarProps) {
   const t = useT();
   const th = useTheme();
 
   const stateText = (() => {
     switch (state) {
       case "listening":
-        return t("voiceLoop.listening");
+        return partialText?.trim() ? partialText : t("voiceLoop.listening");
       case "transcribing":
         return t("voiceLoop.transcribing");
       case "waiting":

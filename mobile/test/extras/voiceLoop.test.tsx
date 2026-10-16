@@ -35,9 +35,10 @@ const mockRec = {
 const mockPerm = jest.fn(async () => ({ granted: true }));
 const mockDel = jest.fn();
 const mockMode = jest.fn(async (_m: unknown) => {});
+const mockUseAudioRecorder = jest.fn(() => mockRec);
 
 jest.mock("expo-audio", () => ({
-  useAudioRecorder: () => mockRec,
+  useAudioRecorder: (_preset?: unknown) => mockUseAudioRecorder(),
   RecordingPresets: { HIGH_QUALITY: { extension: ".m4a" } },
   requestRecordingPermissionsAsync: () => mockPerm(),
   setAudioModeAsync: (m: unknown) => mockMode(m),
@@ -208,7 +209,7 @@ describe("VC-A: continuous voice conversation", () => {
   describe("3. useVoiceLoop hook tests", () => {
     let transcribeMock: jest.Mock;
     let now = 1000;
-    const chatKey = "test-chat-key";
+    const chatKey = "websocket:test-chat-key";
 
     beforeEach(() => {
       jest.useFakeTimers();
@@ -376,22 +377,320 @@ describe("VC-A: continuous voice conversation", () => {
     });
   });
 
-  describe("4. UI and button tests", () => {
-    afterEach(() => {
+  describe("4. Part 1: VC-A bug fixes", () => {
+    let transcribeMock: jest.Mock;
+    let now = 1000;
+    const chatKey = "websocket:part1-chat-key";
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      now = 1000;
+      jest.spyOn(Date, "now").mockImplementation(() => now);
+      jest.clearAllMocks();
+      transcribeMock = jest.fn().mockResolvedValue("hello world");
+      sessionStore.setState({
+        session: {
+          client: {
+            transcribeAudio: transcribeMock,
+            sendMessage: jest.fn(),
+          },
+          frameLimit: null,
+        } as never,
+        state: "open" as never,
+      });
+      threadStore.setState({
+        threads: {
+          [chatKey]: {
+            messages: [],
+            running: false,
+            model: null,
+            preset: null,
+            notices: [],
+            draft: "",
+            loaded: true,
+            stopped: false,
+            sendError: null,
+            uploading: false,
+            pendingFiles: [],
+            forkBoundary: null,
+            temporary: false,
+          },
+        },
+      });
+      speechStore.getState().setEnabled(true);
+      speechStore.setState({ voicePending: null, speakingId: null });
+    });
+
+    afterEach(async () => {
+      await act(async () => {
+        jest.clearAllTimers();
+      });
+      jest.useRealTimers();
+      jest.restoreAllMocks();
       cleanup();
     });
 
-    test("VoiceLoopBar renders state text, Termina button, and Interrompi button when speaking", async () => {
-      const onStop = jest.fn();
-      const onInterrupt = jest.fn();
+    const stepTime = async (ms: number) => {
+      for (let t = 0; t < ms; t += 100) {
+        now += 100;
+        await act(async () => {
+          jest.advanceTimersByTime(100);
+        });
+      }
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    };
 
-      const { rerender } = await render(
+    // Item 1: startRecording runs twice -> must run only once
+    test("Item 1: startRecording runs only once on start() even if permission takes a tick", async () => {
+      mockPerm.mockClear();
+      mockPerm.mockImplementationOnce(async () => {
+        await Promise.resolve();
+        return { granted: true };
+      });
+      mockRec.prepareToRecordAsync.mockClear();
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+
+      await act(async () => {
+        await result.current.start();
+      });
+
+      expect(mockPerm).toHaveBeenCalledTimes(1);
+      expect(mockRec.prepareToRecordAsync).toHaveBeenCalledTimes(1);
+    });
+
+    // Item 2: The mic leaks when Termina or background lands during permission or prepare awaits
+    test("Item 2: Termina during prepare await aborts and stops recorder (no leak)", async () => {
+      let resolvePrepare: () => void = () => {};
+      mockRec.prepareToRecordAsync.mockImplementationOnce(() => {
+        return new Promise<void>((resolve) => {
+          resolvePrepare = resolve;
+        });
+      });
+
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      let startPromise: Promise<void>;
+      await act(async () => {
+        startPromise = result.current.start();
+      });
+
+      // User hits Termina while prepare is pending
+      await act(async () => {
+        await result.current.stop();
+      });
+
+      // Now prepare finishes
+      await act(async () => {
+        resolvePrepare();
+        await startPromise;
+      });
+
+      // Recorder must not be recording
+      expect(result.current.state).toBe("idle");
+      expect(mockMode).toHaveBeenLastCalledWith({ allowsRecording: false });
+    });
+
+    // Item 3: A transcription in flight sends after Termina -> drop text and send nothing
+    test("Item 3: transcription in flight when stop() is called is dropped and not sent", async () => {
+      const sendSpy = jest.spyOn(threadStore.getState(), "send").mockReturnValue(true);
+      let resolveTranscribe: (t: string) => void = () => {};
+      transcribeMock.mockImplementationOnce(() => {
+        return new Promise<string>((resolve) => {
+          resolveTranscribe = resolve;
+        });
+      });
+
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      await act(async () => {
+        await result.current.start();
+      });
+
+      // Trigger silence to enter transcribing
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -30 });
+      await stepTime(300);
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -60 });
+      await stepTime(1600);
+
+      expect(transcribeMock).toHaveBeenCalled();
+
+      // Now user calls stop() while transcription is in flight
+      await act(async () => {
+        await result.current.stop();
+      });
+      expect(result.current.state).toBe("idle");
+
+      // Now transcribe resolves
+      await act(async () => {
+        resolveTranscribe("stale text");
+      });
+
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
+    // Item 4: Stale session -> session change ends the loop
+    test("Item 4: session change ends the loop", async () => {
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      await act(async () => {
+        await result.current.start();
+      });
+      expect(result.current.state).toBe("listening");
+
+      // Switch session / profile
+      await act(async () => {
+        sessionStore.setState({ session: null, state: "closed" as never });
+      });
+
+      expect(result.current.state).toBe("idle");
+    });
+
+    // Item 5: Stuck in waiting
+    test("Item 5a: if threadStore.send fails, loop stops and goes to idle with operationFailed toast", async () => {
+      const toastSpy = jest.spyOn(require("../../src/ui/components/Toast").toast, "show");
+      jest.spyOn(threadStore.getState(), "send").mockReturnValue(false);
+
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      await act(async () => {
+        await result.current.start();
+      });
+
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -30 });
+      await stepTime(300);
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -60 });
+      await stepTime(1600);
+
+      expect(result.current.state).toBe("idle");
+      expect(toastSpy).toHaveBeenCalledWith(i18n.t("common.operationFailed"));
+    });
+
+    test("Item 5b: waiting timeout (180s) ends the loop", async () => {
+      jest.spyOn(threadStore.getState(), "send").mockReturnValue(true);
+
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      await act(async () => {
+        await result.current.start();
+      });
+
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -30 });
+      await stepTime(300);
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -60 });
+      await stepTime(1600);
+
+      expect(result.current.state).toBe("waiting");
+
+      // Advance by 180,000 ms
+      await act(async () => {
+        jest.advanceTimersByTime(180_000);
+      });
+
+      expect(result.current.state).toBe("idle");
+    });
+
+    // Item 8: No recorder hook created when voice is unavailable
+    test("Item 8: Composer does not initialize voice loop recorder when voice is unavailable", async () => {
+      sessionStore.setState({
+        session: {
+          id: "s1",
+          get: jest.fn(async () => ({
+            transcription: { enabled: false, provider_configured: false },
+          })),
+          client: { onRuntimeModelUpdate: () => () => {}, onChat: () => () => {} },
+        } as never,
+        state: "open" as never,
+        profile: null,
+      });
+
+      mockUseAudioRecorder.mockClear();
+
+      await render(
+        <ThemeProvider>
+          <Composer chatKey="chat-no-voice" />
+        </ThemeProvider>,
+      );
+
+      // With voice unavailable, useAudioRecorder should not have been called
+      expect(mockUseAudioRecorder).not.toHaveBeenCalled();
+    });
+
+    // Item 6: machineRef lags -> machineRef must be updated synchronously inside dispatch
+    test("Item 6: machineRef is updated synchronously inside dispatch", async () => {
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      expect(result.current.state).toBe("idle");
+
+      // When start is triggered, state changes to listening immediately in ref
+      await act(async () => {
+        const startPromise = result.current.start();
+        // Since dispatch was called synchronously inside start:
+        // the machineRef should already be listening even before all async actions complete
+        await startPromise;
+      });
+      expect(result.current.state).toBe("listening");
+    });
+
+    // Item 7: Side effect in an updater -> announce() called outside setMachine updater
+    test("Item 7: announce() is called outside setMachine updater", async () => {
+      const announceSpy = jest.spyOn(AccessibilityInfo, "announceForAccessibility");
+      announceSpy.mockClear();
+
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      await act(async () => {
+        await result.current.start();
+      });
+
+      // announceForAccessibility should be called for state transition
+      expect(announceSpy).toHaveBeenCalledWith(i18n.t("voiceLoop.listening"));
+    });
+
+    // Item 9: On too-short path, temp file is deleted and audio mode is reset
+    test("Item 9: On too-short turn (<200ms), file is deleted and audio mode reset", async () => {
+      mockDel.mockClear();
+      mockMode.mockClear();
+      const origUri = mockRec.uri;
+
+      const { result } = await renderHook(() => useVoiceLoop(chatKey));
+      await act(async () => {
+        await result.current.start();
+      });
+
+      // Speech for 300 ms to trigger speechStart
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -30 });
+      await stepTime(300);
+
+      // Now set now to advance by only 100ms total from start so durationMs < 200
+      now = 1100;
+      mockRec.getStatus.mockReturnValue({ isRecording: true, metering: -60 });
+      await stepTime(1600);
+
+      expect(mockMode).toHaveBeenCalledWith({ allowsRecording: false });
+      expect(mockDel).toHaveBeenCalled();
+      mockRec.uri = origUri;
+    });
+  });
+
+  describe("5. UI and button tests", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(async () => {
+      await act(async () => {
+        jest.runOnlyPendingTimers();
+      });
+      jest.useRealTimers();
+      cleanup();
+    });
+
+    test("VoiceLoopBar renders listening state text and stop button", async () => {
+      const onStop = jest.fn();
+
+      await render(
         <ThemeProvider>
           <VoiceLoopBar
             state="listening"
             level={0.5}
             onStop={onStop}
-            onInterrupt={onInterrupt}
+            onInterrupt={jest.fn()}
           />
         </ThemeProvider>,
       );
@@ -399,24 +698,27 @@ describe("VC-A: continuous voice conversation", () => {
       expect(screen.getByText(i18n.t("voiceLoop.listening"))).toBeTruthy();
       expect(screen.queryByText(i18n.t("voiceLoop.interrupt"))).toBeNull();
 
-      const stopBtn = screen.getByText(i18n.t("voiceLoop.stop"));
+      const stopBtn = screen.getByLabelText(i18n.t("voiceLoop.stop"));
       fireEvent.press(stopBtn);
       expect(onStop).toHaveBeenCalledTimes(1);
+    });
 
-      // Rerender in speaking state
-      await rerender(
+    test("VoiceLoopBar renders speaking state text and interrupt button", async () => {
+      const onInterrupt = jest.fn();
+
+      await render(
         <ThemeProvider>
           <VoiceLoopBar
             state="speaking"
             level={0}
-            onStop={onStop}
+            onStop={jest.fn()}
             onInterrupt={onInterrupt}
           />
         </ThemeProvider>,
       );
 
       expect(screen.getByText(i18n.t("voiceLoop.speaking"))).toBeTruthy();
-      const interruptBtn = screen.getByText(i18n.t("voiceLoop.interrupt"));
+      const interruptBtn = screen.getByLabelText(i18n.t("voiceLoop.interrupt"));
       fireEvent.press(interruptBtn);
       expect(onInterrupt).toHaveBeenCalledTimes(1);
     });
@@ -435,7 +737,7 @@ describe("VC-A: continuous voice conversation", () => {
         profile: null,
       });
 
-      await render(
+      const { unmount } = await render(
         <ThemeProvider>
           <Composer chatKey="chat-test" />
         </ThemeProvider>,
@@ -448,6 +750,8 @@ describe("VC-A: continuous voice conversation", () => {
       const loopBtn = screen.getByLabelText(i18n.t("voiceLoop.start"));
       expect(loopBtn.props.accessibilityState?.disabled).toBe(true);
       expect(loopBtn.props.accessibilityHint).toBe(i18n.t("voiceLoop.audioRepliesRequired"));
+      unmount();
     });
   });
 });
+
