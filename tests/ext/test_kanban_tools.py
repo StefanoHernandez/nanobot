@@ -176,3 +176,12 @@ async def test_list_and_create_do_not_need_a_task_id(store):
     assert "task_id is required" not in str(created)
     missing = await _as("kanban:t1:coder", tool, action="complete", summary="done")
     assert "task_id is required" in str(missing)
+
+
+async def test_update_names_a_missing_card_and_keeps_a_working_one(store):
+    tool = kt.KanbanTool()
+    missing = await _as("websocket:abc", tool, action="update", task_id="ghost", title="x")
+    assert "not_found" in str(missing)
+    busy = await _as("websocket:abc", tool, action="update", task_id="t1", start=True)
+    assert "already_working" in str(busy)
+    assert store.get_task_detail("t1")["task"]["status"] == "review"
