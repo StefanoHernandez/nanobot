@@ -255,12 +255,22 @@ export function useCosts(days: number = 30) {
 
 export function useCostsBackgroundWatcher(): void {
   const isOpen = useStore(sessionStore, (s) => s.state === "open");
+  const profileId = useStore(sessionStore, (s) => s.profile?.id);
   const dailyCap = useStore(costsStore, (s) => s.data?.daily_cap_usd);
+
+  useEffect(() => {
+    if (isOpen) {
+      void costsStore.getState().refresh(1);
+    }
+  }, [isOpen, profileId]);
 
   usePolling({
     enabled: isOpen && dailyCap != null,
     intervalMs: 600000,
-    tick: () => costsStore.getState().refresh(),
+    tick: () => costsStore.getState().refresh(1),
     background: true,
   });
 }
+
+export const useCostsWatcher = useCostsBackgroundWatcher;
+

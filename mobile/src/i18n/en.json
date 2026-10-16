@@ -1014,12 +1014,30 @@
     "selectedDay": "Day: {{date}}",
     "allDays": "All days",
     "capSection": "Daily spending limit",
-    "inOutTokens": "In: {{input}} · Out: {{output}}"
+    "inOutTokens": "In: {{input}} · Out: {{output}}",
+    "priceSummary": "${{input}} in / ${{output}} out{{cache}}",
+    "cacheReadPart": " · ${{price}} cache",
+    "cacheWritePart": " · ${{price}} write",
+    "cacheBothPart": " · ${{read}} read / ${{write}} write",
+    "capPlaceholder": "e.g. 5.00",
+    "alertPctPlaceholder": "80",
+    "modelPlaceholder": "provider/model",
+    "inputPricePlaceholder": "e.g. 3.0",
+    "outputPricePlaceholder": "e.g. 15.0",
+    "cacheReadPlaceholder": "e.g. 0.3",
+    "cacheWritePlaceholder": "e.g. 3.75"
   },
   "home": {
     "hello": "Hi, I'm {{name}}"
   },
   "machine": {
+    "units": {
+      "s": "s",
+      "min": "min",
+      "h": "h",
+      "day": "day",
+      "days": "days"
+    },
     "gateway": "Gateway",
     "noAccess": "Access denied",
     "noErrors": "No recent errors",

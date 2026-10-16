@@ -95,21 +95,26 @@ describe("MD-A: Machine Dashboard", () => {
 
   // 1. Duration helper tests
   describe("Duration helper (formatDuration)", () => {
-    test("formats 0 s, 59 s, 61 min, 3 days 4 h in en and 3 g 4 h in it", () => {
-      expect(formatDuration(0, "en")).toBe("0 s");
-      expect(formatDuration(59, "en")).toBe("59 s");
-      expect(formatDuration(61 * 60, "en")).toBe("61 min");
-      expect(formatDuration(3 * 86400 + 4 * 3600, "en")).toBe("3 days 4 h");
+    test("formats 0 s, 59 s, 61 min, 3 days 4 h in en and 3 g 4 h in it", async () => {
+      await i18n.changeLanguage("en");
+      expect(formatDuration(0, i18n.t)).toBe("0 s");
+      expect(formatDuration(59, i18n.t)).toBe("59 s");
+      expect(formatDuration(61 * 60, i18n.t)).toBe("61 min");
+      expect(formatDuration(3 * 86400 + 4 * 3600, i18n.t)).toBe("3 days 4 h");
 
       // In Italian
-      expect(formatDuration(0, "it")).toBe("0 s");
-      expect(formatDuration(59, "it")).toBe("59 s");
-      expect(formatDuration(61 * 60, "it")).toBe("61 min");
-      expect(formatDuration(3 * 86400 + 4 * 3600, "it")).toBe("3 g 4 h");
+      await i18n.changeLanguage("it");
+      expect(formatDuration(0, i18n.t)).toBe("0 s");
+      expect(formatDuration(59, i18n.t)).toBe("59 s");
+      expect(formatDuration(61 * 60, i18n.t)).toBe("61 min");
+      expect(formatDuration(3 * 86400 + 4 * 3600, i18n.t)).toBe("3 g 4 h");
+
+      // Reset to en
+      await i18n.changeLanguage("en");
 
       // Null / undefined
-      expect(formatDuration(null, "en")).toBe("—");
-      expect(formatDuration(undefined, "en")).toBe("—");
+      expect(formatDuration(null, i18n.t)).toBe("—");
+      expect(formatDuration(undefined, i18n.t)).toBe("—");
     });
   });
 
@@ -120,10 +125,10 @@ describe("MD-A: Machine Dashboard", () => {
       expect(temperatureColor(64, lightTheme)).toBe(lightTheme.colors.foreground);
       // 64.9 °C: normal
       expect(temperatureColor(64.9, lightTheme)).toBe(lightTheme.colors.foreground);
-      // 65 °C: warning (turns warning colour at 65 °C or more)
-      expect(temperatureColor(65, lightTheme)).toBe(lightTheme.colors.ring);
+      // 65 °C: warning (turns warning colour at 65 °C or more) -> colors.brand!
+      expect(temperatureColor(65, lightTheme)).toBe(lightTheme.colors.brand);
       // 74.9 °C: warning
-      expect(temperatureColor(74.9, lightTheme)).toBe(lightTheme.colors.ring);
+      expect(temperatureColor(74.9, lightTheme)).toBe(lightTheme.colors.brand);
       // 75 °C: danger (turns danger colour at 75 °C or more)
       expect(temperatureColor(75, lightTheme)).toBe(lightTheme.colors.destructive);
       // 80 °C: danger
