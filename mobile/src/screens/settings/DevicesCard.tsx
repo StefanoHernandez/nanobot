@@ -101,7 +101,7 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   return (
     <>
       <Head>{isWeb ? t("about.devicesAll", { defaultValue: t("settings.devicesAll") }) : t("settings.devices")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         {phase === "error" ? (
           <>
             <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, padding: 16 }}>{t("common.error")}</Text>

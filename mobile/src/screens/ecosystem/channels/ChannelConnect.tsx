@@ -40,7 +40,7 @@ export function ChannelConnect({
   if (!supportsConnect(channel)) return null;
 
   return (
-    <View style={[styles.container, { borderColor: th.colors.border, backgroundColor: th.colors.card, borderRadius: th.radius.md }]}>
+    <View style={[styles.container, { borderColor: th.colors.border, ...th.surface }]}>
       <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
         {t("channels.connect.button")}
       </Text>

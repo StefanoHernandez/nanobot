@@ -125,7 +125,7 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
         return (
           <View key={g}>
             <Head>{title}</Head>
-            <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden", paddingVertical: 8 }}>
+            <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden", paddingVertical: 8 }}>
               {gf.map((f, idx) => (
                 <View key={f.path} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
                   {row(f)}
@@ -190,7 +190,7 @@ function Features() {
   return (
     <>
       <Head>{t("system.features")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         {shown.map((f, idx) => (
           <View key={f.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
             <ListItem
@@ -219,7 +219,7 @@ export function SystemSection() {
   if (!data) return null;
   return (
     <>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
         <ListItem title={t("system.configPath")} subtitle={data.runtime?.config_path} />
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem title={t("system.applyState")} subtitle={data.apply_state?.status ?? "idle"} />

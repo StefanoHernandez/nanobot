@@ -29,13 +29,25 @@ export function Button({ title, onPress, variant = "primary", color, disabled, l
       accessibilityState={accessibilityState ?? { disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
       onPress={onPress}
-      style={[styles.base, { backgroundColor: bg, borderRadius: 999, opacity: inactive ? 0.5 : 1 }]}
+      style={({ pressed }) => [
+        styles.base,
+        {
+          backgroundColor: bg,
+          borderRadius: 999,
+          opacity: inactive ? 0.5 : 1,
+          // A physical press: the pill sinks slightly instead of only changing colour.
+          transform: [{ scale: pressed && !inactive ? 0.97 : 1 }],
+          boxShadow: variant === "primary" && !inactive ? `0 8px 20px -10px ${c.primary}` : undefined,
+          borderWidth: variant === "secondary" ? 1 : 0,
+          borderColor: c.border,
+        },
+      ]}
     >
-      {loading ? <ActivityIndicator color={fg} /> : <Text style={{ color: fg, fontFamily: th.font.medium, fontSize: 16 }}>{title}</Text>}
+      {loading ? <ActivityIndicator color={fg} /> : <Text style={{ color: fg, fontFamily: th.font.medium, fontSize: 15, letterSpacing: 0.2 }}>{title}</Text>}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { minHeight: 48, paddingHorizontal: 20, alignItems: "center", justifyContent: "center" },
+  base: { minHeight: 48, paddingHorizontal: 24, alignItems: "center", justifyContent: "center" },
 });

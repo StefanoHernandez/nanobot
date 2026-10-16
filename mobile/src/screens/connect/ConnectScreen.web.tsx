@@ -169,7 +169,7 @@ export function ConnectScreen() {
         ) : null}
 
         {list.length > 0 ? (
-          <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, overflow: "hidden", marginBottom: 20 }}>
+          <View style={{ ...th.surface, overflow: "hidden", marginBottom: 20 }}>
             {list.map((p) => (
               <ListItem key={p.id} title={p.name} subtitle={p.baseUrl} onPress={() => open(p.id)} onLongPress={() => setToDelete(p)} />
             ))}

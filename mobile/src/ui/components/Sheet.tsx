@@ -23,6 +23,10 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
           styles.sheet,
           {
             backgroundColor: th.colors.popover,
+            borderWidth: 1,
+            borderBottomWidth: 0,
+            borderColor: th.colors.border,
+            boxShadow: "0 -20px 48px -24px rgba(0,0,0,0.35)",
             borderTopLeftRadius: th.radius.lg,
             borderTopRightRadius: th.radius.lg,
             paddingBottom: insets.bottom + 16,
@@ -40,5 +44,5 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1 },
-  sheet: { padding: 20 },
+  sheet: { padding: 24 },
 });

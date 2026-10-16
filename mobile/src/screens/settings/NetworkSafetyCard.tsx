@@ -28,14 +28,14 @@ export function NetworkSafetyCard() {
   return (
     <>
       <Head>{t("netsafe.title")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem
           title={t("netsafe.local")} subtitle={t("netsafe.localHelp")}
           right={<Switch accessibilityLabel={t("netsafe.local")} value={a.webui_allow_local_service_access} onValueChange={(v) => (v ? setConfirmingLocal(true) : void save(false, mode))} />}
         />
       </View>
       <Head>{t("netsafe.mode")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 12 }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 12 }}>
         <Chips
           options={[{ value: "default", label: t("netsafe.default") }, { value: "full", label: t("netsafe.full") }]} value={mode}
           onChange={(m) => (m === mode ? undefined : isDangerousAccessMode(m) ? setConfirming(true) : void save(a.webui_allow_local_service_access, m))}

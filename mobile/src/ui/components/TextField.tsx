@@ -25,7 +25,7 @@ export function TextField({ label, value, onChangeText, secureTextEntry, helper,
   return (
     <View style={styles.wrap}>
       <Text style={{ color: c.foreground, fontFamily: th.font.medium, fontSize: 14, marginBottom: 6 }}>{label}</Text>
-      <View style={[styles.row, { borderColor: error ? c.destructive : c.input, borderRadius: th.radius.sm, backgroundColor: c.card }, rowStyle]}>
+      <View style={[styles.row, { borderColor: error ? c.destructive : c.input, borderRadius: th.radius.sm, backgroundColor: c.muted }, rowStyle]}>
         <TextInput
           accessibilityLabel={label}
           style={[styles.input, { color: c.foreground, fontFamily: mono ? th.font.mono : th.font.regular }, inputStyle]}
