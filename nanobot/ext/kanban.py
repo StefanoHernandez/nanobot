@@ -102,6 +102,19 @@ def _optional_bot(raw: Any) -> str | None:
     return raw.strip()
 
 
+_SCHEDULE_HORIZON_MS = 366 * 24 * 60 * 60 * 1000
+
+
+def _scheduled_at(raw: Any, now_ms: int) -> int | None:
+    if raw is None:
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise KanbanError(400, "invalid_scheduled_at")
+    if raw < 0 or raw > now_ms + _SCHEDULE_HORIZON_MS:
+        raise KanbanError(400, "invalid_scheduled_at")
+    return raw
+
+
 def _recurrence(raw: Any) -> str:
     if raw is None or raw == "":
         return ""
@@ -566,13 +579,14 @@ class KanbanStore:
                 raise KanbanError(409, "task_limit")
             new_id = _new_id(body.get("id"))
             now = _now_ms()
+            scheduled = _scheduled_at(body.get("scheduled_at_ms"), now)
             conn.execute(
                 """
                 INSERT INTO tasks (
                     id, board_id, title, description, status, priority,
                     assignee_bot_id, reviewer_bot_id, workspace_mode, recurrence_expr,
-                    created_at_ms, updated_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    scheduled_at_ms, created_at_ms, updated_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     new_id,
@@ -585,6 +599,7 @@ class KanbanStore:
                     _optional_bot(body.get("reviewer_bot_id")),
                     workspace_mode,
                     _recurrence(body.get("recurrence_expr")),
+                    scheduled,
                     now,
                     now,
                 ),
@@ -630,6 +645,8 @@ class KanbanStore:
                     fields[key] = _optional_bot(body[key])
             if "recurrence_expr" in body:
                 fields["recurrence_expr"] = _recurrence(body["recurrence_expr"])
+            if "scheduled_at_ms" in body:
+                fields["scheduled_at_ms"] = _scheduled_at(body["scheduled_at_ms"], _now_ms())
             if "max_retries" in body:
                 fields["max_retries"] = _bounded_int(
                     body["max_retries"], default=2, low=0, high=20, code="invalid_retries"
@@ -957,7 +974,7 @@ class KanbanStore:
                     scheduled = now + seconds * 1000
                     conn.execute(
                         """
-                        UPDATE tasks SET status = 'todo', scheduled_at_ms = ?, summary = ?,
+                        UPDATE tasks SET status = 'ready', scheduled_at_ms = ?, summary = ?,
                             artifacts_json = ?, updated_at_ms = ?
                         WHERE id = ?
                         """,

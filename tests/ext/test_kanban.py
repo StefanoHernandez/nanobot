@@ -163,7 +163,7 @@ def test_record_failure_transient_and_blocked(store_path):
     assert "Max retries (2) exceeded" in task["blocked_reason"]
 
 
-def test_recurrence_every_requeues_todo(store_path):
+def test_recurrence_every_requeues_ready(store_path):
     store = _store(store_path)
     _board(store)
     _bot(store, "coder")
@@ -173,11 +173,55 @@ def test_recurrence_every_requeues_todo(store_path):
     store.complete_task("tick", "cycle done", ["log.txt"])
 
     task = store.get_task_detail("tick")["task"]
-    assert task["status"] == "todo"
+    assert task["status"] == "ready"
     assert task["scheduled_at_ms"] is not None
     assert task["scheduled_at_ms"] > before_ms
     runs = store.get_task_detail("tick")["runs"]
     assert runs and runs[-1]["status"] == "done"
+
+
+def test_recurrence_waits_until_scheduled_at(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "tick", status="ready", assignee="coder", recurrence_expr="every:3600s")
+    store.claim_ready_tasks(0)
+    store.complete_task("tick", "cycle done", ["log.txt"])
+    task = store.get_task_detail("tick")["task"]
+    scheduled = task["scheduled_at_ms"]
+    assert isinstance(scheduled, int)
+    assert store.claim_ready_tasks(scheduled - 1) == []
+    assert store.get_task_detail("tick")["task"]["status"] == "ready"
+    claimed = store.claim_ready_tasks(scheduled)
+    assert [row["task_id"] for row in claimed] == ["tick"]
+
+
+def test_scheduled_at_create_and_update(store_path):
+    store = _store(store_path)
+    _board(store)
+    now = kb._now_ms()
+    when = now + 60_000
+    task = store.save_task({"board_id": "main", "title": "later", "scheduled_at_ms": when})
+    assert task["scheduled_at_ms"] == when
+    cleared = store.save_task({"id": task["id"], "scheduled_at_ms": None})
+    assert cleared["scheduled_at_ms"] is None
+    again = store.save_task({"id": task["id"], "scheduled_at_ms": when + 1000})
+    assert again["scheduled_at_ms"] == when + 1000
+
+
+def test_scheduled_at_rejects_bool_and_far_future(store_path):
+    store = _store(store_path)
+    _board(store)
+    now = kb._now_ms()
+    with pytest.raises(kb.KanbanError) as bad_type:
+        store.save_task({"board_id": "main", "title": "bad", "scheduled_at_ms": True})
+    assert bad_type.value.status == 400
+    assert bad_type.value.code == "invalid_scheduled_at"
+    too_far = now + 367 * 24 * 60 * 60 * 1000
+    with pytest.raises(kb.KanbanError) as far:
+        store.save_task({"board_id": "main", "title": "far", "scheduled_at_ms": too_far})
+    assert far.value.status == 400
+    assert far.value.code == "invalid_scheduled_at"
 
 
 def test_mentions_hop_limit(store_path):
