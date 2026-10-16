@@ -1014,12 +1014,30 @@
     "selectedDay": "Giorno: {{date}}",
     "allDays": "Tutti i giorni",
     "capSection": "Limite di spesa giornaliero",
-    "inOutTokens": "In: {{input}} · Out: {{output}}"
+    "inOutTokens": "In: {{input}} · Out: {{output}}",
+    "priceSummary": "${{input}} in / ${{output}} out{{cache}}",
+    "cacheReadPart": " · ${{price}} cache",
+    "cacheWritePart": " · ${{price}} write",
+    "cacheBothPart": " · ${{read}} read / ${{write}} write",
+    "capPlaceholder": "es. 5.00",
+    "alertPctPlaceholder": "80",
+    "modelPlaceholder": "provider/modello",
+    "inputPricePlaceholder": "es. 3.0",
+    "outputPricePlaceholder": "es. 15.0",
+    "cacheReadPlaceholder": "es. 0.3",
+    "cacheWritePlaceholder": "es. 3.75"
   },
   "home": {
     "hello": "Ciao, sono {{name}}"
   },
   "machine": {
+    "units": {
+      "s": "s",
+      "min": "min",
+      "h": "h",
+      "day": "g",
+      "days": "g"
+    },
     "gateway": "Gateway",
     "noAccess": "Accesso negato",
     "noErrors": "Nessun errore recente",

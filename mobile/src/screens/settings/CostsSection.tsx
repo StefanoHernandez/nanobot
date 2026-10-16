@@ -69,16 +69,17 @@ export function CostsSection() {
   const [sheetInputPrice, setSheetInputPrice] = useState("");
   const [sheetOutputPrice, setSheetOutputPrice] = useState("");
   const [sheetCacheReadPrice, setSheetCacheReadPrice] = useState("");
+  const [sheetCacheWritePrice, setSheetCacheWritePrice] = useState("");
 
   const sheetModelKeyRef = React.useRef("");
   const sheetInputPriceRef = React.useRef("");
   const sheetOutputPriceRef = React.useRef("");
   const sheetCacheReadPriceRef = React.useRef("");
+  const sheetCacheWritePriceRef = React.useRef("");
 
   const handleRangeChange = (newRange: "7" | "30") => {
     setRange(newRange);
     setSelectedDay(null);
-    void costsStore.getState().refresh(Number(newRange));
   };
 
   const openAddPrice = (prefillKey = "") => {
@@ -86,10 +87,12 @@ export function CostsSection() {
     sheetInputPriceRef.current = "";
     sheetOutputPriceRef.current = "";
     sheetCacheReadPriceRef.current = "";
+    sheetCacheWritePriceRef.current = "";
     setSheetModelKey(prefillKey);
     setSheetInputPrice("");
     setSheetOutputPrice("");
     setSheetCacheReadPrice("");
+    setSheetCacheWritePrice("");
     setSheetIsEdit(false);
     setSheetOpen(true);
   };
@@ -99,10 +102,12 @@ export function CostsSection() {
     sheetInputPriceRef.current = String(price.input);
     sheetOutputPriceRef.current = String(price.output);
     sheetCacheReadPriceRef.current = price.cache_read != null ? String(price.cache_read) : "";
+    sheetCacheWritePriceRef.current = price.cache_write != null ? String(price.cache_write) : "";
     setSheetModelKey(key);
     setSheetInputPrice(String(price.input));
     setSheetOutputPrice(String(price.output));
     setSheetCacheReadPrice(price.cache_read != null ? String(price.cache_read) : "");
+    setSheetCacheWritePrice(price.cache_write != null ? String(price.cache_write) : "");
     setSheetIsEdit(true);
     setSheetOpen(true);
   };
@@ -117,12 +122,30 @@ export function CostsSection() {
       return;
     }
 
+    let crVal: number | undefined = undefined;
+    if (sheetCacheReadPriceRef.current.trim()) {
+      const cr = parseFloat(sheetCacheReadPriceRef.current.trim());
+      if (isNaN(cr) || cr < 0) {
+        toast.show(t("costs.invalidPrice"));
+        return;
+      }
+      crVal = cr;
+    }
+
+    let cwVal: number | undefined = undefined;
+    if (sheetCacheWritePriceRef.current.trim()) {
+      const cw = parseFloat(sheetCacheWritePriceRef.current.trim());
+      if (isNaN(cw) || cw < 0) {
+        toast.show(t("costs.invalidPrice"));
+        return;
+      }
+      cwVal = cw;
+    }
+
     const currentPrices = { ...(data?.prices ?? {}) };
     const entry: ModelPrice = { input: inVal, output: outVal };
-    if (sheetCacheReadPriceRef.current.trim()) {
-      const cr = parseFloat(sheetCacheReadPriceRef.current);
-      if (!isNaN(cr) && cr >= 0) entry.cache_read = cr;
-    }
+    if (crVal !== undefined) entry.cache_read = crVal;
+    if (cwVal !== undefined) entry.cache_write = cwVal;
     currentPrices[key] = entry;
 
     const ok = await costsStore.getState().saveSettings({ prices: currentPrices });
@@ -334,9 +357,11 @@ export function CostsSection() {
                   key={bar.date}
                   testID="costs-day-bar"
                   onPress={() => setSelectedDay(selectedDay === bar.date ? null : bar.date)}
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                   style={{
                     flex: 1,
                     height: "100%",
+                    minHeight: 48,
                     justifyContent: "flex-end",
                     alignItems: "center",
                   }}
@@ -572,8 +597,18 @@ export function CostsSection() {
                     marginTop: 2,
                   }}
                 >
-                  ${price.input} in / ${price.output} out
-                  {price.cache_read != null ? ` · $${price.cache_read} cache` : ""}
+                  {t("costs.priceSummary", {
+                    input: price.input,
+                    output: price.output,
+                    cache:
+                      price.cache_read != null && price.cache_write != null
+                        ? t("costs.cacheBothPart", { read: price.cache_read, write: price.cache_write })
+                        : price.cache_read != null
+                          ? t("costs.cacheReadPart", { price: price.cache_read })
+                          : price.cache_write != null
+                            ? t("costs.cacheWritePart", { price: price.cache_write })
+                            : "",
+                  })}
                 </Text>
               </View>
               <IconButton
@@ -606,7 +641,7 @@ export function CostsSection() {
             setCapText(v);
           }}
           onBlur={handleCapBlur}
-          placeholder="e.g. 5.00"
+          placeholder={t("costs.capPlaceholder")}
           keyboardType="numeric"
           autoCapitalize="none"
         />
@@ -619,7 +654,7 @@ export function CostsSection() {
             setAlertPctText(v);
           }}
           onBlur={handleAlertPctBlur}
-          placeholder="80"
+          placeholder={t("costs.alertPctPlaceholder")}
           keyboardType="numeric"
           autoCapitalize="none"
         />
@@ -639,7 +674,7 @@ export function CostsSection() {
               sheetModelKeyRef.current = v;
               setSheetModelKey(v);
             }}
-            placeholder="provider/model"
+            placeholder={t("costs.modelPlaceholder")}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!sheetIsEdit}
@@ -652,7 +687,7 @@ export function CostsSection() {
               sheetInputPriceRef.current = v;
               setSheetInputPrice(v);
             }}
-            placeholder="e.g. 3.0"
+            placeholder={t("costs.inputPricePlaceholder")}
             keyboardType="numeric"
             autoCapitalize="none"
           />
@@ -664,7 +699,7 @@ export function CostsSection() {
               sheetOutputPriceRef.current = v;
               setSheetOutputPrice(v);
             }}
-            placeholder="e.g. 15.0"
+            placeholder={t("costs.outputPricePlaceholder")}
             keyboardType="numeric"
             autoCapitalize="none"
           />
@@ -676,7 +711,19 @@ export function CostsSection() {
               sheetCacheReadPriceRef.current = v;
               setSheetCacheReadPrice(v);
             }}
-            placeholder="e.g. 0.3"
+            placeholder={t("costs.cacheReadPlaceholder")}
+            keyboardType="numeric"
+            autoCapitalize="none"
+          />
+
+          <TextField
+            label={t("costs.cacheWritePrice")}
+            value={sheetCacheWritePrice}
+            onChangeText={(v) => {
+              sheetCacheWritePriceRef.current = v;
+              setSheetCacheWritePrice(v);
+            }}
+            placeholder={t("costs.cacheWritePlaceholder")}
             keyboardType="numeric"
             autoCapitalize="none"
           />
