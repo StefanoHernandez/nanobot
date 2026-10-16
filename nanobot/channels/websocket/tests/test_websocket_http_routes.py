@@ -972,6 +972,38 @@ async def test_webui_skill_delete_remains_local_only(
 
 
 @pytest.mark.asyncio
+async def test_webui_skill_delete_allows_a_full_power_device(
+    bus: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nanobot.ext import devices as dev
+
+    monkeypatch.setenv("NANOBOT_DEVICES_FILE", str(tmp_path / "devices.json"))
+    delete = MagicMock(return_value="deleted")
+    monkeypatch.setattr("nanobot.webui.ws_http.delete_webui_skill", delete)
+    channel = _ch(
+        bus,
+        session_manager=_seed_session(tmp_path),
+        workspace_path=tmp_path,
+        port=_free_port(),
+    )
+    _, device_id, _ = dev.register_device("phone")
+    monkeypatch.setitem(dev._DEVICE_TOKENS, "phone-api-token", device_id)
+    phone = {"Host": "arduino.example:8765", "Authorization": "Bearer phone-api-token"}
+
+    async def delete_skill() -> httpx.Response:
+        return await _webui_mutate(
+            channel, "skill.delete", {"name": "custom-skill"}, headers=phone, connection=_REMOTE
+        )
+
+    assert (await delete_skill()).status_code == 403
+    dev.set_full_power(device_id, True)
+    assert (await delete_skill()).status_code == 200
+    delete.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_webui_skill_install_honors_remote_install_opt_in(
     bus: MagicMock,
     tmp_path: Path,
