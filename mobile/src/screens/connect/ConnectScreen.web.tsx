@@ -102,7 +102,8 @@ export function ConnectScreen() {
         const data = (await res.json()) as { id: string; name: string };
         const existing = list.find((p) => p.baseUrl === baseUrl);
         const profileId = existing?.id ?? crypto.randomUUID();
-        const profileName = deviceName || (typeof window !== "undefined" ? window.location.host : "nanobot");
+        // The profile name is the bot's (thread header, greeting); deviceName names this browser on the server.
+        const profileName = existing?.name ?? "nanobot";
 
         await profiles.save({ id: profileId, name: profileName, baseUrl, auth: "cookie" });
         pairedDevice.set(profileId, data.id);
