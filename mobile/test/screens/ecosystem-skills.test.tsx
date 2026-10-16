@@ -253,7 +253,7 @@ describe("P4-U3 Skills UI", () => {
     await fireEvent.press(confirmBtn);
 
     expect(mockInstall).toHaveBeenCalled();
-    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/Enable remote installs on your computer/i));
+    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/A browser on the server or full power for this device is required/i));
   });
 
   test("I9: SkillsScreen refreshes settings on focus", async () => {

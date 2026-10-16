@@ -102,6 +102,15 @@ export function useSkills() {
     [mutate],
   );
 
+  const remove = useCallback(
+    async (name: string) => {
+      const p = await mutate<SkillActionPayload>("skill.delete", { name });
+      if (p?.skills) setSkills(p.skills);
+      return p;
+    },
+    [mutate],
+  );
+
   return {
     skills,
     loading,
@@ -113,5 +122,6 @@ export function useSkills() {
     detail,
     install,
     update,
+    remove,
   };
 }

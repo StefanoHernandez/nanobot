@@ -66,14 +66,31 @@ export async function claimDevice(baseUrl: string, code: string, name: string): 
 
 type MintResponse = { code: string; qr: string; expires_in?: number };
 
-export async function mintPairingCode(session: NanobotSession): Promise<{ code: string; qr: string }> {
+export async function mintPairingCode(session: NanobotSession, url?: string): Promise<{ code: string; qr: string }> {
+  const body = url ? JSON.stringify({ url }) : undefined;
   const res = await fetch(`${session.baseUrl}/api/ext/devices/codes`, {
     method: "POST",
     redirect: "error",
     credentials: "omit",
-    headers: { Authorization: `Bearer ${session.apiToken()}` },
+    headers: {
+      Authorization: `Bearer ${session.apiToken()}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body,
   });
-  if (!res.ok) throw new Error("mint failed");
+  if (!res.ok) {
+    let errCode = "mint failed";
+    try {
+      const data = await res.json();
+      if (data && typeof data === "object" && typeof data.error === "string") {
+        errCode = data.error;
+      }
+    } catch {}
+    const err = new Error(errCode) as Error & { status?: number; error?: string };
+    err.status = res.status;
+    err.error = errCode;
+    throw err;
+  }
   const data = (await res.json()) as MintResponse;
   if (!data.code || !data.qr) throw new Error("mint failed");
   return { code: data.code, qr: data.qr };
@@ -85,6 +102,7 @@ export type PairedDevice = {
   created: number;
   last_seen: number | null;
   revoked: boolean;
+  full_power: boolean;
 };
 
 export async function listDevices(session: NanobotSession): Promise<PairedDevice[]> {
@@ -102,6 +120,7 @@ export async function listDevices(session: NanobotSession): Promise<PairedDevice
       created: typeof rec.created === "number" ? rec.created : 0,
       last_seen: typeof last === "number" && Number.isFinite(last) ? last : null,
       revoked: rec.revoked === true,
+      full_power: rec.full_power === true,
     });
   }
   return devices;
@@ -120,4 +139,31 @@ export async function revokeDevice(session: NanobotSession, id: string): Promise
     body: JSON.stringify({ id }),
   });
   if (!res.ok) throw new Error("revoke failed");
+}
+
+export async function setFullPower(session: NanobotSession, id: string, enabled: boolean): Promise<void> {
+  if (!id) throw new Error("invalid_request");
+  const res = await fetch(`${session.baseUrl}/api/ext/devices/full-power`, {
+    method: "POST",
+    redirect: "error",
+    credentials: "omit",
+    headers: {
+      Authorization: `Bearer ${session.apiToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id, enabled }),
+  });
+  if (!res.ok) {
+    let errCode = "full_power failed";
+    try {
+      const data = await res.json();
+      if (data && typeof data === "object" && typeof data.error === "string") {
+        errCode = data.error;
+      }
+    } catch {}
+    const err = new Error(errCode) as Error & { status?: number; error?: string };
+    err.status = res.status;
+    err.error = errCode;
+    throw err;
+  }
 }

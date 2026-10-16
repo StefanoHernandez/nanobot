@@ -8,7 +8,7 @@ import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useSettings } from "../../../settings/store";
 import { useSkills } from "../../../ecosystem/skills";
-import { installGate, toastEcosystemError } from "../../../ecosystem/common";
+import { installGate, isPolicyError, toastEcosystemError } from "../../../ecosystem/common";
 import { SkillDetailSheet } from "./SkillDetailSheet";
 import { SkillItem, SkillRow } from "./SkillRow";
 import type { MarketplaceSkillSummary } from "@/lib/types";
@@ -159,7 +159,11 @@ export function SkillsScreen() {
         toast.show(t("common.success", "Success"));
       }
     } catch (e) {
-      toastEcosystemError(e, t);
+      if (isPolicyError(e)) {
+        toast.show(t("skills.installNeedsFullPower"));
+      } else {
+        toastEcosystemError(e, t);
+      }
     } finally {
       setOperatingSkill(null);
     }

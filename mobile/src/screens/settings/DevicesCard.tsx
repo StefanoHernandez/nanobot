@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
 import type { NanobotSession } from "../../core/session";
-import { listDevices, revokeDevice, type PairedDevice } from "../../core/pairing";
+import { listDevices, revokeDevice, setFullPower, type PairedDevice } from "../../core/pairing";
 import { webLogout } from "../../core/cookieBootstrap";
 import { profiles } from "../../core/profiles";
 import { i18n, useT } from "../../i18n";
@@ -11,6 +11,7 @@ import { useTheme } from "../../ui/ThemeProvider";
 import { Head } from "./common";
 import { sessionStore } from "../../state/sessionStore";
 import { pairedDevice } from "../../core/pairing";
+import { isServerBrowser } from "../../platform/serverMode";
 
 function formatLastSeen(secs: number | null, lang: string, neverLabel: string): string {
   if (secs == null) return neverLabel;
@@ -24,6 +25,8 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   const [devices, setDevices] = useState<PairedDevice[]>([]);
   const [revokeTarget, setRevokeTarget] = useState<PairedDevice | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
+  const [fullPowerTarget, setFullPowerTarget] = useState<PairedDevice | null>(null);
+  const [fullPowerBusy, setFullPowerBusy] = useState(false);
   const genRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -58,6 +61,7 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   }, [load]);
 
   const isWeb = Platform.OS === "web";
+  const isServer = isServerBrowser();
   const activeProfile = sessionStore?.getState ? sessionStore.getState()?.profile : null;
   const activeProfileId = activeProfile?.id ?? null;
   const storedId = activeProfileId ? pairedDevice.get(activeProfileId) : null;
@@ -96,6 +100,42 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
     }
   };
 
+  const onToggleFullPowerOff = async (d: PairedDevice) => {
+    try {
+      await setFullPower(session, d.id, false);
+      await load();
+    } catch (e) {
+      const err = (e as { error?: string; status?: number }).error;
+      const status = (e as { error?: string; status?: number }).status;
+      if (status === 403 || err === "local_browser_only") {
+        toast.show(t("devices.fullPowerLocalOnly"));
+      } else {
+        toast.show(t("common.operationFailed"));
+      }
+    }
+  };
+
+  const onFullPowerConfirm = async () => {
+    if (!fullPowerTarget || fullPowerBusy) return;
+    setFullPowerBusy(true);
+    try {
+      await setFullPower(session, fullPowerTarget.id, true);
+      setFullPowerTarget(null);
+      await load();
+    } catch (e) {
+      setFullPowerTarget(null);
+      const err = (e as { error?: string; status?: number }).error;
+      const status = (e as { error?: string; status?: number }).status;
+      if (status === 403 || err === "local_browser_only") {
+        toast.show(t("devices.fullPowerLocalOnly"));
+      } else {
+        toast.show(t("common.operationFailed"));
+      }
+    } finally {
+      setFullPowerBusy(false);
+    }
+  };
+
   if (phase === "404" || phase === "loading") return null;
 
   return (
@@ -113,7 +153,7 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
                     <Button
                       title={t("devices.logoutBrowser")}
                       variant="destructive"
-                      onPress={() => setRevokeTarget({ id: "__self_browser__", name: t("devices.thisBrowser"), created: 0, last_seen: null, revoked: false })}
+                      onPress={() => setRevokeTarget({ id: "__self_browser__", name: t("devices.thisBrowser"), created: 0, last_seen: null, revoked: false, full_power: false })}
                     />
                   }
                 />
@@ -137,11 +177,44 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
                     title={title}
                     subtitle={formatLastSeen(d.last_seen, i18n.language, t("settings.deviceNever"))}
                     right={
-                      <Button
-                        title={buttonTitle}
-                        variant="destructive"
-                        onPress={() => setRevokeTarget(d)}
-                      />
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                        {isServer ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
+                              {t("devices.fullPower")}
+                            </Text>
+                            <Switch
+                              accessibilityLabel={t("devices.fullPower")}
+                              value={d.full_power === true}
+                              onValueChange={(val) => {
+                                if (val) {
+                                  setFullPowerTarget(d);
+                                } else {
+                                  void onToggleFullPowerOff(d);
+                                }
+                              }}
+                            />
+                          </View>
+                        ) : d.full_power ? (
+                          <View
+                            style={{
+                              backgroundColor: th.colors.accent,
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: th.radius.sm,
+                            }}
+                          >
+                            <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 12 }}>
+                              {t("devices.fullPower")}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <Button
+                          title={buttonTitle}
+                          variant="destructive"
+                          onPress={() => setRevokeTarget(d)}
+                        />
+                      </View>
                     }
                   />
                 </View>
@@ -155,7 +228,7 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
                     <Button
                       title={t("devices.logoutBrowser")}
                       variant="destructive"
-                      onPress={() => setRevokeTarget({ id: "__self_browser__", name: t("devices.thisBrowser"), created: 0, last_seen: null, revoked: false })}
+                      onPress={() => setRevokeTarget({ id: "__self_browser__", name: t("devices.thisBrowser"), created: 0, last_seen: null, revoked: false, full_power: false })}
                     />
                   }
                 />
@@ -164,6 +237,15 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
           </>
         )}
       </View>
+      <Dialog
+        open={!!fullPowerTarget}
+        title={t("devices.fullPower")}
+        message={t("devices.fullPowerConfirm")}
+        confirmLabel={t("common.ok")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void onFullPowerConfirm()}
+        onCancel={() => setFullPowerTarget(null)}
+      />
       <Dialog
         open={!!revokeTarget}
         destructive

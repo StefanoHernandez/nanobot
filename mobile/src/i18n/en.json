@@ -23,7 +23,13 @@
     "pairFromServer": "Generate the code from an already paired phone or from the server",
     "thisBrowser": "this browser",
     "logoutBrowser": "Log out from this browser",
-    "logoutConfirm": "You will be disconnected from this browser."
+    "logoutConfirm": "You will be disconnected from this browser.",
+    "phoneUrl": "Phone address",
+    "phoneUrlHint": "Use the server's Tailscale address: the phone cannot reach 127.0.0.1",
+    "phoneUrlInvalid": "Invalid address",
+    "fullPower": "Full power",
+    "fullPowerConfirm": "This device will be able to install and delete skills and plugins and change server-only settings. Grant only to devices you own.",
+    "fullPowerLocalOnly": "A browser on the server or full power for this device is required"
   },
   "about": {
     "devices": "Paired phones",
@@ -861,7 +867,11 @@
     "emptyInstalled": "No skills installed",
     "version": "v{{version}}",
     "source": "Source: {{source}}",
-    "detailTitle": "Skill details"
+    "detailTitle": "Skill details",
+    "delete": "Delete skill",
+    "deleteConfirm": "Delete {{name}}? The skill's files will be deleted from the server.",
+    "deleteNeedsFullPower": "A browser on the server or full power for this device is required",
+    "installNeedsFullPower": "A browser on the server or full power for this device is required"
   },
   "automations": {
     "title": "Automations",
