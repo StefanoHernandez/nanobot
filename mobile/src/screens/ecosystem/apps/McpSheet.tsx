@@ -81,7 +81,7 @@ export function McpSheet({
 
   return (
     <>
-      <Sheet open={open} title={preset.display_name || preset.name} onClose={onClose}>
+      <Sheet open={open} title={preset.display_name || preset.name} onClose={onClose} scroll={false}>
         <KeyboardAvoidingView behavior="padding">
           <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
             {preset.description ? (

@@ -82,7 +82,7 @@ export function SkillDetailSheet({
 
   return (
     <>
-      <Sheet open={open} title={skillDetail?.name || skillName} onClose={onClose}>
+      <Sheet open={open} title={skillDetail?.name || skillName} onClose={onClose} scroll={false}>
         <View style={styles.container}>
           {loading ? (
             <View style={styles.loadingWrapper}>

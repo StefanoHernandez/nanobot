@@ -341,7 +341,18 @@ export function useVoiceLoop(chatKey: string) {
   }, [clearTick, dropFile, resetAudioMode]);
 
   const stop = useCallback(async () => {
+    const engine = deviceEngineRef.current;
+    let kept = "";
+    if (engine) {
+      deviceEngineRef.current = null;
+      try {
+        kept = ((await engine.stop()) ?? "").trim();
+      } catch {
+        kept = "";
+      }
+    }
     await stopAll();
+    if (kept) dispatch({ type: "transcript", text: kept });
     dispatch({ type: "stop" });
   }, [stopAll, dispatch]);
 

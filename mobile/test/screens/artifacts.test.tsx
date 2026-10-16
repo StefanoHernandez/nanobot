@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FileViewer } from "../../src/screens/viewer/FileViewer";
 import { artifactStore } from "../../src/screens/viewer/artifactStore";
+import { kv } from "../../src/platform/storage";
+import { toast } from "../../src/ui/components/Toast";
 import { CodeBlock } from "../../src/ui/markdown/CodeBlock";
 import { sessionStore } from "../../src/state/sessionStore";
 import { threadStore } from "../../src/state/threadStore";
@@ -843,15 +845,21 @@ test("network stays off until this preview confirms it, and remote scripts stay 
   expect(buildShellHtml({ kind: "html", html: "<p>x</p>", network: true, isLightPreview: true })).toContain("connect-src 'none'");
 
   artifactStore.set("<p>hi</p>", "preview.html");
+  kv.del("artifact.networkHint");
+  const hint = jest.spyOn(toast, "show");
   try {
     await wrap(<FileViewer uri="" name="preview.html" />);
     await screen.findByLabelText("Allow network");
+    expect(screen.getByRole("switch", { name: "Allow network" }).props.accessibilityState.checked).toBe(false);
+    expect(hint).toHaveBeenCalledWith("If the preview looks empty or incomplete, tap Network");
+    hint.mockClear();
+    await cleanup();
+    await wrap(<FileViewer uri="" name="preview.html" />);
+    expect(hint).not.toHaveBeenCalled();
     const shell = () => (screen.getByTestId("webview").props.source.html as string);
     const toggle = async (on: boolean) => {
       const sw = screen.getByRole("switch", { name: on ? "Allow network" : "Network allowed" });
-      await act(async () => {
-        sw.props.onChange({ nativeEvent: { value: on } });
-      });
+      await fireEvent.press(sw);
     };
     expect(shell()).toContain("connect-src 'none'");
     await toggle(true);
