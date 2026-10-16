@@ -21,7 +21,8 @@ export function Dialog({ open, title, message, confirmLabel, cancelLabel, onConf
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
       <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
-        <View style={[styles.card, { backgroundColor: th.colors.popover, borderRadius: th.radius.lg }]}>
+        <View style={th.bezel}>
+        <View style={[styles.card, th.surface, { backgroundColor: th.colors.popover, borderRadius: th.radius.lg }]}>
           <Text style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20 }}>{title}</Text>
           {message ? <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15, lineHeight: 21, marginTop: 8 }}>{message}</Text> : null}
           {children ? <View style={{ marginTop: 12 }}>{children}</View> : null}
@@ -30,6 +31,7 @@ export function Dialog({ open, title, message, confirmLabel, cancelLabel, onConf
             <Button title={confirmLabel} variant={destructive ? "destructive" : "primary"} onPress={onConfirm} />
           </View>
         </View>
+        </View>
       </KeyboardAvoidingView>
       {open ? <ToastHost /> : null}
     </Modal>
@@ -37,7 +39,7 @@ export function Dialog({ open, title, message, confirmLabel, cancelLabel, onConf
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", padding: 24 },
-  card: { padding: 20 },
+  backdrop: { flex: 1, backgroundColor: "rgba(8,6,12,0.55)", justifyContent: "center", padding: 24 },
+  card: { padding: 24 },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 20 },
 });

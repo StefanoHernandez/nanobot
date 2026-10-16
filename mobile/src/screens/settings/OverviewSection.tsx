@@ -37,7 +37,7 @@ export function OverviewSection() {
   return (
     <>
       <Head>{t("settings.usage30")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 16, gap: 10 }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 16, gap: 10 }}>
         <View testID="usage-bars" style={{ flexDirection: "row", alignItems: "flex-end", height: 72, gap: 2 }}>
           {days.map((d) => (
             <View
@@ -53,7 +53,7 @@ export function OverviewSection() {
       </View>
 
       <Head>{t("settings.currentModel")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem
           title={a?.model ?? "-"}
           subtitle={[a?.resolved_provider ?? a?.provider, a?.model_preset].filter(Boolean).join(" · ")}
@@ -62,7 +62,7 @@ export function OverviewSection() {
       </View>
 
       <Head>{t("settings.sections.capabilities")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <ListItem title={t("settings.web")} subtitle={on(data?.web?.enable)} onPress={go("capabilities")} />
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem title={t("settings.image")} subtitle={on(data?.image_generation?.enabled)} onPress={go("capabilities")} />
