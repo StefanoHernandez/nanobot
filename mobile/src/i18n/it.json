@@ -24,8 +24,8 @@
     "thisBrowser": "questo browser",
     "logoutBrowser": "Esci da questo browser",
     "logoutConfirm": "Verrai disconnesso da questo browser.",
-    "phoneUrl": "Indirizzo per il telefono",
-    "phoneUrlHint": "Usa l'indirizzo Tailscale del server: il telefono non raggiunge 127.0.0.1",
+    "phoneUrl": "Indirizzo del server per il telefono",
+    "phoneUrlHint": "L'indirizzo Tailscale di questo server (es. https://arduino.tuo-tailnet.ts.net, senza porta), non quello del telefono",
     "phoneUrlInvalid": "Indirizzo non valido",
     "fullPower": "Pieni poteri",
     "fullPowerConfirm": "Questo dispositivo potrà installare ed eliminare skill e plugin e cambiare le impostazioni riservate al server. Concedi solo a dispositivi tuoi.",
@@ -137,6 +137,7 @@
     "pairingCode": "Codice di abbinamento",
     "pairingCodeHelp": "Generato dal server con `nanobot pair` o dall'app mobile",
     "badCode": "Codice non valido o scaduto",
+    "pairUnreachable": "Non raggiungo {{url}}: dev'essere l'indirizzo del server, con Tailscale attivo",
     "badSecret": "Segreto del server errato",
     "tooManyAttempts": "Troppi tentativi. Riprova tra poco.",
     "webSessionEnded": "Sessione terminata o revocata. Accedi di nuovo."

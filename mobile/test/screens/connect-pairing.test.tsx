@@ -80,3 +80,21 @@ test("paste pairing JSON claims without Authorization and saves device token", a
   expect(mockOpen).toHaveBeenCalledTimes(1);
   expect(router.replace).toHaveBeenCalledWith("/");
 });
+
+test.each([
+  ["an unreachable address names it", () => fetchMock.mockRejectedValue(new TypeError("Network request failed")), "Can't reach https://phone.ts.net"],
+  ["a used or expired code says so", () => fetchMock.mockResolvedValue({ ok: false, status: 401 }), "Invalid or expired code"],
+])("pairing error: %s", async (_name, arrange, message) => {
+  arrange();
+  const { toast } = require("../../src/ui/components/Toast");
+  const shown = jest.spyOn(toast, "show");
+  await show();
+  await fireEvent.press(screen.getByText("Scan code"));
+  const qr = JSON.stringify({ v: 1, url: "https://phone.ts.net", code: "PAIR-CODE" });
+  await fireEvent.changeText(screen.getByLabelText("Paste the code"), qr);
+  const scanButtons = screen.getAllByRole("button", { name: "Scan code" });
+  await act(async () => {
+    fireEvent.press(scanButtons[scanButtons.length - 1]!);
+  });
+  await waitFor(() => expect(shown).toHaveBeenCalledWith(expect.stringContaining(message)));
+});
