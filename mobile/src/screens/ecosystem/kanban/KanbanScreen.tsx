@@ -14,17 +14,14 @@ import type { NanobotSession } from "../../../core/session";
 import {
   DEFAULT_BOARD_ID,
   KANBAN_COLUMNS,
+  createKanbanBoard,
   deleteKanbanBot,
   fetchKanban,
-  moveKanbanTask,
   postKanbanMessage,
-  reviewKanbanTask,
   saveKanbanBot,
-  saveKanbanTask,
   validateBoardMessageContent,
   validateBotIcon,
   validateBotName,
-  validateReviewFeedback,
   validateRolePrompt,
   validateTaskTitle,
   type KanbanBot,
@@ -35,13 +32,21 @@ import { useT } from "../../../i18n";
 import { sessionStore } from "../../../state/sessionStore";
 import { SettingsShell } from "../../settings/SettingsShell";
 import { Chips } from "../../settings/common";
-import { Button, Dialog, IconButton, TextField, goBackOr, toast } from "../../../ui/components";
+import { Button, Dialog, IconButton, TextField, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
+import { TaskEditorSheet, toastKanbanError } from "./TaskEditorSheet";
 
 type Phase = "loading" | "ok" | "404" | "error";
 type KanbanTab = "board" | "chat" | "bots";
 
-const emptyBotForm = { name: "", icon: "", role_prompt: "" };
+const emptyBotForm = { name: "", icon: "", role_prompt: "", model_preset: "", max_concurrent: "1" };
+const emptyBoardForm = { title: "", description: "", max_concurrent: "2" };
+
+function shortWhen(ms: number): string {
+  const date = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export function KanbanScreen({ session }: { session: NanobotSession }) {
   const t = useT();
@@ -51,21 +56,19 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
   const [snapshot, setSnapshot] = useState<KanbanSnapshot | null>(null);
   const [boardId, setBoardId] = useState(DEFAULT_BOARD_ID);
   const [tab, setTab] = useState<KanbanTab>("board");
-  const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
-  const [moveBusy, setMoveBusy] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [saveBusy, setSaveBusy] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<KanbanTask | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
-  const [reviewFeedback, setReviewFeedback] = useState("");
-  const [reviewBusy, setReviewBusy] = useState(false);
   const [botDialogOpen, setBotDialogOpen] = useState(false);
   const [botEditingId, setBotEditingId] = useState<string | null>(null);
   const [botForm, setBotForm] = useState(emptyBotForm);
   const [botSaveBusy, setBotSaveBusy] = useState(false);
   const [deleteBotTarget, setDeleteBotTarget] = useState<KanbanBot | null>(null);
   const [deleteBotBusy, setDeleteBotBusy] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [boardForm, setBoardForm] = useState(emptyBoardForm);
+  const [boardBusy, setBoardBusy] = useState(false);
   const genRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -105,11 +108,9 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
     void load();
   }, [load]);
 
-  const botNames = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const b of snapshot?.bots ?? []) {
-      map.set(b.id, b.name);
-    }
+  const botsById = useMemo(() => {
+    const map = new Map<string, KanbanBot>();
+    for (const bot of snapshot?.bots ?? []) map.set(bot.id, bot);
     return map;
   }, [snapshot?.bots]);
 
@@ -118,54 +119,9 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
     [snapshot?.tasks],
   );
 
-  const statusOptions = useMemo(
-    () => KANBAN_COLUMNS.map((value) => ({ value, label: t(`kanban.status.${value}`) })),
-    [t],
-  );
-
-  const closeTaskDialog = () => {
-    if (!moveBusy && !reviewBusy) {
-      setSelectedTask(null);
-      setReviewFeedback("");
-    }
-  };
-
-  const onPickStatus = async (status: KanbanTask["status"]) => {
-    if (!selectedTask || moveBusy || status === selectedTask.status) {
-      closeTaskDialog();
-      return;
-    }
-    setMoveBusy(true);
-    try {
-      await moveKanbanTask(session, selectedTask.id, status);
-      setSelectedTask(null);
-      setReviewFeedback("");
-      await load();
-    } catch {
-      setPhase("error");
-      setSelectedTask(null);
-      setReviewFeedback("");
-    } finally {
-      setMoveBusy(false);
-    }
-  };
-
-  const onSaveNew = async () => {
-    if (saveBusy || !snapshot || !validateTaskTitle(newTitle)) return;
-    setSaveBusy(true);
-    try {
-      await saveKanbanTask(session, {
-        board_id: snapshot.active_board.id,
-        title: newTitle.trim(),
-      });
-      setAddOpen(false);
-      setNewTitle("");
-      await load();
-    } catch {
-      setPhase("error");
-    } finally {
-      setSaveBusy(false);
-    }
+  const openTask = (task: KanbanTask | null) => {
+    setEditingTask(task);
+    setEditorOpen(true);
   };
 
   const onSendChat = async () => {
@@ -175,8 +131,8 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
       await postKanbanMessage(session, snapshot.active_board.id, chatDraft);
       setChatDraft("");
       await load();
-    } catch {
-      setPhase("error");
+    } catch (error) {
+      toastKanbanError(t, error);
     } finally {
       setChatBusy(false);
     }
@@ -194,7 +150,13 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
 
   const openEditBot = (bot: KanbanBot) => {
     setBotEditingId(bot.id);
-    setBotForm({ name: bot.name, icon: bot.icon, role_prompt: bot.role_prompt });
+    setBotForm({
+      name: bot.name,
+      icon: bot.icon,
+      role_prompt: bot.role_prompt,
+      model_preset: bot.model_preset,
+      max_concurrent: String(bot.max_concurrent),
+    });
     setBotDialogOpen(true);
   };
 
@@ -206,8 +168,17 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
     }
   };
 
+  const botMax = Number(botForm.max_concurrent);
+  const botFormOk =
+    validateBotName(botForm.name) &&
+    validateBotIcon(botForm.icon) &&
+    validateRolePrompt(botForm.role_prompt) &&
+    Number.isInteger(botMax) &&
+    botMax >= 1 &&
+    botMax <= 20;
+
   const onSaveBot = async () => {
-    if (botSaveBusy || !validateBotName(botForm.name) || !validateBotIcon(botForm.icon) || !validateRolePrompt(botForm.role_prompt)) return;
+    if (botSaveBusy || !botFormOk) return;
     setBotSaveBusy(true);
     try {
       await saveKanbanBot(session, {
@@ -215,15 +186,38 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
         name: botForm.name.trim(),
         icon: botForm.icon,
         role_prompt: botForm.role_prompt,
+        model_preset: botForm.model_preset,
+        max_concurrent: botMax,
       });
       setBotDialogOpen(false);
       setBotEditingId(null);
       setBotForm(emptyBotForm);
       await load();
-    } catch {
-      setPhase("error");
+    } catch (error) {
+      toastKanbanError(t, error);
     } finally {
       setBotSaveBusy(false);
+    }
+  };
+
+  const onCreateBoard = async () => {
+    if (boardBusy || !validateTaskTitle(boardForm.title)) return;
+    const maxConcurrent = Number(boardForm.max_concurrent);
+    if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1 || maxConcurrent > 20) return;
+    setBoardBusy(true);
+    try {
+      const id = await createKanbanBoard(session, {
+        title: boardForm.title.trim(),
+        description: boardForm.description,
+        max_concurrent: maxConcurrent,
+      });
+      setBoardOpen(false);
+      setBoardForm(emptyBoardForm);
+      setBoardId(id);
+    } catch (error) {
+      toastKanbanError(t, error);
+    } finally {
+      setBoardBusy(false);
     }
   };
 
@@ -237,47 +231,11 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
         closeBotDialog();
       }
       await load();
-    } catch {
-      toast.show(t("common.error"));
+    } catch (error) {
+      toastKanbanError(t, error);
       setDeleteBotTarget(null);
     } finally {
       setDeleteBotBusy(false);
-    }
-  };
-
-  const onApproveReview = async () => {
-    if (!selectedTask || reviewBusy || selectedTask.status !== "review") return;
-    setReviewBusy(true);
-    try {
-      await reviewKanbanTask(session, selectedTask.id, true);
-      setSelectedTask(null);
-      setReviewFeedback("");
-      await load();
-    } catch {
-      setPhase("error");
-      setSelectedTask(null);
-      setReviewFeedback("");
-    } finally {
-      setReviewBusy(false);
-    }
-  };
-
-  const onRequestChanges = async () => {
-    if (!selectedTask || reviewBusy || selectedTask.status !== "review") return;
-    const feedback = reviewFeedback.trim();
-    if (!feedback || !validateReviewFeedback(feedback)) return;
-    setReviewBusy(true);
-    try {
-      await reviewKanbanTask(session, selectedTask.id, false, feedback);
-      setSelectedTask(null);
-      setReviewFeedback("");
-      await load();
-    } catch {
-      setPhase("error");
-      setSelectedTask(null);
-      setReviewFeedback("");
-    } finally {
-      setReviewBusy(false);
     }
   };
 
@@ -337,6 +295,26 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
 
           {tab === "board" ? (
             <>
+              <View style={styles.boardPicker}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.boardChips}>
+                  <Chips
+                    options={(snapshot.boards.length > 0 ? snapshot.boards : [snapshot.active_board]).map((board) => ({
+                      value: board.id,
+                      label: board.title,
+                    }))}
+                    value={snapshot.active_board.id}
+                    onChange={setBoardId}
+                  />
+                </ScrollView>
+                <IconButton
+                  icon="plus"
+                  accessibilityLabel={t("kanban.addBoard")}
+                  onPress={() => {
+                    setBoardForm(emptyBoardForm);
+                    setBoardOpen(true);
+                  }}
+                />
+              </View>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -346,17 +324,7 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
                 {KANBAN_COLUMNS.map((column) => {
                   const columnTasks = visibleTasks.filter((task) => task.status === column);
                   return (
-                    <View
-                      key={column}
-                      style={[
-                        styles.column,
-                        {
-                          backgroundColor: th.colors.card,
-                          borderColor: th.colors.border,
-                          borderRadius: th.radius.md,
-                        },
-                      ]}
-                    >
+                    <View key={column} style={[styles.column, th.bezel, th.surface]}>
                       <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
                         {t(`kanban.status.${column}`)} ({columnTasks.length})
                       </Text>
@@ -373,21 +341,15 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
                         </Text>
                       ) : (
                         columnTasks.map((task) => {
-                          const assignee =
-                            task.assignee_bot_id != null ? botNames.get(task.assignee_bot_id) : undefined;
+                          const bot = task.assignee_bot_id != null ? botsById.get(task.assignee_bot_id) : undefined;
+                          const scheduled =
+                            typeof task.scheduled_at_ms === "number" && task.scheduled_at_ms > Date.now();
                           return (
                             <Pressable
                               key={task.id}
                               accessibilityRole="button"
-                              onPress={() => setSelectedTask(task)}
-                              style={[
-                                styles.card,
-                                {
-                                  backgroundColor: th.colors.background,
-                                  borderColor: th.colors.border,
-                                  borderRadius: th.radius.sm,
-                                },
-                              ]}
+                              onPress={() => openTask(task)}
+                              style={[styles.card, th.surface]}
                             >
                               <Text
                                 numberOfLines={2}
@@ -405,7 +367,7 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
                               >
                                 {t(`kanban.priority.${task.priority}`)}
                               </Text>
-                              {assignee ? (
+                              {bot || scheduled || task.recurrence_expr || task.status === "blocked" ? (
                                 <Text
                                   style={{
                                     color: th.colors.mutedForeground,
@@ -414,7 +376,11 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
                                     marginTop: 2,
                                   }}
                                 >
-                                  {assignee}
+                                  {bot?.icon ? <Text>{bot.icon} </Text> : null}
+                                  {bot?.name ? <Text>{bot.name}</Text> : null}
+                                  {scheduled && task.scheduled_at_ms != null ? <Text>{` 🕒 ${shortWhen(task.scheduled_at_ms)}`}</Text> : null}
+                                  {task.recurrence_expr ? <Text> 🔁</Text> : null}
+                                  {task.status === "blocked" ? <Text> ⛔</Text> : null}
                                 </Text>
                               ) : null}
                             </Pressable>
@@ -432,7 +398,7 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
                   accessibilityLabel={t("kanban.add")}
                   fill={th.colors.primary}
                   color={th.colors.primaryForeground}
-                  onPress={() => setAddOpen(true)}
+                  onPress={() => openTask(null)}
                 />
               </View>
             </>
@@ -579,52 +545,45 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
         </>
       ) : null}
 
-      <Dialog
-        open={!!selectedTask}
-        title={selectedTask?.title ?? ""}
-        confirmLabel={t("common.close")}
-        cancelLabel={t("common.cancel")}
-        onCancel={closeTaskDialog}
-        onConfirm={closeTaskDialog}
-      >
-        <Chips
-          options={statusOptions}
-          value={selectedTask?.status ?? "todo"}
-          onChange={(status) => {
-            if (KANBAN_COLUMNS.includes(status as (typeof KANBAN_COLUMNS)[number])) {
-              void onPickStatus(status);
-            }
-          }}
-        />
-        {selectedTask?.status === "review" ? (
-          <View style={{ gap: 8, marginTop: 4 }}>
-            <Button title={t("kanban.approve")} onPress={() => void onApproveReview()} loading={reviewBusy} />
-            <TextField label={t("kanban.feedback")} value={reviewFeedback} onChangeText={setReviewFeedback} />
-            <Button
-              title={t("kanban.requestChanges")}
-              variant="secondary"
-              onPress={() => void onRequestChanges()}
-              loading={reviewBusy}
-              disabled={!reviewFeedback.trim()}
-            />
-          </View>
-        ) : null}
-      </Dialog>
+      <TaskEditorSheet
+        open={editorOpen}
+        task={editingTask}
+        boardId={snapshot?.active_board.id ?? boardId}
+        bots={snapshot?.bots ?? []}
+        tasks={snapshot?.tasks ?? []}
+        links={snapshot?.links ?? []}
+        session={session}
+        onClose={() => setEditorOpen(false)}
+        onChanged={load}
+      />
 
       <Dialog
-        open={addOpen}
-        title={t("kanban.add")}
+        open={boardOpen}
+        title={t("kanban.addBoard")}
         confirmLabel={t("common.save")}
         cancelLabel={t("common.cancel")}
         onCancel={() => {
-          if (!saveBusy) {
-            setAddOpen(false);
-            setNewTitle("");
-          }
+          if (!boardBusy) setBoardOpen(false);
         }}
-        onConfirm={() => void onSaveNew()}
+        onConfirm={() => void onCreateBoard()}
       >
-        <TextField label={t("kanban.add")} value={newTitle} onChangeText={setNewTitle} />
+        <TextField
+          label={t("kanban.taskTitle")}
+          value={boardForm.title}
+          onChangeText={(title) => setBoardForm((form) => ({ ...form, title }))}
+        />
+        <TextField
+          label={t("kanban.boardDescription")}
+          value={boardForm.description}
+          onChangeText={(description) => setBoardForm((form) => ({ ...form, description }))}
+          multiline
+        />
+        <TextField
+          label={t("kanban.maxConcurrent")}
+          value={boardForm.max_concurrent}
+          onChangeText={(max_concurrent) => setBoardForm((form) => ({ ...form, max_concurrent }))}
+          keyboardType="number-pad"
+        />
       </Dialog>
 
       <Dialog
@@ -646,6 +605,17 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
           value={botForm.role_prompt}
           onChangeText={(role_prompt) => setBotForm((f) => ({ ...f, role_prompt }))}
           multiline
+        />
+        <TextField
+          label={t("kanban.modelPreset")}
+          value={botForm.model_preset}
+          onChangeText={(model_preset) => setBotForm((form) => ({ ...form, model_preset }))}
+        />
+        <TextField
+          label={t("kanban.maxConcurrent")}
+          value={botForm.max_concurrent}
+          onChangeText={(max_concurrent) => setBotForm((form) => ({ ...form, max_concurrent }))}
+          keyboardType="number-pad"
         />
         {botEditingId ? (
           <View style={{ marginTop: 8 }}>
@@ -685,6 +655,8 @@ const styles = StyleSheet.create({
   tabBar: { marginHorizontal: 16, marginTop: 8, marginBottom: 8, padding: 4, flexDirection: "row", gap: 4 },
   tabSegment: { flex: 1, minHeight: 48, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   boardScroll: { marginTop: 0 },
+  boardPicker: { flexDirection: "row", alignItems: "center", paddingLeft: 16, paddingRight: 8 },
+  boardChips: { alignItems: "center" },
   boardRow: { paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
   column: { width: 260, padding: 12, borderWidth: StyleSheet.hairlineWidth, gap: 8 },
   card: { minHeight: 48, padding: 12, borderWidth: StyleSheet.hairlineWidth, justifyContent: "center" },
