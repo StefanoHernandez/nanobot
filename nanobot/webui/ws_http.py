@@ -680,7 +680,7 @@ class GatewayHTTPHandler:
             if response is not None:
                 from nanobot.ext.webapp import harden
 
-                return harden(response)
+                return harden(response, self.static_dist_path)
 
         return connection.respond(404, "Not Found")
 

@@ -110,3 +110,6 @@ nanobot/_build_commit.txt
 
 # Generated from docs/ by the Hatch build hook (including editable installs)
 nanobot/skills/nanobot-document/references/
+
+# Fork: app web export copied in by build-arduino.yml
+nanobot/web/app/

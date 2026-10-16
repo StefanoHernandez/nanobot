@@ -72,15 +72,14 @@ def test_spa_fallback_uses_precompressed_index_without_long_term_cache(tmp_path)
     assert gzip.decompress(response.body) == source
 
 
-def test_exported_app_gets_hardening_headers_only_when_enabled(tmp_path, monkeypatch) -> None:
+def test_our_app_export_gets_hardening_headers_legacy_does_not(tmp_path) -> None:
     from nanobot.ext.webapp import APP_CSP, harden
 
     (tmp_path / "index.html").write_text("<!doctype html>")
-    monkeypatch.delenv("NANOBOT_APP_DIST", raising=False)
-    plain = harden(_handler(tmp_path)._serve_static("/index.html"))
-    assert "Content-Security-Policy" not in plain.headers
+    plain = harden(_handler(tmp_path)._serve_static("/index.html"), tmp_path)
+    assert "Content-Security-Policy" not in plain.headers  # legacy WebUI: upstream's own headers
 
-    monkeypatch.setenv("NANOBOT_APP_DIST", str(tmp_path))
-    app = harden(_handler(tmp_path)._serve_static("/index.html"))
+    (tmp_path / "_expo").mkdir()  # an Expo web export
+    app = harden(_handler(tmp_path)._serve_static("/index.html"), tmp_path)
     assert app.headers["Content-Security-Policy"] == APP_CSP
     assert "script-src" not in APP_CSP  # srcdoc previews inherit it; scripts must stay allowed
