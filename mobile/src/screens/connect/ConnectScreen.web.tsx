@@ -6,6 +6,7 @@ import { BotFace } from "../../ui/BotFace";
 import { Button, Dialog, IconButton, ListItem, TextField } from "../../ui/components";
 import { pairedDevice } from "../../core/pairing";
 import { profiles, type Profile } from "../../core/profiles";
+import { webLogout } from "../../core/cookieBootstrap";
 import { sessionStore } from "../../state/sessionStore";
 import { i18n, useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
@@ -128,6 +129,8 @@ export function ConnectScreen() {
   const confirmDelete = async () => {
     if (!toDelete) return;
     const wasActive = profiles.activeId() === toDelete.id;
+    // A cookie profile is a registered device: revoke it, or the HttpOnly cookie stays valid.
+    if (toDelete.auth === "cookie") await webLogout(toDelete.baseUrl).catch(() => {});
     await profiles.remove(toDelete.id);
     pairedDevice.clear(toDelete.id);
     if (wasActive) sessionStore.getState().close();

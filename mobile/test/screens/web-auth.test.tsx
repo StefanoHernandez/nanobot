@@ -183,6 +183,22 @@ describe("Web Login Screen (ConnectScreen.web)", () => {
     expect(router.replace).toHaveBeenCalledWith("/");
   });
 
+  test("deleting a cookie profile revokes this browser on the server first", async () => {
+    for (const p of profiles.list()) await profiles.remove(p.id);
+    await profiles.save({ id: "p1", name: "Browser", baseUrl: "http://localhost:8765", auth: "cookie" });
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => "" });
+
+    await show();
+    fireEvent(screen.getByText("Browser"), "longPress");
+    fireEvent.press(await screen.findByRole("button", { name: i18n.t("common.delete") }));
+
+    await waitFor(() => expect(profiles.list().some((p) => p.id === "p1")).toBe(false));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8765/api/ext/devices/web-logout",
+      expect.objectContaining({ method: "POST", credentials: "same-origin" }),
+    );
+  });
+
   test("error mapping: 401 on code tab maps to connect.badCode", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,

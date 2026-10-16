@@ -9,6 +9,14 @@ export const VENDOR_SECRET_KEY = "nanobot-webui.bootstrap-secret";
 
 let installed = false;
 
+/** RFC 4122 v4 UUID from 16 random bytes. */
+export function uuidFrom(b: Uint8Array): string {
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 /** Browser globals the vendored nanobot code expects. Idempotent; call first in app/_layout.tsx. */
 export function installPolyfills(): void {
   if (installed) return;
@@ -34,8 +42,10 @@ export function installPolyfills(): void {
   }
 
   if (!g.crypto) g.crypto = {};
-  const c = g.crypto as { randomUUID?: () => string };
-  if (!c.randomUUID) c.randomUUID = () => Crypto.randomUUID();
+  const c = g.crypto as { randomUUID?: () => string; getRandomValues?: (a: Uint8Array) => Uint8Array };
+  // A browser on plain http (e.g. http://arduino:8765) has getRandomValues but no randomUUID, and
+  // expo-crypto's web randomUUID calls crypto.randomUUID: it would recurse into this shim.
+  if (!c.randomUUID) c.randomUUID = c.getRandomValues ? () => uuidFrom(c.getRandomValues!(new Uint8Array(16))) : () => Crypto.randomUUID();
 
   // bootstrap.ts reads window.location / history only in browser-URL helpers; inert stubs. NanobotSession sets location.href = baseUrl (vendor readers of window.location.href).
   if (!g.location) {
