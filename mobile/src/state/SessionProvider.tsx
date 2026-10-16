@@ -39,7 +39,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!needsConnect) redirected.current = false;
     else if (!redirected.current && shouldRedirectToConnect({ needsConnect, navReady, pathname })) {
       redirected.current = true;
-      router.replace((state === "auth_error" ? "/connect?reason=auth" : "/connect") as never);
+      const activeProfile = profiles.list().find((p) => p.id === profiles.activeId());
+      const isCookie = activeProfile?.auth === "cookie";
+      const target = state === "auth_error"
+        ? (isCookie ? "/connect?reason=web_session_ended" : "/connect?reason=auth")
+        : "/connect";
+      router.replace(target as never);
     }
   }, [needsConnect, navReady, pathname, state]);
 
