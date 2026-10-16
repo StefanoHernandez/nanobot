@@ -324,6 +324,7 @@ describe("NanobotClient", () => {
     lastSocket().sent = [];
     client.onChat(chatId, vi.fn());
     client.sendMessage(chatId, "hello", undefined, { turnId: "turn-1" });
+    expect(client.getUnsettledRunChatIds()).toEqual([]);
 
     expect(lastSocket().sent.map((raw) => JSON.parse(raw))).toEqual([
       {
@@ -584,7 +585,7 @@ describe("NanobotClient", () => {
     expect(handler).toHaveBeenLastCalledWith("chat-stop", null);
   });
 
-  it("clears stale run strip when reconnecting after a dropped socket", async () => {
+  it("preserves durable run clocks and identities through transport reconnect", async () => {
     const client = new NanobotClient({
       url: "ws://test",
       reconnect: true,
@@ -598,16 +599,30 @@ describe("NanobotClient", () => {
     lastSocket().fakeMessage({
       event: "goal_status",
       chat_id: "chat-strip",
+      turn_id: "turn-strip",
       status: "running",
       started_at: 12_345,
     });
 
     lastSocket().close();
 
-    expect(client.getRunStartedAt("chat-strip")).toBeNull();
-    expect(handler).toHaveBeenLastCalledWith("chat-strip", null);
+    expect(client.status).toBe("reconnecting");
+    expect(client.getRunStartedAt("chat-strip")).toBe(12_345);
+    expect(client.getRunTurnId("chat-strip")).toBe("turn-strip");
+    expect(client.getUnsettledRunChatIds()).toEqual(["chat-strip"]);
+    expect(handler).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(20);
     expect(FakeSocket.instances.length).toBeGreaterThan(1);
+    lastSocket().fakeOpen();
+    expect(client.getRunStartedAt("chat-strip")).toBe(12_345);
+    expect(handler).toHaveBeenCalledTimes(1);
+    lastSocket().fakeMessage({
+      event: "turn_end", chat_id: "chat-strip", turn_id: "turn-strip",
+    });
+    expect(client.getRunStartedAt("chat-strip")).toBeNull();
+    expect(client.getUnsettledRunChatIds()).toEqual([]);
+    expect(handler).toHaveBeenLastCalledWith("chat-strip", null);
+    client.close();
   });
 
   it("clears run strip when a turn_end arrives without idle", () => {
@@ -702,6 +717,12 @@ describe("NanobotClient", () => {
         "chat-guidance",
         requestGeneration,
         ["turn-active"],
+        {
+          observedTurnIds: ["turn-active", "turn-guidance"],
+          hasPendingToolCalls: false,
+          activeTurnId: null,
+          completionIdsProvided: true,
+        },
       ),
     ).toBe(true);
   });
@@ -1084,6 +1105,38 @@ describe("NanobotClient", () => {
       ),
     ).toBe(true);
     expect(client.hasUnsettledRun("chat-ack-lost")).toBe(false);
+  });
+
+  it("requires a supplied completion identity before closing an observed lifecycle turn", () => {
+    const client = new NanobotClient({
+      url: "ws://test", reconnect: false,
+      socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
+    });
+    const received = vi.fn();
+    client.onChat("chat-authority", received);
+    client.connect();
+    lastSocket().fakeOpen();
+    client.sendMessage("chat-authority", "question", undefined, { turnId: "turn-authority" });
+    const requestGeneration = client.getRunGeneration("chat-authority");
+    lastSocket().fakeMessage({
+      event: "goal_status", chat_id: "chat-authority", turn_id: "turn-authority",
+      status: "running", started_at: 123,
+    });
+    const snapshot = {
+      observedTurnIds: ["turn-authority"], hasPendingToolCalls: false,
+      activeTurnId: null, completionIdsProvided: true,
+    };
+    expect(client.canReconcileCanonicalCompletion("chat-authority", requestGeneration, [], snapshot)).toBe(false);
+    expect(client.reconcileCanonicalCompletion("chat-authority", requestGeneration, [], snapshot)).toBe(false);
+    expect(client.getRunStartedAt("chat-authority")).toBe(123);
+    expect(client.hasUnsettledRun("chat-authority")).toBe(true);
+    received.mockClear();
+    lastSocket().fakeMessage({ event: "delta", chat_id: "chat-authority", turn_id: "turn-authority", text: "Still running" });
+    expect(received).toHaveBeenCalledWith(expect.objectContaining({ event: "delta", text: "Still running" }));
+    expect(client.reconcileCanonicalCompletion(
+      "chat-authority", requestGeneration, ["turn-authority"], snapshot,
+    )).toBe(true);
+    expect(client.hasUnsettledRun("chat-authority")).toBe(false);
   });
 
   it("settles an accepted turn that never reached running from canonical idle", () => {
