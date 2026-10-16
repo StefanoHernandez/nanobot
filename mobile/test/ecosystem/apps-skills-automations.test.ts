@@ -287,7 +287,7 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
     jest.useRealTimers();
   });
 
-  test("the useSkills() result has no delete", async () => {
+  test("the useSkills() result exposes remove, but no direct delete or deleteSkill", async () => {
     mockSession.get.mockResolvedValue({ skills: [] });
 
     const { result } = await renderHook(() => useSkills());
@@ -295,7 +295,7 @@ describe("P4-C2: Apps, MCP, Skills, Automations logic", () => {
 
     expect(keys).not.toContain("delete");
     expect(keys).not.toContain("deleteSkill");
-    expect(keys).not.toContain("remove");
+    expect(keys).toContain("remove");
   });
 
   test("run(id) sends exactly one automation.run, then fetches the result", async () => {
