@@ -3,7 +3,7 @@
 Apply these on the same branch, `grok/KB-A`. Do not create a new branch and do not rebase. Every check from KB-A must pass again.
 
 ## 1. A card with unfinished dependencies starts early (high)
-- **What goes wrong:** "Avvia" saves a card as `ready` even when it depends on cards that are not `done` yet. `_claim_next_for_board` in `nanobot/ext/kanban.py`, the `SELECT ... status = 'ready'` query, never looks at `task_links`, so the bot starts it at once, before its parents finish.
+- **What goes wrong:** "Avvia" saves a card as `ready` even when it depends on cards that are not `done` yet. `_claim_one_ready_task_locked` in `nanobot/ext/kanban.py`, the `SELECT ... status = 'ready'` query, never looks at `task_links`, so the bot starts it at once, before its parents finish.
 - **Fix it at the root, in the claim query.** Add this condition:
   ```sql
   AND NOT EXISTS (
