@@ -195,6 +195,7 @@ def _post(path: str, body: dict, auth: str):
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {auth}"},
         content_length=len(raw),
         content=_Content(),
+        remote="192.0.2.1",
     )
 
 
@@ -389,3 +390,23 @@ def test_full_power_follows_the_socket_the_device_opened(devices_path, monkeypat
     monkeypatch.setitem(dev._DEVICE_CONNECTIONS, socket, (device_id, None))
     dev.set_full_power(device_id, True)
     assert dev.privileged_request(socket, {"Host": "arduino.tail.ts.net:8765"})
+
+
+@pytest.mark.asyncio
+async def test_the_server_browser_can_pair_even_as_a_device(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    _, device_id = _paired_phone(devices_path)
+    api = store.issue_api_token(300)
+    dev.remember_device_tokens(device_id, store, api)
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+
+    def codes(remote: str, host: str):
+        req = _post("/codes", {}, api)
+        req.headers["Host"] = host
+        req.remote = remote
+        return req
+
+    assert (await handler(codes("100.64.0.7", "arduino.tail.ts.net:8765"))).status == 403
+    assert (await handler(codes("127.0.0.1", "127.0.0.1:8765"))).status == 201

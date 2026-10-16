@@ -604,17 +604,18 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
     if request.headers.get("Content-Encoding") or request.headers.get("Transfer-Encoding"):
         return web.json_response({"error": "unsupported_framing"}, status=400)
     try:
+        # aiohttp exposes the peer as request.remote; the local check wants a remote_address.
+        local_browser = is_local_browser_request(SimpleNamespace(remote_address=(request.remote, 0)), request.headers)
         if path == PREFIX + "/codes":
-            if _is_device_minted(request):
+            # A browser on the server itself may pair phones even when it logged in as a device.
+            if _is_device_minted(request) and not local_browser:
                 return web.json_response({"error": "device_cannot_pair"}, status=403)
             code, expires_in = create_pairing_code()
             origin = _request_origin(request.headers)
             qr = json.dumps({"v": 1, "url": origin, "code": code}, separators=(",", ":"))
             return web.json_response({"code": code, "expires_in": expires_in, "qr": qr}, status=201)
         if path == PREFIX + "/full-power":
-            # aiohttp exposes the peer as request.remote; the check wants a remote_address.
-            peer = SimpleNamespace(remote_address=(request.remote, 0))
-            if not is_local_browser_request(peer, request.headers):
+            if not local_browser:
                 return web.json_response({"error": "local_browser_only"}, status=403)
             body = await read_json(request)
             device_id, enabled = body.get("id"), body.get("enabled")
