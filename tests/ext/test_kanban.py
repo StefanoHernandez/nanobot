@@ -341,3 +341,179 @@ def test_pending_wakes_are_capped(store_path, monkeypatch):
     assert store.post_message("main", "@coder one")["triggered_bots"] == ["coder"]
     assert store.post_message("main", "@coder two")["triggered_bots"] == ["coder"]
     assert store.post_message("main", "@coder three")["triggered_bots"] == []
+
+
+def _kanban_router():
+    return SimpleNamespace(
+        config=SimpleNamespace(token_issue_secret="", token=MASTER),
+        check_api_token=lambda request: _Tokens().check_api_token(request),
+    )
+
+
+def _kanban_get(path: str, *, auth: str | None = API):
+    from websockets.datastructures import Headers
+    from websockets.http11 import Request as WsRequest
+
+    headers: list[tuple[str, str]] = []
+    if auth is not None:
+        headers.append(("Authorization", f"Bearer {auth}"))
+    return WsRequest(path, Headers(headers))
+
+
+def _events_json(resp):
+    return json.loads(resp.body.decode("utf-8"))
+
+
+def test_events_since_completed_run(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "done1", status="ready", assignee="coder")
+    store.claim_ready_tasks(0)
+    before = kb._now_ms()
+    store.complete_task("done1", "finished", [])
+    payload = store.events_since(before - 1)
+    assert isinstance(payload["now"], int)
+    done = [e for e in payload["events"] if e["kind"] == "done" and e["task_id"] == "done1"]
+    assert len(done) == 1
+    assert done[0]["key"].startswith("run:")
+    assert done[0]["board_id"] == "main"
+    assert done[0]["title"] == "done1"
+
+
+def test_events_since_repeating_card_two_done_cycles(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "tick", status="ready", assignee="coder", recurrence_expr="every:3600s")
+    since = kb._now_ms() - 1
+    store.claim_ready_tasks(0)
+    store.complete_task("tick", "cycle one", [])
+    task = store.get_task_detail("tick")["task"]
+    scheduled = task["scheduled_at_ms"]
+    assert isinstance(scheduled, int)
+    store.claim_ready_tasks(scheduled)
+    store.complete_task("tick", "cycle two", [])
+    payload = store.events_since(since)
+    done = [e for e in payload["events"] if e["kind"] == "done" and e["task_id"] == "tick"]
+    assert len(done) == 2
+    assert done[0]["key"] != done[1]["key"]
+    assert all(e["key"].startswith("run:") for e in done)
+
+
+def test_events_since_request_review_not_run(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "work", status="ready", assignee="coder")
+    since = kb._now_ms() - 1
+    store.claim_ready_tasks(0)
+    store.request_review("work", "please review", [])
+    payload = store.events_since(since)
+    review = [e for e in payload["events"] if e["task_id"] == "work"]
+    assert len(review) == 1
+    assert review[0]["kind"] == "review"
+    assert review[0]["key"].startswith("review:work:")
+    assert not any(e["key"].startswith("run:") for e in payload["events"])
+
+
+def test_events_since_block_task(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "stuck", status="running", assignee="coder")
+    since = kb._now_ms() - 1
+    store.block_task("stuck", "waiting on vendor")
+    payload = store.events_since(since)
+    blocked = [e for e in payload["events"] if e["task_id"] == "stuck"]
+    assert len(blocked) == 1
+    assert blocked[0]["kind"] == "blocked"
+    assert blocked[0]["key"].startswith("blocked:stuck:")
+
+
+def test_events_since_filters_older(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "old", status="ready", assignee="coder")
+    t0 = 1_000_000
+    monkeypatch.setattr(kb, "_now_ms", lambda: t0 + 500)
+    store.claim_ready_tasks(0)
+    store.complete_task("old", "done", [])
+    monkeypatch.setattr(kb, "_now_ms", lambda: t0 + 2000)
+    payload = store.events_since(t0 + 1000)
+    assert not any(e["task_id"] == "old" for e in payload["events"])
+
+
+def test_events_since_keeps_oldest_fifty(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    base = 10_000_000
+    since = base - 1
+    for i in range(51):
+        monkeypatch.setattr(kb, "_now_ms", lambda i=i: base + i * 10)
+        tid = f"t{i:02d}"
+        store.save_task({"id": tid, "board_id": "main", "title": tid, "status": "review"})
+    payload = store.events_since(since)
+    assert len(payload["events"]) == 50
+    titles = [e["title"] for e in payload["events"]]
+    assert titles[0] == "t00"
+    assert titles[-1] == "t49"
+    assert "t50" not in titles
+
+
+def test_events_since_pages_past_fifty(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    base = 20_000_000
+    for i in range(60):
+        monkeypatch.setattr(kb, "_now_ms", lambda i=i: base + i * 10)
+        tid = f"p{i:02d}"
+        store.save_task({"id": tid, "board_id": "main", "title": tid, "status": "review"})
+    monkeypatch.setattr(kb, "_now_ms", lambda: base + 10_000)
+    first = store.events_since(base - 1)
+    assert len(first["events"]) == 50
+    assert first["now"] < base + 50 * 10
+    second = store.events_since(first["now"])
+    keys = {e["key"] for e in first["events"]} | {e["key"] for e in second["events"]}
+    assert len(keys) == 60
+
+
+def test_events_since_hides_events_after_the_clock(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "late", status="ready", assignee="coder")
+    monkeypatch.setattr(kb, "_now_ms", lambda: 5_000)
+    store.claim_ready_tasks(0)
+    store.complete_task("late", "finished", [])
+    monkeypatch.setattr(kb, "_now_ms", lambda: 4_000)
+    first = store.events_since(0)
+    assert not any(e["task_id"] == "late" for e in first["events"])
+    assert first["now"] == 4_000
+    monkeypatch.setattr(kb, "_now_ms", lambda: 6_000)
+    second = store.events_since(first["now"])
+    late = [e for e in second["events"] if e["task_id"] == "late"]
+    assert len(late) == 1
+    assert late[0]["kind"] == "done"
+
+
+def test_parse_since_rejects_bad_values():
+    with pytest.raises(kb.KanbanError) as exc:
+        kb._parse_since_ms(True)
+    assert exc.value.status == 400
+    assert exc.value.code == "invalid_since"
+    with pytest.raises(kb.KanbanError):
+        kb._parse_since_ms("-1")
+    with pytest.raises(kb.KanbanError):
+        kb._parse_since_ms(None)
+    assert kb._parse_since_ms(0) == 0
+    assert kb._parse_since_ms("42") == 42
+
+
+def test_events_route_bad_since(store_path):
+    router = _kanban_router()
+    resp = kb.dispatch_kanban_get(router, _kanban_get("/api/ext/kanban/events?since=abc"), "/api/ext/kanban/events")
+    assert resp is not None
+    assert resp.status_code == 400
+    assert _events_json(resp) == {"error": "invalid_since"}

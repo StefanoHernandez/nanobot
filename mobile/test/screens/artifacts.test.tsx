@@ -490,6 +490,7 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     const shell = buildShellHtml({ kind: "pptx", fileSize: 1000 });
     expect(shell).toContain("if (!window.pptxPreview || typeof window.pptxPreview.init !== \"function\")");
     expect(shell).toContain("throw new Error(\"pptxPreview not available\")");
+    expect(shell).toContain("window.pptxPreview.init(container, { width: Math.max(240, container.clientWidth - 32) })");
   });
 
   test("Changing the shell source after the first load: the new initial load is allowed (onShouldStartLoadWithRequest returns true once for it)", async () => {
