@@ -8,6 +8,11 @@ import { speechStore } from "./speech";
 import { useSession } from "../state/sessionStore";
 import { threadStore } from "../state/threadStore";
 import { toast } from "../ui/components/Toast";
+import { DeviceSttEngine, isRecognitionAvailable, warnEngineUnavailableOnce } from "./sttEngine";
+import { prefs } from "../settings/prefs";
+import { settingsStore } from "../settings/store";
+import { voiceAvailable } from "./voice";
+import type { SettingsPayload } from "@/lib/types";
 
 // ponytail: speech detection threshold; levels above this start speech detection. May need tuning per phone.
 export const SPEECH_DB = -40;
@@ -26,6 +31,8 @@ export const MAX_TURN_MS = 60_000;
 
 // ponytail: safety timeout when nobody speaks after entering listening. May need tuning per phone.
 export const NO_SPEECH_TIMEOUT_MS = 10_000;
+
+export const WAITING_TIMEOUT_MS = 180_000;
 
 export const KEEP_AWAKE_TAG = "voice-loop";
 
@@ -173,6 +180,20 @@ export function voiceLoopReducer(
       if (event.type === "noSpeechTimeout") {
         return { state: "idle", emptyCount: 0 };
       }
+      if (event.type === "transcript") {
+        const text = event.text?.trim() ?? "";
+        if (!text) {
+          const nextCount = emptyCount + 1;
+          if (nextCount >= 2) {
+            return { state: "idle", emptyCount: 0 };
+          }
+          return { state: "listening", emptyCount: nextCount };
+        }
+        return { state: "waiting", emptyCount: 0 };
+      }
+      if (event.type === "transcriptError") {
+        return { state: "idle", emptyCount: 0 };
+      }
       return { state: "listening", emptyCount };
 
     case "transcribing":
@@ -226,18 +247,29 @@ const dummyRecorder = {
 };
 
 export function useVoiceLoop(chatKey: string) {
-  const { session } = useSession();
+  const { session, state: sessionState } = useSession();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const sessionStateRef = useRef(sessionState);
+  sessionStateRef.current = sessionState;
+
   const recorder = typeof useAudioRecorder === "function" ? useAudioRecorder(safePreset) : (dummyRecorder as never);
+  const recorderRef = useRef(recorder);
+  recorderRef.current = recorder;
 
   const [machine, setMachine] = useState<VoiceLoopState>({ state: "idle", emptyCount: 0 });
   const machineRef = useRef(machine);
-  machineRef.current = machine;
 
   const [metering, setMetering] = useState(-60);
+  const [partialText, setPartialText] = useState("");
+  const deviceEngineRef = useRef<DeviceSttEngine | null>(null);
+  const lastFinalRef = useRef("");
   const detectorRef = useRef(new SilenceDetector());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const turnStartedAt = useRef(0);
   const recordingRef = useRef(false);
+  const loopTokenRef = useRef(0);
 
   const level = Math.max(0, Math.min(1, (metering + 60) / 60));
 
@@ -254,13 +286,13 @@ export function useVoiceLoop(chatKey: string) {
   }, []);
 
   const dispatch = useCallback((event: VoiceLoopEvent) => {
-    setMachine((prev) => {
-      const next = voiceLoopReducer(prev, event);
-      if (next.state !== prev.state) {
-        announce(next.state);
-      }
-      return next;
-    });
+    const prev = machineRef.current;
+    const next = voiceLoopReducer(prev, event);
+    machineRef.current = next;
+    setMachine(next);
+    if (next.state !== prev.state) {
+      announce(next.state);
+    }
   }, [announce]);
 
   const clearTick = useCallback(() => {
@@ -272,9 +304,9 @@ export function useVoiceLoop(chatKey: string) {
 
   const dropFile = useCallback(() => {
     try {
-      if (recorder.uri) new File(recorder.uri).delete();
+      if (recorderRef.current.uri) new File(recorderRef.current.uri).delete();
     } catch {}
-  }, [recorder]);
+  }, []);
 
   const resetAudioMode = useCallback(() => {
     return setAudioModeAsync({ allowsRecording: false }).catch(() => {});
@@ -282,10 +314,23 @@ export function useVoiceLoop(chatKey: string) {
 
   // Full stop & cleanup
   const stopAll = useCallback(async () => {
+    loopTokenRef.current += 1;
     clearTick();
+    if (waitingTimerRef.current) {
+      clearTimeout(waitingTimerRef.current);
+      waitingTimerRef.current = null;
+    }
     recordingRef.current = false;
+    setPartialText("");
+    if (deviceEngineRef.current) {
+      const eng = deviceEngineRef.current;
+      deviceEngineRef.current = null;
+      try {
+        await eng.cancel();
+      } catch {}
+    }
     try {
-      await recorder.stop();
+      await recorderRef.current.stop();
     } catch {}
     dropFile();
     await resetAudioMode();
@@ -293,7 +338,7 @@ export function useVoiceLoop(chatKey: string) {
     try {
       await deactivateKeepAwake(KEEP_AWAKE_TAG);
     } catch {}
-  }, [recorder, clearTick, dropFile, resetAudioMode]);
+  }, [clearTick, dropFile, resetAudioMode]);
 
   const stop = useCallback(async () => {
     await stopAll();
@@ -311,75 +356,128 @@ export function useVoiceLoop(chatKey: string) {
     recordingRef.current = false;
     const durationMs = Date.now() - turnStartedAt.current;
     try {
-      await recorder.stop();
+      await recorderRef.current.stop();
     } catch {}
 
-    const uri = recorder.uri;
+    const uri = recorderRef.current.uri;
+    const token = loopTokenRef.current;
     try {
       if (!uri || durationMs < 200) {
+        dropFile();
+        await resetAudioMode();
         dispatch({ type: "transcript", text: "" });
         return;
       }
       const dataUrl = `data:audio/mp4;base64,${await new File(uri).base64()}`;
-      if (session?.frameLimit != null && dataUrl.length + (session.frameReserve ?? 256) > session.frameLimit) {
+      if (token !== loopTokenRef.current) {
+        dropFile();
+        await resetAudioMode();
+        return;
+      }
+      const currentSession = sessionRef.current;
+      if (!currentSession) {
+        dropFile();
+        await resetAudioMode();
+        await stopAll();
+        toast.show(i18n.t("common.operationFailed"));
+        dispatch({ type: "stop" });
+        return;
+      }
+      if (currentSession.frameLimit != null && dataUrl.length + (currentSession.frameReserve ?? 256) > currentSession.frameLimit) {
+        dropFile();
+        await resetAudioMode();
         toast.show(i18n.t("voice.error.tooBig"));
         await stopAll();
         dispatch({ type: "transcriptError", error: "tooBig" });
         return;
       }
-      if (!session) {
-        await stopAll();
-        dispatch({ type: "transcriptError", error: "unavailable" });
-        return;
-      }
-      const text = await session.client.transcribeAudio(dataUrl, { durationMs });
+
+      const text = await currentSession.client.transcribeAudio(dataUrl, { durationMs });
       dropFile();
       await resetAudioMode();
+
+      if (token !== loopTokenRef.current) {
+        return;
+      }
 
       const trimmed = text?.trim() ?? "";
       if (!trimmed) {
         dispatch({ type: "transcript", text: "" });
       } else {
-        dispatch({ type: "transcript", text: trimmed });
-        threadStore.getState().send(session, chatKey, trimmed);
+        const sent = threadStore.getState().send(currentSession, chatKey, trimmed);
+        if (!sent) {
+          await stopAll();
+          toast.show(i18n.t("common.operationFailed"));
+          dispatch({ type: "stop" });
+          return;
+        }
         speechStore.getState().markVoiceDictated(chatKey, true);
+        dispatch({ type: "transcript", text: trimmed });
       }
     } catch (e) {
       dropFile();
       await resetAudioMode();
+      if (token !== loopTokenRef.current) return;
       await stopAll();
       dispatch({ type: "transcriptError", error: e instanceof Error ? e.message : "transcription" });
       toast.show(i18n.t("voice.error.transcription"));
       announce("error");
     }
-  }, [recorder, session, chatKey, clearTick, dropFile, resetAudioMode, stopAll, dispatch, announce]);
+  }, [chatKey, clearTick, dropFile, resetAudioMode, stopAll, dispatch, announce]);
 
   // Start recording when entering "listening"
   const startRecording = useCallback(async () => {
     if (recordingRef.current) return;
+    recordingRef.current = true;
+    const token = loopTokenRef.current;
+
     try {
       const { granted } = await requestRecordingPermissionsAsync();
+      if (token !== loopTokenRef.current) {
+        recordingRef.current = false;
+        return;
+      }
       if (!granted) {
+        recordingRef.current = false;
         toast.show(i18n.t("voice.error.permission"));
         await stop();
         return;
       }
       await setAudioModeAsync({ allowsRecording: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      recordingRef.current = true;
+      if (token !== loopTokenRef.current) {
+        recordingRef.current = false;
+        await resetAudioMode();
+        return;
+      }
+      await recorderRef.current.prepareToRecordAsync();
+      if (token !== loopTokenRef.current) {
+        recordingRef.current = false;
+        try { await recorderRef.current.stop(); } catch {}
+        dropFile();
+        await resetAudioMode();
+        return;
+      }
+      recorderRef.current.record();
     } catch {
+      recordingRef.current = false;
+      if (token !== loopTokenRef.current) return;
       await stop();
       toast.show(i18n.t("voice.error.unavailable"));
       return;
     }
+
+    if (token !== loopTokenRef.current) return;
 
     turnStartedAt.current = Date.now();
     detectorRef.current.reset(turnStartedAt.current);
     clearTick();
 
     timerRef.current = setInterval(() => {
-      const status = (recorder as { getStatus?: () => { metering?: number } }).getStatus?.();
+      if (token !== loopTokenRef.current) {
+        clearTick();
+        return;
+      }
+      const status = (recorderRef.current as { getStatus?: () => { metering?: number } }).getStatus?.();
       const db = status?.metering ?? -60;
       setMetering(db);
 
@@ -401,23 +499,171 @@ export function useVoiceLoop(chatKey: string) {
         });
       }
     }, 100);
-  }, [recorder, clearTick, dispatch, runTranscription, stopAll, stop, announce]);
+  }, [clearTick, dispatch, runTranscription, stopAll, stop, announce, dropFile, resetAudioMode]);
+
+  const checkServerConfigured = async (): Promise<boolean> => {
+    const cur = settingsStore.getState().data;
+    if (cur) return voiceAvailable(cur);
+    const sess = sessionRef.current;
+    if (sess?.get) {
+      try {
+        const st = await sess.get<SettingsPayload>("/api/settings");
+        settingsStore.getState().setData(st);
+        return voiceAvailable(st);
+      } catch {}
+    }
+    return false;
+  };
+
+  const startDeviceListening = useCallback(async () => {
+    if (recordingRef.current) return;
+    recordingRef.current = true;
+    const token = loopTokenRef.current;
+
+    const engine = new DeviceSttEngine();
+    deviceEngineRef.current = engine;
+    lastFinalRef.current = "";
+    setPartialText("");
+
+    engine.on("partial", (text) => {
+      if (token !== loopTokenRef.current) return;
+      setPartialText(text);
+    });
+
+    engine.on("final", (text) => {
+      if (token !== loopTokenRef.current) return;
+      lastFinalRef.current = text;
+    });
+
+    engine.on("end", async () => {
+      if (token !== loopTokenRef.current) return;
+      recordingRef.current = false;
+      deviceEngineRef.current = null;
+      setPartialText("");
+
+      const text = (lastFinalRef.current || "").trim();
+      if (!text) {
+        dispatch({ type: "transcript", text: "" });
+        return;
+      }
+
+      const currentSession = sessionRef.current;
+      if (!currentSession) {
+        await stopAll();
+        toast.show(i18n.t("common.operationFailed"));
+        dispatch({ type: "stop" });
+        return;
+      }
+
+      const sent = threadStore.getState().send(currentSession, chatKey, text);
+      if (!sent) {
+        await stopAll();
+        toast.show(i18n.t("common.operationFailed"));
+        dispatch({ type: "stop" });
+        return;
+      }
+
+      speechStore.getState().markVoiceDictated(chatKey, true);
+      dispatch({ type: "transcript", text });
+    });
+
+    engine.on("error", async (code) => {
+      if (token !== loopTokenRef.current) return;
+      recordingRef.current = false;
+      deviceEngineRef.current = null;
+      setPartialText("");
+
+      if (code === "language-not-supported" || code === "service-not-allowed") {
+        toast.show(i18n.t(`voice.error.${code}`, { defaultValue: i18n.t("voice.error.transcription") }));
+        const canFallback = await checkServerConfigured();
+        if (canFallback) {
+          void startRecording();
+          return;
+        }
+        await stopAll();
+        dispatch({ type: "stop" });
+      } else if (code === "speech-timeout" || code === "no-match") {
+        dispatch({ type: "transcript", text: "" });
+      } else {
+        toast.show(i18n.t("voice.error.transcription"));
+        await stopAll();
+        dispatch({ type: "stop" });
+      }
+    });
+
+    try {
+      await engine.start({ continuous: false });
+    } catch {
+      recordingRef.current = false;
+      deviceEngineRef.current = null;
+      if (token !== loopTokenRef.current) return;
+      await stop();
+      toast.show(i18n.t("voice.error.unavailable"));
+    }
+  }, [chatKey, dispatch, startRecording, stopAll, stop]);
+
+  const startListeningTurn = useCallback(async () => {
+    const pref = prefs.voiceEngine();
+    if (pref === "server") {
+      void startRecording();
+      return;
+    }
+    if (!isRecognitionAvailable()) {
+      warnEngineUnavailableOnce();
+      void startRecording();
+      return;
+    }
+    await startDeviceListening();
+  }, [startRecording, startDeviceListening]);
 
   // Trigger recording when state changes to "listening"
   useEffect(() => {
     if (machine.state === "listening" && !recordingRef.current) {
-      void startRecording();
+      void startListeningTurn();
     }
-  }, [machine.state, startRecording]);
+  }, [machine.state, startListeningTurn]);
 
-  // Start the entire loop from idle
+  // Start the entire loop from idle (only bumps generation and dispatches start; effect enters recording)
   const start = useCallback(async () => {
+    loopTokenRef.current += 1;
     try {
       await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
     } catch {}
     dispatch({ type: "start" });
-    await startRecording();
-  }, [dispatch, startRecording]);
+  }, [dispatch]);
+
+  // Waiting timeout: 180s in waiting ends the loop
+  useEffect(() => {
+    if (machine.state === "waiting") {
+      waitingTimerRef.current = setTimeout(() => {
+        if (machineRef.current.state === "waiting") {
+          void stop();
+        }
+      }, WAITING_TIMEOUT_MS);
+    } else {
+      if (waitingTimerRef.current) {
+        clearTimeout(waitingTimerRef.current);
+        waitingTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (waitingTimerRef.current) {
+        clearTimeout(waitingTimerRef.current);
+        waitingTimerRef.current = null;
+      }
+    };
+  }, [machine.state, stop]);
+
+  // Session changes or closes -> end loop
+  const prevSessionRef = useRef(session);
+  useEffect(() => {
+    if (machineRef.current.state !== "idle") {
+      if (!session || sessionState !== "open" || prevSessionRef.current !== session) {
+        void stop();
+      }
+    }
+    prevSessionRef.current = session;
+  }, [session, sessionState, stop]);
 
   // AppState background / inactive listener
   useEffect(() => {
@@ -455,7 +701,6 @@ export function useVoiceLoop(chatKey: string) {
       const thPrev = prev.threads[chatKey];
       if (thPrev?.running && thCur && !thCur.running) {
         // Turn ended on thread
-        // Check if speech was queued or if speakingId is already active
         setTimeout(() => {
           if (machineRef.current.state === "waiting") {
             const speaking = speechStore.getState().speakingId;
@@ -481,6 +726,7 @@ export function useVoiceLoop(chatKey: string) {
     state: machine.state,
     metering,
     level,
+    partialText,
     start,
     stop,
     interrupt,

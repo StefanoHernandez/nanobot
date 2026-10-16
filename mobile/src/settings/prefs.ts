@@ -2,10 +2,12 @@ import { i18n } from "../i18n";
 import { kv } from "../platform/storage";
 
 export type Language = "system" | "it" | "en";
+export type VoiceEngine = "device" | "server";
 const LANG = "pref.language";
 const SOUND = "pref.notificationSound";
 const AUTO_READ = "pref.voiceAutoRead";
 const AUDIO = "pref.audioReplies";
+const VOICE_ENGINE = "pref.voiceEngine";
 
 const device = () => Intl.DateTimeFormat().resolvedOptions().locale.split("-")[0];
 
@@ -32,4 +34,13 @@ export const prefs = {
   setVoiceAutoRead(on: boolean): void {
     kv.set(AUTO_READ, on ? "1" : "0");
   },
+  /** "Voice engine": "device" (default) or "server". */
+  voiceEngine: (): VoiceEngine => {
+    const v = kv.get(VOICE_ENGINE);
+    return v === "server" ? "server" : "device";
+  },
+  setVoiceEngine(e: VoiceEngine): void {
+    kv.set(VOICE_ENGINE, e);
+  },
 };
+

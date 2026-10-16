@@ -210,7 +210,8 @@
     "docs": "Documentazione",
     "license": "Licenza MIT - basato su HKUDS/nanobot",
     "audioReplies": "Audio delle risposte",
-    "audioRepliesHelp": "Mostra il pulsante Ascolta sulle risposte. Usa la voce del telefono: gratis, nessun credito."
+    "audioRepliesHelp": "Mostra il pulsante Ascolta sulle risposte. Usa la voce del telefono: gratis, nessun credito.",
+    "voiceEngine": "Riconoscimento vocale"
   },
   "chats": {
     "empty": "Scegli o crea una chat",
@@ -279,13 +280,21 @@
     "stop": "Termina registrazione",
     "cancel": "Annulla registrazione",
     "transcribing": "Trascrizione…",
+    "engineDevice": "Sul telefono (consigliato)",
+    "engineServer": "Sul server",
+    "engineUnavailable": "Riconoscimento sul telefono non disponibile, uso il server",
+    "offlineHint": "Per usarlo offline scarica la lingua italiana in Impostazioni Android → Riconoscimento vocale",
+    "offlineReady": "Offline disponibile",
+    "offlineMissing": "Solo online (scarica la lingua per l'uso offline)",
     "error": {
       "permission": "Permesso microfono negato",
       "tooShort": "Registrazione troppo breve",
       "tooLong": "Registrazione troppo lunga",
       "tooBig": "Registrazione troppo grande da inviare",
       "transcription": "Trascrizione non riuscita",
-      "unavailable": "Input vocale non disponibile"
+      "unavailable": "Input vocale non disponibile",
+      "language-not-supported": "Lingua non supportata dal riconoscimento vocale",
+      "service-not-allowed": "Servizio di riconoscimento vocale non consentito"
     }
   },
   "subagents": {

@@ -23,7 +23,7 @@ import { VoiceLoopBar } from "./VoiceLoopBar";
 import { useVoiceLoop } from "../../extras/voiceLoop";
 import { speechStore } from "../../extras/speech";
 import { useStore } from "zustand";
-import { voiceAvailable } from "../../extras/voice";
+import { isVoiceAvailable } from "../../extras/sttEngine";
 import { DEFAULT_LIMITS } from "../../core/session";
 import { prepareImage, validateFiles, type LocalFile } from "../../core/upload";
 import { AttachmentBar } from "./AttachmentBar";
@@ -68,7 +68,6 @@ export function Composer({ chatKey }: { chatKey: string }) {
   } = useThreadSlice(chatKey);
 
   const audioRepliesEnabled = useStore(speechStore, (s) => s.enabled);
-  const voiceLoop = useVoiceLoop(chatKey);
 
   const prevUploading = useRef(uploading);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -127,13 +126,17 @@ export function Composer({ chatKey }: { chatKey: string }) {
     };
   }, [session]);
 
-  const [voiceOk, setVoiceOk] = useState(false);
+  const [voicePartial, setVoicePartial] = useState("");
+  const [voiceOk, setVoiceOk] = useState(() => isVoiceAvailable(null));
   useEffect(() => {
     let active = true;
-    if (!session?.get) return;
+    if (!session?.get) {
+      if (active) setVoiceOk(isVoiceAvailable(null));
+      return;
+    }
     session.get<SettingsPayload>("/api/settings").then(
-      (st) => active && setVoiceOk(voiceAvailable(st)),
-      () => active && setVoiceOk(false),
+      (st) => active && setVoiceOk(isVoiceAvailable(st)),
+      () => active && setVoiceOk(isVoiceAvailable(null)),
     );
     return () => { active = false; };
   }, [session]);
@@ -334,148 +337,181 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
   const isRunningEmpty = running && !hasContent;
 
-  if (voiceLoop.state !== "idle") {
+  const renderContent = (voiceLoop: ReturnType<typeof useVoiceLoop> | null) => {
+    if (voiceLoop && voiceLoop.state !== "idle") {
+      return (
+        <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
+          <VoiceLoopBar
+            state={voiceLoop.state}
+            level={voiceLoop.level}
+            partialText={voiceLoop.partialText}
+            onStop={voiceLoop.stop}
+            onInterrupt={voiceLoop.interrupt}
+          />
+        </View>
+      );
+    }
+
     return (
       <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
-        <VoiceLoopBar
-          state={voiceLoop.state}
-          level={voiceLoop.level}
-          onStop={voiceLoop.stop}
-          onInterrupt={voiceLoop.interrupt}
-        />
+      <View style={[styles.container, { backgroundColor: th.colors.card, borderRadius: th.radius.lg }]}>
+        {isSlash ? (
+          <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
+        ) : isMention && activeMention ? (
+          <MentionMenu
+            chats={chats}
+            apps={cliApps}
+            presets={mcpPresets}
+            query={activeMention.query}
+            onSelect={handleSelectMention}
+          />
+        ) : null}
+
+        {pendingFiles.length > 0 ? (
+          <AttachmentBar
+            files={pendingFiles}
+            onRemove={(_file, index) => {
+              setPendingFiles(pendingFiles.filter((_, i) => i !== index));
+            }}
+          />
+        ) : null}
+
+        <View>
+          <TextInput
+            ref={inputRef}
+            multiline
+            textAlignVertical="top"
+            value={voicePartial ? (draft ? `${draft} ${voicePartial}` : voicePartial) : draft}
+            onChangeText={handleDraftChange}
+            onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
+            onKeyPress={handleKeyPress}
+            placeholder={t("composer.placeholder")}
+            placeholderTextColor={th.colors.mutedForeground}
+            style={[
+              styles.input,
+              {
+                color: th.colors.foreground,
+                fontFamily: th.font.regular,
+                backgroundColor: "transparent",
+                borderColor: "transparent",
+                borderRadius: th.radius.md,
+              },
+            ]}
+          />
+
+          <View style={styles.toolsRow}>
+            <IconButton
+              icon="paperclip"
+              accessibilityLabel={t("attach.button")}
+              disabled={uploading}
+              onPress={() => setSheetOpen(true)}
+            />
+            <IconButton
+              icon="text-box-multiple-outline"
+              accessibilityLabel={t("prompts.open")}
+              onPress={() => setPromptsOpen(true)}
+            />
+            <EffortPill chatKey={chatKey} />
+            <ContextIndicator chatKey={chatKey} />
+            <View style={{ flex: 1 }} />
+            {voiceOk ? (
+              <>
+                {voiceLoop ? (
+                  <IconButton
+                    icon="account-voice"
+                    accessibilityLabel={t("voiceLoop.start")}
+                    accessibilityHint={!audioRepliesEnabled ? t("voiceLoop.audioRepliesRequired") : undefined}
+                    disabled={!audioRepliesEnabled}
+                    onPress={() => void voiceLoop.start()}
+                  />
+                ) : null}
+                <VoiceButton
+                  chatKey={chatKey}
+                  onTranscript={(text) => {
+                    setVoicePartial("");
+                    appendTranscript(text);
+                  }}
+                  onPartial={setVoicePartial}
+                />
+              </>
+            ) : null}
+            {voiceOk && !hasContent && !running ? null : isRunningEmpty ? (
+              <IconButton
+                icon="stop-circle-outline"
+                accessibilityLabel={t("thread.stop")}
+                onPress={stop}
+              />
+            ) : running ? (
+              <IconButton
+                icon="arrow-up"
+                fill={th.colors.brand}
+                color={th.colors.brandForeground}
+                accessibilityLabel={t("composer.steer")}
+                disabled={!canSend}
+                loading={uploading}
+                onPress={handleSend}
+              />
+            ) : (
+              <IconButton
+                icon="arrow-up"
+                fill={th.colors.brand}
+                color={th.colors.brandForeground}
+                accessibilityLabel={t("composer.send")}
+                disabled={!canSend}
+                loading={uploading}
+                onPress={handleSend}
+              />
+            )}
+          </View>
+        </View>
+
+        {sheetOpen ? (
+          <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t("attach.title")}>
+            <ListItem
+              left={<MaterialCommunityIcons name="image-multiple-outline" size={24} color={th.colors.foreground} />}
+              title={t("attach.photos")}
+              onPress={handlePickPhotos}
+            />
+            <ListItem
+              left={<MaterialCommunityIcons name="file-document-outline" size={24} color={th.colors.foreground} />}
+              title={t("attach.files")}
+              onPress={handlePickFiles}
+            />
+          </Sheet>
+        ) : null}
+
+        {promptsOpen ? (
+          <PromptPickerSheet
+            open={promptsOpen}
+            onClose={() => setPromptsOpen(false)}
+            chatKey={chatKey}
+          />
+        ) : null}
+      </View>
       </View>
     );
+  };
+
+  if (!voiceOk) {
+    return renderContent(null);
   }
 
   return (
-    <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
-    <View style={[styles.container, { backgroundColor: th.colors.card, borderRadius: th.radius.lg }]}>
-      {isSlash ? (
-        <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
-      ) : isMention && activeMention ? (
-        <MentionMenu
-          chats={chats}
-          apps={cliApps}
-          presets={mcpPresets}
-          query={activeMention.query}
-          onSelect={handleSelectMention}
-        />
-      ) : null}
-
-      {pendingFiles.length > 0 ? (
-        <AttachmentBar
-          files={pendingFiles}
-          onRemove={(_file, index) => {
-            setPendingFiles(pendingFiles.filter((_, i) => i !== index));
-          }}
-        />
-      ) : null}
-
-      <View>
-        <TextInput
-          ref={inputRef}
-          multiline
-          textAlignVertical="top"
-          value={draft}
-          onChangeText={handleDraftChange}
-          onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
-          onKeyPress={handleKeyPress}
-          placeholder={t("composer.placeholder")}
-          placeholderTextColor={th.colors.mutedForeground}
-          style={[
-            styles.input,
-            {
-              color: th.colors.foreground,
-              fontFamily: th.font.regular,
-              backgroundColor: "transparent",
-              borderColor: "transparent",
-              borderRadius: th.radius.md,
-            },
-          ]}
-        />
-
-        <View style={styles.toolsRow}>
-          <IconButton
-            icon="paperclip"
-            accessibilityLabel={t("attach.button")}
-            disabled={uploading}
-            onPress={() => setSheetOpen(true)}
-          />
-          <IconButton
-            icon="text-box-multiple-outline"
-            accessibilityLabel={t("prompts.open")}
-            onPress={() => setPromptsOpen(true)}
-          />
-          <EffortPill chatKey={chatKey} />
-          <ContextIndicator chatKey={chatKey} />
-          <View style={{ flex: 1 }} />
-          {voiceOk ? (
-            <>
-              <IconButton
-                icon="account-voice"
-                accessibilityLabel={t("voiceLoop.start")}
-                accessibilityHint={!audioRepliesEnabled ? t("voiceLoop.audioRepliesRequired") : undefined}
-                disabled={!audioRepliesEnabled}
-                onPress={() => void voiceLoop.start()}
-              />
-              <VoiceButton chatKey={chatKey} onTranscript={appendTranscript} />
-            </>
-          ) : null}
-          {voiceOk && !hasContent && !running ? null : isRunningEmpty ? (
-            <IconButton
-              icon="stop-circle-outline"
-              accessibilityLabel={t("thread.stop")}
-              onPress={stop}
-            />
-          ) : running ? (
-            <IconButton
-              icon="arrow-up"
-              fill={th.colors.brand}
-              color={th.colors.brandForeground}
-              accessibilityLabel={t("composer.steer")}
-              disabled={!canSend}
-              loading={uploading}
-              onPress={handleSend}
-            />
-          ) : (
-            <IconButton
-              icon="arrow-up"
-              fill={th.colors.brand}
-              color={th.colors.brandForeground}
-              accessibilityLabel={t("composer.send")}
-              disabled={!canSend}
-              loading={uploading}
-              onPress={handleSend}
-            />
-          )}
-        </View>
-      </View>
-
-      {sheetOpen ? (
-        <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t("attach.title")}>
-          <ListItem
-            left={<MaterialCommunityIcons name="image-multiple-outline" size={24} color={th.colors.foreground} />}
-            title={t("attach.photos")}
-            onPress={handlePickPhotos}
-          />
-          <ListItem
-            left={<MaterialCommunityIcons name="file-document-outline" size={24} color={th.colors.foreground} />}
-            title={t("attach.files")}
-            onPress={handlePickFiles}
-          />
-        </Sheet>
-      ) : null}
-
-      {promptsOpen ? (
-        <PromptPickerSheet
-          open={promptsOpen}
-          onClose={() => setPromptsOpen(false)}
-          chatKey={chatKey}
-        />
-      ) : null}
-    </View>
-    </View>
+    <VoiceLoopHost chatKey={chatKey}>
+      {(voiceLoop) => renderContent(voiceLoop)}
+    </VoiceLoopHost>
   );
+}
+
+function VoiceLoopHost({
+  chatKey,
+  children,
+}: {
+  chatKey: string;
+  children: (voiceLoop: ReturnType<typeof useVoiceLoop>) => React.ReactElement | null;
+}) {
+  const voiceLoop = useVoiceLoop(chatKey);
+  return children(voiceLoop);
 }
 
 const styles = StyleSheet.create({
