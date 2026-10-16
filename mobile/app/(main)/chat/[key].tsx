@@ -1,7 +1,6 @@
 import React, { useCallback } from "react";
 import { BackHandler } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
-import { DrawerActions } from "@react-navigation/native";
 import { ThreadScreen } from "../../../src/screens/thread/ThreadScreen";
 import { useSession } from "../../../src/state/sessionStore";
 import { threadStore } from "../../../src/state/threadStore";
@@ -37,7 +36,8 @@ export default function ChatRoute() {
       threadStore.getState().scheduleLeave(session, key);
     }
     router.replace("/");
-    navigation.dispatch(DrawerActions.openDrawer());
+    // expo-router (SDK 56+) refuses @react-navigation imports; this is the action DrawerActions.openDrawer() builds.
+    navigation.dispatch({ type: "OPEN_DRAWER" });
   }, [key, navigation, session]);
 
   useFocusEffect(
