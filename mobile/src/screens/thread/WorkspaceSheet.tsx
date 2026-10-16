@@ -73,7 +73,7 @@ export function WorkspaceSheet({ chatKey, open, onClose }: { chatKey: string; op
     ) : null;
 
   return (
-    <Sheet open={open} onClose={() => { setDir(null); onClose(); }} title={t("workspace.title")}>
+    <Sheet open={open} onClose={() => { setDir(null); onClose(); }} title={t("workspace.title")} scroll={false}>
       <ScrollView style={{ maxHeight: 480 }}>
         {dir ? (
           <>

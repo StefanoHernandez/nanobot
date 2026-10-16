@@ -62,7 +62,7 @@ export function SubagentsButton({
           <Text style={{ color: th.colors.primaryForeground, fontSize: 10 }}>{active}</Text>
         </View>
       ) : null}
-      <Sheet open={open} onClose={() => setOpen(false)} title={t("subagents.title")}>
+      <Sheet open={open} onClose={() => setOpen(false)} title={t("subagents.title")} scroll={false}>
         <ScrollView style={{ maxHeight: 420 }}>
           {sorted.map((x) => (
             <View key={x.task_id} style={{ flexDirection: "row", alignItems: "center", minHeight: 56, gap: 8 }}>

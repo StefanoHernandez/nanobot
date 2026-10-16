@@ -290,6 +290,45 @@ describe("DeviceSttEngine turn lifecycle", () => {
     await expect(stopped).resolves.toBe("prima frase seconda frase");
   });
 
+  test("stop after a partial keeps that text when Android reports no-match", async () => {
+    const engine = new DeviceSttEngine();
+    const errors: string[] = [];
+    engine.on("error", (code) => errors.push(code));
+    await engine.start();
+    emitNativeEvent("result", { isFinal: false, results: [{ transcript: "ciao come" }] });
+    const stopped = engine.stop();
+    emitNativeEvent("error", { error: "no-match" });
+    await expect(stopped).resolves.toBe("ciao come");
+    expect(errors).toEqual([]);
+  });
+
+  test("stop keeps the final sentence and the partial that follows", async () => {
+    const engine = new DeviceSttEngine();
+    await engine.start();
+    emitNativeEvent("result", { isFinal: true, results: [{ transcript: "prima frase" }] });
+    emitNativeEvent("result", { isFinal: false, results: [{ transcript: "seconda" }] });
+    const stopped = engine.stop();
+    emitNativeEvent("end", {});
+    await expect(stopped).resolves.toBe("prima frase seconda");
+  });
+
+  test("an error without stop is still emitted", async () => {
+    const engine = new DeviceSttEngine();
+    const errors: string[] = [];
+    engine.on("error", (code) => errors.push(code));
+    await engine.start();
+    emitNativeEvent("error", { error: "no-match" });
+    expect(errors).toEqual(["no-match"]);
+  });
+
+  test("cancel after partials keeps no text", async () => {
+    const engine = new DeviceSttEngine();
+    await engine.start();
+    emitNativeEvent("result", { isFinal: false, results: [{ transcript: "ciao come" }] });
+    await engine.cancel();
+    await expect(engine.stop()).resolves.toBeNull();
+  });
+
   test("another variant of the language is not taken as the offline pack", async () => {
     // English: earlier tests cached an it-IT hit, and a cached hit is trusted.
     await i18n.changeLanguage("en");

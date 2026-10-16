@@ -63,6 +63,8 @@ export class DeviceSttEngine implements SttEngine {
   private listeners: { [K in keyof SttEvents]?: ((...args: any[]) => void)[] } = {};
   private unsubscribers: (() => void)[] = [];
   private finalText = "";
+  private lastPartial = "";
+  private stopping = false;
   private stopResolver: ((text: string | null) => void) | null = null;
   /** Set once the turn ends or fails: the native module fires "end" after "error", and must not twice. */
   private done = false;
@@ -94,6 +96,8 @@ export class DeviceSttEngine implements SttEngine {
 
   async start(opts?: { continuous?: boolean }): Promise<void> {
     this.finalText = "";
+    this.lastPartial = "";
+    this.stopping = false;
     this.done = false;
     this.cleanupNativeListeners();
 
@@ -114,25 +118,36 @@ export class DeviceSttEngine implements SttEngine {
       const joined = (head: string) => (this.finalText ? `${this.finalText} ${head}` : head).trim();
       if (ev?.isFinal) {
         this.finalText = joined(text);
+        this.lastPartial = "";
         this.emit("final", this.finalText);
       } else {
-        this.emit("partial", joined(text));
+        this.lastPartial = joined(text);
+        this.emit("partial", this.lastPartial);
       }
     });
     this.unsubscribers.push(() => subResult.remove());
 
-    const subEnd = ExpoSpeechRecognitionModule.addListener("end", () => {
-      if (!this.finish()) return;
-      this.emit("end");
+    const resolveStop = () => {
+      // A live partial already includes earlier final sentences. Prefer it, or the stop drops the tail.
+      const text = this.lastPartial || this.finalText || null;
       if (this.stopResolver) {
-        this.stopResolver(this.finalText || null);
+        this.stopResolver(text);
         this.stopResolver = null;
       }
+    };
+    const subEnd = ExpoSpeechRecognitionModule.addListener("end", () => {
+      if (!this.finish()) return;
+      if (!this.stopping) this.emit("end");
+      resolveStop();
     });
     this.unsubscribers.push(() => subEnd.remove());
 
     const subError = ExpoSpeechRecognitionModule.addListener("error", (ev: any) => {
       if (!this.finish()) return;
+      if (this.stopping) {
+        resolveStop();
+        return;
+      }
       const code = ev?.error ?? "unknown";
       this.emit("error", code);
       if (this.stopResolver) {
@@ -154,19 +169,23 @@ export class DeviceSttEngine implements SttEngine {
   }
 
   async stop(): Promise<string | null> {
-    if (this.done) return this.finalText || null;
+    const kept = this.lastPartial || this.finalText || null;
+    if (this.done) return kept;
+    this.stopping = true;
     return new Promise<string | null>((resolve) => {
       this.stopResolver = resolve;
       try {
         ExpoSpeechRecognitionModule.stop();
       } catch {
-        resolve(this.finalText || null);
+        resolve(this.lastPartial || this.finalText || null);
       }
     });
   }
 
   async cancel(): Promise<void> {
     this.stopResolver = null;
+    this.finalText = "";
+    this.lastPartial = "";
     this.finish();
     try {
       ExpoSpeechRecognitionModule.abort();

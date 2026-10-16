@@ -74,19 +74,20 @@ export function VoiceButton({
 
   const stopDeviceRecording = useCallback(async () => {
     clearDeviceTimer();
-    onPartial?.("");
     setDeviceState("idle");
     const engine = deviceEngineRef.current;
     deviceEngineRef.current = null;
     if (!engine) return;
     try {
       const text = await engine.stop();
+      onPartial?.("");
       if (!handledRef.current) {
         handledRef.current = true;
         const res = (text ?? lastFinalRef.current).trim();
         if (res) handleTranscript(res);
       }
     } catch {
+      onPartial?.("");
       if (!handledRef.current) {
         handledRef.current = true;
         const res = lastFinalRef.current.trim();

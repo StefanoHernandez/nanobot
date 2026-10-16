@@ -373,7 +373,7 @@ export function AutomationJobSheet({
 
   return (
     <>
-      <Sheet open={open} title={title} onClose={onClose}>
+      <Sheet open={open} title={title} onClose={onClose} scroll={false}>
         <KeyboardAvoidingView behavior="padding">
           <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
             {/* Meta info */}
