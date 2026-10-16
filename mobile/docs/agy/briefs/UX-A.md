@@ -1,4 +1,4 @@
-# UX-A: a clear network button for artifacts, "back" from a chat returns to the chat list, and sheets stay above the keyboard (owner: Grok)
+# UX-A: a clear network button for artifacts, "back" from a chat returns to the chat list, sheets stay above the keyboard, and stopping dictation keeps the text (owner: Grok)
 
 Branch `grok/UX-A`, from `origin/main`, **in your own worktree** (see the prompt). Follow `mobile/docs/agy/README.md`: no rebase, one branch, a report at the end. App only: no server changes.
 
@@ -56,6 +56,35 @@ Branch `grok/UX-A`, from `origin/main`, **in your own worktree** (see the prompt
 - the existing sheet and screen tests stay green.
 
 **Checking it:** jest cannot open a real keyboard. In the report, list the sheets with text fields you checked by reading the code. Stefano will test on the phone: Progetti → new project, the Kanban card editor, and one more.
+
+## 4. Stopping voice dictation must keep what was transcribed
+**What goes wrong:** the user dictates with the device engine. The words show up live in the composer as partial results. They press stop and get "Trascrizione non riuscita", and **the text is gone**.
+
+**Why it happens** (read `src/extras/sttEngine.ts` and `src/screens/thread/VoiceButton.tsx`):
+1. Android only turns text "final" at the end of a sentence. Until then there are only `partial` results. `DeviceSttEngine` keeps `finalText` but **not** the last partial.
+2. When the user calls `stop()` mid-sentence, Android often answers with an `error` event, such as `no-match`, `speech-timeout` or `client`, instead of a last final plus `end`.
+3. The engine forwards it as `error` and resolves `stop()` with `null`.
+4. `VoiceButton`'s `error` handler shows the toast. `stopDeviceRecording` then finds no final text, and `onPartial("")` has already wiped the live text. Everything is lost.
+
+**Fix it in the engine, where every caller goes through:**
+- Keep `lastPartial`: the joined text of the last `partial`, the same string that is emitted.
+- Add a `stopping` flag, set when `stop()` is called.
+- **When stopping:**
+  - an `error` event is **not** a failure: finish the turn like `end` does and **do not** emit `error`;
+  - `stop()` resolves with `finalText || lastPartial || null`;
+  - this covers both `end` and `error`.
+- **When not stopping:** errors behave as today. A real failure the user did not cause still shows the toast.
+- `cancel()` still throws the text away. The user asked for that.
+- **In `VoiceButton.tsx`:** `stopDeviceRecording` uses the string `stop()` returns, which now includes the partial. Remove any path that shows the error toast after the user pressed stop: the engine no longer emits it, so check that nothing else does.
+- `voiceLoop.ts` uses the same engine: check that it still behaves. A stop in the loop must also keep the partial text.
+
+**Tests** in `test/extras/sttEngine.test.ts`:
+- partial "ciao come", then `stop()`, then a native `error` `no-match`: `stop()` resolves to "ciao come" and no `error` event is emitted;
+- final "prima frase" + partial "seconda", then stop + `end`: it resolves to "prima frase seconda";
+- an `error` without stop is still emitted, as today;
+- `cancel()` after partials resolves or returns nothing and keeps no text.
+
+**In `VoiceButton`:** stopping after partials passes the text to `onTranscript` and shows no toast.
 
 ## Tests (jest)
 - Network button:
