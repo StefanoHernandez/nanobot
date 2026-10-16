@@ -24,6 +24,19 @@ import {
   type KanbanWorkspace,
   type RecurrenceUnit,
 } from "../../../ecosystem/kanban";
+
+const REPEAT_LIMIT_SECONDS = 2_592_000;
+const START_STATUSES = new Set<KanbanStatus>(["triage", "todo", "blocked", "done"]);
+
+function repeatSeconds(amount: string, unit: RecurrenceUnit): number | null {
+  if (!/^\d+$/.test(amount)) return null;
+  const count = Number(amount);
+  if (!Number.isInteger(count) || count < 1) return null;
+  const factor = unit === "minutes" ? 60 : unit === "hours" ? 3600 : 86400;
+  const seconds = count * factor;
+  if (seconds > REPEAT_LIMIT_SECONDS) return null;
+  return seconds;
+}
 import { useT } from "../../../i18n";
 import { Chips } from "../../settings/common";
 import { Button, Dialog, Sheet, TextField, toast } from "../../../ui/components";
@@ -172,10 +185,12 @@ export function TaskEditorSheet({
   const titleOk = validateTaskTitle(title);
   const maxRetries = Number(retries);
   const retriesOk = Number.isInteger(maxRetries) && maxRetries >= 0 && maxRetries <= 20;
+  const repeatOk = repeatMode === "never" || repeatSeconds(repeatAmount, repeatUnit) !== null;
+  const showStart = !task || START_STATUSES.has(task.status);
 
   const save = async (nextStatus: KanbanStatus) => {
-    if (busy || !titleOk || !retriesOk) return;
-    if (nextStatus === "ready" && !assignee) return;
+    if (busy || !titleOk || !retriesOk || !repeatOk) return;
+    if (nextStatus === "ready" && (!showStart || !assignee)) return;
     setBusy(true);
     try {
       await saveKanbanTask(session, {
@@ -189,7 +204,7 @@ export function TaskEditorSheet({
         reviewer_bot_id: reviewer,
         workspace_mode: workspace,
         recurrence_expr:
-          repeatMode === "every" ? recurrenceToExpr(Number(repeatAmount) || 0, repeatUnit) : "",
+          repeatMode === "every" ? recurrenceToExpr(Number(repeatAmount), repeatUnit) : "",
         scheduled_at_ms: whenMode === "at" ? atDate.getTime() : null,
         max_retries: maxRetries,
         parent_ids: parentIds,
@@ -347,6 +362,7 @@ export function TaskEditorSheet({
                 value={repeatUnit}
                 onChange={setRepeatUnit}
               />
+              {!repeatOk ? <Text style={muted}>{t("kanban.repeatInvalid")}</Text> : null}
             </>
           ) : null}
           <Text style={label}>{t("kanban.workspace")}</Text>
@@ -428,17 +444,19 @@ export function TaskEditorSheet({
               />
             </View>
           ) : null}
-          <Button
-            title={t("kanban.start")}
-            onPress={() => void save("ready")}
-            loading={busy}
-            disabled={!assignee || !titleOk}
-          />
-          {!assignee ? <Text style={muted}>{t("kanban.needsBot")}</Text> : null}
+          {showStart ? (
+            <Button
+              title={t("kanban.start")}
+              onPress={() => void save("ready")}
+              loading={busy}
+              disabled={!assignee || !titleOk || !repeatOk}
+            />
+          ) : null}
+          {showStart && !assignee ? <Text style={muted}>{t("kanban.needsBot")}</Text> : null}
           {task ? (
-            <Button title={t("common.save")} variant="secondary" onPress={() => void save(task.status)} loading={busy} disabled={!titleOk || !retriesOk} />
+            <Button title={t("common.save")} variant="secondary" onPress={() => void save(task.status)} loading={busy} disabled={!titleOk || !retriesOk || !repeatOk} />
           ) : (
-            <Button title={t("kanban.saveTodo")} variant="secondary" onPress={() => void save("todo")} loading={busy} disabled={!titleOk || !retriesOk} />
+            <Button title={t("kanban.saveTodo")} variant="secondary" onPress={() => void save("todo")} loading={busy} disabled={!titleOk || !retriesOk || !repeatOk} />
           )}
           {task ? (
             <Button title={t("kanban.deleteTask")} variant="destructive" onPress={() => setConfirmDelete(true)} disabled={busy} />

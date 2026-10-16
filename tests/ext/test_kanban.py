@@ -224,6 +224,19 @@ def test_scheduled_at_rejects_bool_and_far_future(store_path):
     assert far.value.code == "invalid_scheduled_at"
 
 
+def test_claim_waits_until_parents_are_done(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "parent", status="todo")
+    _task(store, "child", status="ready", assignee="coder", parent_ids=["parent"])
+    assert store.claim_ready_tasks(0) == []
+    assert store.get_task_detail("child")["task"]["status"] == "ready"
+    store.move_task("parent", "done")
+    claimed = store.claim_ready_tasks(0)
+    assert [row["task_id"] for row in claimed] == ["child"]
+
+
 def test_mentions_hop_limit(store_path):
     store = _store(store_path)
     _board(store)

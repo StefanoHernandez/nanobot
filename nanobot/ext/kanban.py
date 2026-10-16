@@ -862,6 +862,10 @@ class KanbanStore:
                 WHERE board_id = ? AND status = 'ready'
                   AND assignee_bot_id IS NOT NULL
                   AND (scheduled_at_ms IS NULL OR scheduled_at_ms <= ?)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_links l JOIN tasks p ON p.id = l.parent_id
+                      WHERE l.child_id = tasks.id AND p.status != 'done'
+                  )
                 ORDER BY created_at_ms
                 """,
                 (board_id, now),

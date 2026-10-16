@@ -425,3 +425,72 @@ test("a failed save shows a toast and leaves the board up", async () => {
   expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
   expect(screen.queryByText("This server has no board yet.")).toBeNull();
 });
+
+test("a running card has Save and no Start", async () => {
+  mockGet.mockResolvedValue({
+    ...snapshot,
+    tasks: [
+      ...snapshot.tasks,
+      {
+        id: "t-run",
+        title: "In progress",
+        status: "running",
+        priority: "medium",
+        assignee_bot_id: "bot1",
+        description: "",
+      },
+    ],
+  });
+
+  show();
+  await waitFor(() => expect(screen.getByText("In progress")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("In progress"));
+  });
+
+  expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+});
+
+test("a bad repeat disables Start and Save and shows the hint", async () => {
+  mockGet.mockResolvedValue(snapshot);
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Ship feature")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "New task" }));
+  });
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Title"), "Launch me");
+  });
+  await act(async () => {
+    fireEvent.press(screen.getAllByRole("button", { name: "🤖 Helper" })[0]);
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Every…" }));
+  });
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Every…"), "0");
+  });
+
+  expect(screen.getByText("Enter a whole number")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Start" }).props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByRole("button", { name: "Save to To do" }).props.accessibilityState.disabled).toBe(true);
+
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Every…"), "1");
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "days" }));
+  });
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Every…"), "31");
+  });
+
+  expect(screen.getByText("Enter a whole number")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Start" }).props.accessibilityState.disabled).toBe(true);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
