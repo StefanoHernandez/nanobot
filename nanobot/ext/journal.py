@@ -346,28 +346,35 @@ def prune_journal_sessions(sessions: SessionManager, *, keep: int = 10) -> None:
             sessions.delete_session(key)
 
 
-async def run_journal_job(agent: Any, *, tz_name: str | None = None) -> None:
-    """Run today's journal the way Dream runs a turn. The server writes the file. Nothing is delivered."""
-    workspace = Path(agent.context.memory.workspace)
-    sessions = agent.sessions
+def agent_turn(agent: Any) -> _Turn:
+    """One journal turn in an ephemeral session, the way Dream runs its turn. Old journal sessions are pruned after."""
+
+    async def _silent(*_args: Any, **_kwargs: Any) -> None:
+        return None
 
     async def turn(prompt: str) -> str:
-        async def _silent(*_args: Any, **_kwargs: Any) -> None:
-            return None
-
-        resp = await agent.process_direct(
-            prompt,
-            session_key=f"journal:{datetime.now():%Y%m%d-%H%M%S}",
-            ephemeral=True,
-            on_progress=_silent,
-        )
+        try:
+            resp = await agent.process_direct(
+                prompt,
+                session_key=f"journal:{datetime.now():%Y%m%d-%H%M%S}",
+                ephemeral=True,
+                on_progress=_silent,
+            )
+        finally:
+            prune_journal_sessions(agent.sessions)
         content = getattr(resp, "content", "") if resp is not None else ""
         return content if isinstance(content, str) else ""
 
-    try:
-        await execute_day(workspace, sessions, local_today(tz_name), turn, tz_name=tz_name)
-    finally:
-        prune_journal_sessions(sessions)
+    return turn
+
+
+async def run_journal_job(agent: Any, *, tz_name: str | None = None) -> None:
+    """Write today's journal. The server writes the file. Nothing is delivered."""
+    workspace = Path(agent.context.memory.workspace)
+    # A job left over from before the journal was turned off does nothing.
+    if not load_settings(workspace)["enabled"]:
+        return
+    await execute_day(workspace, agent.sessions, local_today(tz_name), agent_turn(agent), tz_name=tz_name)
 
 
 def _workspace(router: Any) -> Path:
@@ -463,12 +470,15 @@ async def _handle_post(
         return web.json_response({"error": "method_not_allowed"}, status=405)
     if not admin_authorized(secret, tokens, request):
         return web.json_response({"error": "unauthorized"}, status=401)
-    if workspace is None or sessions is None:
+    if sessions is None:
         return web.json_response({"error": "unavailable"}, status=503)
-    if timezone is None:
+    if workspace is None or timezone is None:
+        # The websocket channel only holds its own config; the agent's workspace and timezone are in the main one.
         from nanobot.config.loader import load_config
 
-        timezone = load_config().agents.defaults.timezone
+        config = load_config()
+        workspace = workspace or config.workspace_path
+        timezone = timezone or config.agents.defaults.timezone
     try:
         body = await _read_json(request)
         if request.path == PREFIX + "/settings":
