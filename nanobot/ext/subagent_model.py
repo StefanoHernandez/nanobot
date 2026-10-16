@@ -22,6 +22,8 @@ _ATTR = "_ext_subagent_runtime"
 MOBILE_ONLY_RUNTIME_PATHS = frozenset({
     "agents.defaults.dream.model_override",
     "agents.defaults.subagent_model_preset",
+    "agents.defaults.prompt_cache_ttl",
+    "agents.defaults.session_ttl_minutes",
 })
 
 
