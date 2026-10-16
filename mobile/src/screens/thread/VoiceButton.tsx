@@ -32,10 +32,12 @@ export function VoiceButton({
   chatKey,
   onTranscript,
   onPartial,
+  onRecordingChange,
 }: {
   chatKey: string;
   onTranscript: (text: string) => void;
   onPartial?: (text: string) => void;
+  onRecordingChange?: (recording: boolean) => void;
 }) {
   const t = useT();
   const th = useTheme();
@@ -58,6 +60,15 @@ export function VoiceButton({
   const deviceStartAtRef = useRef(0);
   const lastFinalRef = useRef("");
   const handledRef = useRef(false);
+  const recording = serverVoice.state === "recording" || deviceState === "recording";
+  const onRecordingChangeRef = useRef(onRecordingChange);
+  onRecordingChangeRef.current = onRecordingChange;
+  useEffect(() => {
+    onRecordingChangeRef.current?.(recording);
+    return () => {
+      if (recording) onRecordingChangeRef.current?.(false);
+    };
+  }, [recording]);
 
   useEffect(() => {
     if (!serverVoice.error) return;

@@ -3,6 +3,7 @@ import type { NanobotSession } from "../core/session";
 export type JournalIndex = {
   enabled: boolean;
   hour: number;
+  model: string | null;
   days: string[];
 };
 
@@ -28,9 +29,17 @@ export function normalizeJournal(raw: unknown): JournalIndex {
   const days = Array.isArray(rec.days)
     ? rec.days.filter((day): day is string => typeof day === "string" && DAY.test(day))
     : [];
+  const rawModel = rec.model;
+  let model: string | null = null;
+  if (rawModel === "default") {
+    model = null;
+  } else if (typeof rawModel === "string" && rawModel) {
+    model = rawModel;
+  }
   return {
     enabled: rec.enabled === true,
     hour: typeof hour === "number" && Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 22,
+    model,
     days,
   };
 }
@@ -98,7 +107,7 @@ export async function fetchJournalDay(session: NanobotSession, date: string): Pr
 
 export async function saveJournalSettings(
   session: NanobotSession,
-  settings: { enabled: boolean; hour: number },
+  settings: { enabled: boolean; hour: number; model?: string | null },
 ): Promise<JournalIndex> {
   const saved = normalizeJournal(await postJournal(session, "/api/ext/journal/settings", settings));
   return { ...saved, days: saved.days };
