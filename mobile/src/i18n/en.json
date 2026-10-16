@@ -149,6 +149,7 @@
       "appearance": "Appearance",
       "models": "Models",
       "capabilities": "Capabilities",
+      "prompts": "Prompts",
       "system": "System",
       "machine": "Machine",
       "backup": "Backup",
@@ -1087,5 +1088,27 @@
     "inProgress": "Backup already in progress",
     "notNanobot": "The file is not a nanobot backup",
     "unsafe": "Unsafe archive"
+  },
+  "prompts": {
+    "title": "Prompts",
+    "promptTitle": "Title",
+    "open": "Prompt library",
+    "empty": "No prompts yet",
+    "noMatches": "No prompts found",
+    "newPrompt": "New prompt",
+    "saveDraftAsPrompt": "Save draft as prompt",
+    "projectBadge": "Project",
+    "projectScope": "Only this project",
+    "body": "Prompt body",
+    "search": "Search prompts",
+    "variables": "Variables",
+    "insert": "Insert",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "deleteConfirmTitle": "Delete prompt?",
+    "deleteConfirmMessage": "Delete \"{{title}}\"? This cannot be undone.",
+    "tooMany": "Prompt limit reached (maximum 500)",
+    "sectionTitle": "Prompts"
   }
 }

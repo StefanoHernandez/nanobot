@@ -4,6 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { EffortPill } from "../../extras/EffortPill";
+import { PromptPickerSheet } from "../../extras/PromptPickerSheet";
 import { loadCommands, type Cmd } from "../../extras/logic";
 import { useT } from "../../i18n";
 import { useSession } from "../../state/sessionStore";
@@ -64,6 +65,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
   const prevUploading = useRef(uploading);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
   const [commands, setCommands] = useState<Cmd[]>([]);
   const [cliApps, setCliApps] = useState<CliAppInfo[]>([]);
   const [mcpPresets, setMcpPresets] = useState<McpPresetInfo[]>([]);
@@ -364,6 +366,11 @@ export function Composer({ chatKey }: { chatKey: string }) {
             disabled={uploading}
             onPress={() => setSheetOpen(true)}
           />
+          <IconButton
+            icon="text-box-multiple-outline"
+            accessibilityLabel={t("prompts.open")}
+            onPress={() => setPromptsOpen(true)}
+          />
           <EffortPill chatKey={chatKey} />
           <ContextIndicator chatKey={chatKey} />
           <View style={{ flex: 1 }} />
@@ -411,6 +418,14 @@ export function Composer({ chatKey }: { chatKey: string }) {
             onPress={handlePickFiles}
           />
         </Sheet>
+      ) : null}
+
+      {promptsOpen ? (
+        <PromptPickerSheet
+          open={promptsOpen}
+          onClose={() => setPromptsOpen(false)}
+          chatKey={chatKey}
+        />
       ) : null}
     </View>
     </View>
