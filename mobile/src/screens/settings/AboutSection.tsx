@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import type { VersionCheckResult } from "@/lib/api";
 import { useT } from "../../i18n";
@@ -62,7 +62,16 @@ export function AboutSection() {
         <View style={{ padding: 16, paddingTop: 4, gap: 8 }}>
           <Button title={t("settings.changeServer")} variant="secondary" onPress={() => router.push("/connect")} />
           {session ? (
-            <Button title={t("settings.pairPhone")} variant="secondary" loading={pairBusy} onPress={() => void onPairPhone()} />
+            Platform.OS === "web" ? (
+              <View style={{ gap: 4 }}>
+                <Button title={t("settings.pairPhone")} variant="secondary" disabled onPress={() => {}} />
+                <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
+                  {t("devices.pairFromServer")}
+                </Text>
+              </View>
+            ) : (
+              <Button title={t("settings.pairPhone")} variant="secondary" loading={pairBusy} onPress={() => void onPairPhone()} />
+            )
           ) : null}
         </View>
       </View>

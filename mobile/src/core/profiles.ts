@@ -2,7 +2,13 @@ import { BootstrapAuthRequiredError, fetchBootstrap } from "@/lib/bootstrap";
 import { secretStore } from "../platform/secretStore";
 import { kv } from "../platform/storage";
 
-export type Profile = { id: string; name: string; baseUrl: string; hasSecret: boolean };
+export type Profile = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  hasSecret: boolean;
+  auth?: "cookie" | "secret" | "none";
+};
 
 export function normalizeBaseUrl(input: string): string | null {
   let s = input.trim();
@@ -33,7 +39,7 @@ function read(): Profile[] {
 
 export const profiles = {
   list: (): Profile[] => read(),
-  async save(p: Omit<Profile, "hasSecret">, secret: string): Promise<void> {
+  async save(p: Omit<Profile, "hasSecret">, secret: string = ""): Promise<void> {
     if (secret) await secretStore.set(secretKey(p.id), secret);
     else await secretStore.del(secretKey(p.id));
     const next = read().filter((x) => x.id !== p.id);

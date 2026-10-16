@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { fetchBootstrap, BootstrapAuthRequiredError } from "@/lib/bootstrap";
+import { fetchCookieBootstrap } from "./cookieBootstrap";
 import { NanobotClient } from "@/lib/nanobot-client";
 import { uploadCapability, type UploadCapability } from "../../vendor/nanobot/packages/client-events/attachments";
 import type { WebUIIngressLimits } from "@/lib/types";
@@ -66,7 +67,7 @@ export class NanobotSession {
   private readonly st: (fn: () => void, ms: number) => unknown;
   private readonly ct: (h: unknown) => void;
 
-  constructor(profile: Profile, private secret: string, deps: SessionDeps = {}) {
+  constructor(private profile: Profile, private secret: string, deps: SessionDeps = {}) {
     this.baseUrl = profile.baseUrl;
     // Native only: there `location` is the polyfill stub. In a browser it is the real one, and
     // assigning href navigates the page, which recreates the session and reloads forever.
@@ -149,7 +150,10 @@ export class NanobotSession {
     const g = this.gen;
     const p = (async () => {
       try {
-        const b = await fetchBootstrap(this.baseUrl, this.secret, 10_000);
+        const b =
+          this.profile.auth === "cookie"
+            ? await fetchCookieBootstrap(this.baseUrl, 10_000)
+            : await fetchBootstrap(this.baseUrl, this.secret, 10_000);
         const boot = { apiToken: b.api_token ?? b.token ?? "", wsUrl: wsUrlFor(this.baseUrl, b.ws_path, b.token ?? "") };
         if (g !== this.gen) return boot; // stopped meanwhile: apply nothing
         this.api = boot.apiToken;
