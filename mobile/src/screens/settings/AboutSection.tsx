@@ -28,11 +28,17 @@ function getStorage(): Storage | null {
 }
 
 function getSavedPhoneUrl(): string {
-  return getStorage()?.getItem(PHONE_URL_KEY) ?? "";
+  try {
+    return getStorage()?.getItem(PHONE_URL_KEY) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 function savePhoneUrl(val: string): void {
-  getStorage()?.setItem(PHONE_URL_KEY, val);
+  try {
+    getStorage()?.setItem(PHONE_URL_KEY, val);
+  } catch {}
 }
 
 export function AboutSection() {
@@ -52,7 +58,8 @@ export function AboutSection() {
     try {
       const cleanUrl = isServer && phoneUrl.trim() ? phoneUrl.trim() : undefined;
       const minted = await mintPairingCode(session, cleanUrl);
-      const qr = minted.qr || pairingQrValue(cleanUrl || session.baseUrl, minted.code);
+      // Server mode uses the server's QR (it carries the phone address); native keeps its own base URL.
+      const qr = (isServer && minted.qr) || pairingQrValue(cleanUrl || session.baseUrl, minted.code);
       if (!qr) throw new Error("mint failed");
       setPair({ code: minted.code, qr });
     } catch (e) {

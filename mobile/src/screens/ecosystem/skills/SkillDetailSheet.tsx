@@ -12,10 +12,13 @@ export function SkillDetailSheet({
   open,
   skillName,
   onClose,
+  onDeleted,
 }: {
   open: boolean;
   skillName: string | null;
   onClose: () => void;
+  /** The sheet has its own skills state: the list behind it must reload itself. */
+  onDeleted?: () => void;
 }) {
   const t = useT();
   const th = useTheme();
@@ -30,6 +33,7 @@ export function SkillDetailSheet({
   useEffect(() => {
     if (open && skillName) {
       let active = true;
+      setSkillDetail(null);
       setLoading(true);
       setError(null);
       detail(skillName)
@@ -58,6 +62,7 @@ export function SkillDetailSheet({
     try {
       await remove(skillName);
       setConfirmOpen(false);
+      onDeleted?.();
       onClose();
     } catch (e) {
       setConfirmOpen(false);

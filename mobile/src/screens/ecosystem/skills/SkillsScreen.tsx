@@ -159,7 +159,8 @@ export function SkillsScreen() {
         toast.show(t("common.success", "Success"));
       }
     } catch (e) {
-      if (isPolicyError(e)) {
+      // The app's own gate (host flag off) keeps its copy; a server 403 means this device lacks full power.
+      if (isPolicyError(e) && !(e as { policy?: boolean }).policy) {
         toast.show(t("skills.installNeedsFullPower"));
       } else {
         toastEcosystemError(e, t);
@@ -323,6 +324,7 @@ export function SkillsScreen() {
         open={!!selectedDetailSkill}
         skillName={selectedDetailSkill}
         onClose={() => setSelectedDetailSkill(null)}
+        onDeleted={() => void refresh()}
       />
 
       <Dialog
