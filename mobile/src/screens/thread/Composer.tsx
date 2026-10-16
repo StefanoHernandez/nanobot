@@ -19,6 +19,10 @@ import { useTheme } from "../../ui/ThemeProvider";
 import { ContextIndicator } from "./ContextIndicator";
 import { SlashMenu } from "./SlashMenu";
 import { VoiceButton } from "./VoiceButton";
+import { VoiceLoopBar } from "./VoiceLoopBar";
+import { useVoiceLoop } from "../../extras/voiceLoop";
+import { speechStore } from "../../extras/speech";
+import { useStore } from "zustand";
 import { voiceAvailable } from "../../extras/voice";
 import { DEFAULT_LIMITS } from "../../core/session";
 import { prepareImage, validateFiles, type LocalFile } from "../../core/upload";
@@ -62,6 +66,9 @@ export function Composer({ chatKey }: { chatKey: string }) {
     uploading = false,
     clearSendError = () => {},
   } = useThreadSlice(chatKey);
+
+  const audioRepliesEnabled = useStore(speechStore, (s) => s.enabled);
+  const voiceLoop = useVoiceLoop(chatKey);
 
   const prevUploading = useRef(uploading);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -327,6 +334,19 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
   const isRunningEmpty = running && !hasContent;
 
+  if (voiceLoop.state !== "idle") {
+    return (
+      <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
+        <VoiceLoopBar
+          state={voiceLoop.state}
+          level={voiceLoop.level}
+          onStop={voiceLoop.stop}
+          onInterrupt={voiceLoop.interrupt}
+        />
+      </View>
+    );
+  }
+
   return (
     <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
     <View style={[styles.container, { backgroundColor: th.colors.card, borderRadius: th.radius.lg }]}>
@@ -389,7 +409,18 @@ export function Composer({ chatKey }: { chatKey: string }) {
           <EffortPill chatKey={chatKey} />
           <ContextIndicator chatKey={chatKey} />
           <View style={{ flex: 1 }} />
-          {voiceOk ? <VoiceButton chatKey={chatKey} onTranscript={appendTranscript} /> : null}
+          {voiceOk ? (
+            <>
+              <IconButton
+                icon="account-voice"
+                accessibilityLabel={t("voiceLoop.start")}
+                accessibilityHint={!audioRepliesEnabled ? t("voiceLoop.audioRepliesRequired") : undefined}
+                disabled={!audioRepliesEnabled}
+                onPress={() => void voiceLoop.start()}
+              />
+              <VoiceButton chatKey={chatKey} onTranscript={appendTranscript} />
+            </>
+          ) : null}
           {voiceOk && !hasContent && !running ? null : isRunningEmpty ? (
             <IconButton
               icon="stop-circle-outline"

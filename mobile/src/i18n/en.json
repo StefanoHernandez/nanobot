@@ -1133,5 +1133,17 @@
     "tooMany": "Prompt limit reached (maximum 500)",
     "tooLong": "Title or body is too long",
     "sectionTitle": "Prompts"
+  },
+  "voiceLoop": {
+    "start": "Continuous voice conversation",
+    "stop": "End conversation",
+    "interrupt": "Interrupt",
+    "listening": "Listening…",
+    "transcribing": "Transcribing…",
+    "waiting": "nanobot is replying…",
+    "speaking": "Speaking…",
+    "idle": "Conversation ended",
+    "noSpeech": "No speech detected",
+    "audioRepliesRequired": "Enable audio replies in settings to use voice conversation"
   }
 }
