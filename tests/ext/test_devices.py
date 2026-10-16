@@ -410,3 +410,21 @@ async def test_the_server_browser_can_pair_even_as_a_device(devices_path):
 
     assert (await handler(codes("100.64.0.7", "arduino.tail.ts.net:8765"))).status == 403
     assert (await handler(codes("127.0.0.1", "127.0.0.1:8765"))).status == 201
+
+
+@pytest.mark.asyncio
+async def test_the_server_browser_names_the_address_in_the_qr(devices_path):
+    handler = dev.devices_post_handler(MASTER, _Tokens(), fallback=_fail_fallback)
+
+    def codes(body: dict, remote: str):
+        req = _post("/codes", body, MASTER)
+        req.headers["Host"] = "127.0.0.1:8765"
+        req.remote = remote
+        return req
+
+    resp = await handler(codes({"url": "https://arduino.tail.ts.net/"}, "127.0.0.1"))
+    assert json.loads(_json(resp)["qr"])["url"] == "https://arduino.tail.ts.net"
+    bad = await handler(codes({"url": "https://evil.example/steal"}, "127.0.0.1"))
+    assert bad.status == 400
+    remote = await handler(codes({"url": "https://evil.example"}, "100.64.0.7"))
+    assert json.loads(_json(remote)["qr"])["url"] == "http://127.0.0.1:8765"  # body ignored
