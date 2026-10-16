@@ -68,7 +68,12 @@ export function MemoryScreen() {
   const changeSettings = async (next: { enabled: boolean; hour: number }) => {
     if (!session) return;
     const saved = await saveJournalSettings(session, next);
-    setJournal((prev) => ({ enabled: saved.enabled, hour: saved.hour, days: prev?.days ?? [] }));
+    setJournal((prev) => ({
+      enabled: saved.enabled,
+      hour: saved.hour,
+      model: saved.model,
+      days: prev?.days ?? [],
+    }));
   };
 
   const writeToday = async () => {

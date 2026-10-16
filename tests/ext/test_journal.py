@@ -122,19 +122,129 @@ async def test_empty_day_writes_nothing(tmp_path):
     assert not (workspace / "memory" / "journal" / "2026-10-16.md").exists()
 
 
+PRESETS = frozenset({"fast", "writer"})
+
+
 def test_settings_validation(tmp_path):
     workspace, _sessions_unused = _sessions(tmp_path)
-    assert journal.load_settings(workspace) == {"enabled": False, "hour": 22}
-    saved = journal.save_settings(workspace, {"enabled": True, "hour": 7})
-    assert saved == {"enabled": True, "hour": 7}
+    assert journal.load_settings(workspace) == {"enabled": False, "hour": 22, "model": None}
+    saved = journal.save_settings(workspace, {"enabled": True, "hour": 7}, preset_names=PRESETS)
+    assert saved == {"enabled": True, "hour": 7, "model": None}
     assert journal.load_settings(workspace)["hour"] == 7
     with pytest.raises(journal.JournalError) as exc:
-        journal.parse_settings({"enabled": True, "hour": 24})
+        journal.parse_settings({"enabled": True, "hour": 24}, preset_names=PRESETS)
     assert exc.value.status == 400 and exc.value.code == "invalid_hour"
     with pytest.raises(journal.JournalError):
-        journal.parse_settings({"enabled": True, "hour": True})
+        journal.parse_settings({"enabled": True, "hour": True}, preset_names=PRESETS)
     with pytest.raises(journal.JournalError):
-        journal.parse_settings({"enabled": "yes", "hour": 7})
+        journal.parse_settings({"enabled": "yes", "hour": 7}, preset_names=PRESETS)
+    journal.settings_path(workspace).write_text(
+        '{"enabled": true, "hour": 9, "model": 4}', encoding="utf-8"
+    )
+    assert journal.load_settings(workspace)["model"] is None
+    journal.settings_path(workspace).write_text(
+        '{"enabled": true, "hour": 9, "model": "default"}', encoding="utf-8"
+    )
+    assert journal.load_settings(workspace)["model"] is None
+
+
+def test_journal_model_preset_round_trip(tmp_path):
+    workspace, _ = _sessions(tmp_path)
+    saved = journal.save_settings(
+        workspace,
+        {"enabled": True, "hour": 9, "model": "writer"},
+        preset_names=PRESETS,
+    )
+    assert saved["model"] == "writer"
+    assert journal.load_settings(workspace)["model"] == "writer"
+
+
+def test_journal_model_unknown_preset_rejected(tmp_path):
+    workspace, _ = _sessions(tmp_path)
+    with pytest.raises(journal.JournalError) as exc:
+        journal.save_settings(
+            workspace,
+            {"enabled": True, "hour": 9, "model": "missing"},
+            preset_names=PRESETS,
+        )
+    assert exc.value.status == 400 and exc.value.code == "invalid_model"
+
+
+def test_journal_model_null_and_default_store_null(tmp_path):
+    workspace, _ = _sessions(tmp_path)
+    journal.save_settings(
+        workspace,
+        {"enabled": True, "hour": 9, "model": "writer"},
+        preset_names=PRESETS,
+    )
+    for body in ({"enabled": True, "hour": 9, "model": None}, {"enabled": True, "hour": 9, "model": "default"}):
+        saved = journal.save_settings(workspace, body, preset_names=PRESETS)
+        assert saved["model"] is None
+        assert journal.load_settings(workspace)["model"] is None
+
+
+def test_journal_model_missing_keeps_previous(tmp_path):
+    workspace, _ = _sessions(tmp_path)
+    journal.save_settings(
+        workspace,
+        {"enabled": True, "hour": 9, "model": "fast"},
+        preset_names=PRESETS,
+    )
+    saved = journal.save_settings(workspace, {"enabled": False, "hour": 10}, preset_names=PRESETS)
+    assert saved == {"enabled": False, "hour": 10, "model": "fast"}
+
+
+@pytest.mark.asyncio
+async def test_agent_turn_uses_preset_runtime(tmp_path):
+    workspace, sessions = _sessions(tmp_path)
+    journal.save_settings(
+        workspace,
+        {"enabled": True, "hour": 22, "model": "writer"},
+        preset_names=PRESETS,
+    )
+    runtime = object()
+    seen: list[object | None] = []
+
+    class _Agent:
+        def __init__(self) -> None:
+            self.sessions = sessions
+            self.context = SimpleNamespace(memory=SimpleNamespace(workspace=workspace))
+            self.runtime_resolver = SimpleNamespace(resolve_preset=lambda name: runtime if name == "writer" else None)
+
+        async def process_direct(self, _prompt: str, **kwargs: object) -> SimpleNamespace:
+            seen.append(kwargs.get("runtime"))
+            return SimpleNamespace(content="ok")
+
+    turn = journal.agent_turn(_Agent())
+    text = await turn("prompt")
+    assert text == "ok"
+    assert seen == [runtime]
+
+
+@pytest.mark.asyncio
+async def test_agent_turn_falls_back_when_preset_unavailable(tmp_path):
+    workspace, sessions = _sessions(tmp_path)
+    journal.save_settings(
+        workspace,
+        {"enabled": True, "hour": 22, "model": "writer"},
+        preset_names=PRESETS,
+    )
+    seen: list[object | None] = []
+
+    class _Agent:
+        def __init__(self) -> None:
+            self.sessions = sessions
+            self.context = SimpleNamespace(memory=SimpleNamespace(workspace=workspace))
+            self.runtime_resolver = SimpleNamespace(resolve_preset=lambda _name: (_ for _ in ()).throw(RuntimeError("gone")))
+
+        async def process_direct(self, _prompt: str, **kwargs: object) -> SimpleNamespace:
+            seen.append(kwargs.get("runtime", "chat"))
+            return SimpleNamespace(content="fallback")
+
+    turn = journal.agent_turn(_Agent())
+    text = await turn("prompt")
+    assert text == "fallback"
+    assert seen == ["chat"]
 
 
 def _router(workspace, sessions):
@@ -179,7 +289,7 @@ async def test_routes_list_day_and_run(tmp_path, monkeypatch):
     listing = journal.dispatch_journal_get(router, _get("/api/ext/journal"), "/api/ext/journal")
     assert listing is not None
     body = json.loads(listing.body.decode("utf-8"))
-    assert body["enabled"] is False and body["hour"] == 22 and body["days"] == []
+    assert body["enabled"] is False and body["hour"] == 22 and body["model"] is None and body["days"] == []
 
     missing = journal.dispatch_journal_get(
         router, _get("/api/ext/journal/day?date=2026-10-16"), "/api/ext/journal/day"
@@ -214,7 +324,7 @@ async def test_routes_list_day_and_run(tmp_path, monkeypatch):
     assert "Decisione" in json.loads(day.body.decode("utf-8"))["text"]
 
     saved = await handler(_post("/api/ext/journal/settings", {"enabled": True, "hour": 21}))
-    assert json.loads(saved.text) == {"enabled": True, "hour": 21}
+    assert json.loads(saved.text) == {"enabled": True, "hour": 21, "model": None}
     jobs = [job for job in cron.list_jobs(include_disabled=True) if job.name == "journal"]
     assert len(jobs) == 1 and jobs[0].schedule.expr == "0 21 * * *"
     monkeypatch.undo()
@@ -229,13 +339,13 @@ def test_job_is_scheduled_only_when_enabled(tmp_path):
     cron = CronService(tmp_path / "cron" / "jobs.json")
     journal.sync_journal_job(cron, workspace, "UTC")
     assert [job for job in cron.list_jobs(include_disabled=True) if job.name == "journal"] == []
-    journal.save_settings(workspace, {"enabled": True, "hour": 22})
+    journal.save_settings(workspace, {"enabled": True, "hour": 22}, preset_names=frozenset())
     journal.sync_journal_job(cron, workspace, "Europe/Rome")
     jobs = [job for job in cron.list_jobs(include_disabled=True) if job.name == "journal"]
     assert len(jobs) == 1
     assert jobs[0].schedule.expr == "0 22 * * *"
     assert jobs[0].schedule.tz == "Europe/Rome"
-    journal.save_settings(workspace, {"enabled": False, "hour": 22})
+    journal.save_settings(workspace, {"enabled": False, "hour": 22}, preset_names=frozenset())
     journal.sync_journal_job(cron, workspace, "UTC")
     assert [job for job in cron.list_jobs(include_disabled=True) if job.name == "journal"] == []
 
@@ -265,7 +375,7 @@ async def test_run_journal_job_writes_the_turn_and_does_not_deliver(tmp_path):
     try:
         await journal.run_journal_job(_Agent(), tz_name="UTC")
         assert calls == []  # off by default: a leftover job writes nothing
-        journal.save_settings(workspace, {"enabled": True, "hour": 22})
+        journal.save_settings(workspace, {"enabled": True, "hour": 22}, preset_names=frozenset())
         await journal.run_journal_job(_Agent(), tz_name="UTC")
     finally:
         journal.local_today = original

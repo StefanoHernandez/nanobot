@@ -127,6 +127,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
   }, [session]);
 
   const [voicePartial, setVoicePartial] = useState("");
+  const [voiceRecording, setVoiceRecording] = useState(false);
   const [voiceOk, setVoiceOk] = useState(() => isVoiceAvailable(null));
   useEffect(() => {
     let active = true;
@@ -403,23 +404,30 @@ export function Composer({ chatKey }: { chatKey: string }) {
           />
 
           <View style={styles.toolsRow}>
-            <IconButton
-              icon="paperclip"
-              accessibilityLabel={t("attach.button")}
-              disabled={uploading}
-              onPress={() => setSheetOpen(true)}
-            />
-            <IconButton
-              icon="text-box-multiple-outline"
-              accessibilityLabel={t("prompts.open")}
-              onPress={() => setPromptsOpen(true)}
-            />
-            <EffortPill chatKey={chatKey} />
-            <ContextIndicator chatKey={chatKey} />
+            <View style={styles.toolsLeft}>
+              <IconButton
+                icon="paperclip"
+                accessibilityLabel={t("attach.button")}
+                disabled={uploading}
+                onPress={() => setSheetOpen(true)}
+              />
+              <IconButton
+                icon="text-box-multiple-outline"
+                accessibilityLabel={t("prompts.open")}
+                onPress={() => setPromptsOpen(true)}
+              />
+              {voiceRecording ? null : (
+                <>
+                  <EffortPill chatKey={chatKey} />
+                  <ContextIndicator chatKey={chatKey} />
+                </>
+              )}
+            </View>
             <View style={{ flex: 1 }} />
+            <View style={styles.toolsRight}>
             {voiceOk ? (
               <>
-                {voiceLoop ? (
+                {voiceLoop && !voiceRecording ? (
                   <IconButton
                     icon="account-voice"
                     accessibilityLabel={t("voiceLoop.start")}
@@ -435,6 +443,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
                     appendTranscript(text);
                   }}
                   onPartial={setVoicePartial}
+                  onRecordingChange={setVoiceRecording}
                 />
               </>
             ) : null}
@@ -465,6 +474,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
                 onPress={handleSend}
               />
             )}
+            </View>
           </View>
         </View>
 
@@ -540,5 +550,17 @@ const styles = StyleSheet.create({
   toolsRow: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  toolsLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  toolsRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
   },
 });
