@@ -270,8 +270,14 @@ vi.mock("@/lib/nanobot-client", async (importOriginal) => {
       runStatusHandlers.add(handler);
       return () => runStatusHandlers.delete(handler);
     };
+    onRunCompletion = () => () => {};
     getRunStartedAt = () => null;
     getRunTurnId = () => null;
+    getUnsettledRunChatIds = () => [];
+    getRunGeneration = () => 0;
+    hasUnsettledRun = () => false;
+    canReconcileCanonicalCompletion = () => true;
+    reconcileCanonicalCompletion = () => true;
     fenceCanonicalCompletedTurns = vi.fn();
     getGoalState = () => undefined;
     sendMessage = sendMessageSpy;
@@ -1855,8 +1861,7 @@ describe("App layout", () => {
       schema_version: 1, pinned_keys: [], archived_keys: [], session_order: [],
       title_overrides: { [key]: "推特大战场" }, project_name_overrides: {},
       tags_by_key: {}, collapsed_groups: {}, workbench: { version: 1, tabs: {} },
-      view: { density: "comfortable", show_previews: false, show_timestamps: false,
-        show_archived: false, sort: "updated_desc" },
+      view: { density: "comfortable", show_archived: false, sort: "updated_desc" },
     };
     mockFetchRoutes({
       "/api/settings": baseSettingsPayload(),
@@ -2591,8 +2596,6 @@ describe("App layout", () => {
       collapsed_groups: {},
       view: {
         density: "comfortable",
-        show_previews: false,
-        show_timestamps: false,
         show_archived: false,
         sort: "updated_desc",
       },
@@ -2674,8 +2677,6 @@ describe("App layout", () => {
       collapsed_groups: {},
       view: {
         density: "comfortable",
-        show_previews: false,
-        show_timestamps: false,
         show_archived: false,
         sort: "title_asc",
       },
@@ -2855,7 +2856,7 @@ describe("App layout", () => {
       .not.toBeInTheDocument();
   });
 
-  it("restores sidebar run indicators after a page reload", async () => {
+  it("restores sidebar runs from lifecycle replay without reviving them from stale session rows", async () => {
     mockSessions = [
       {
         key: "websocket:chat-a",
@@ -2880,15 +2881,23 @@ describe("App layout", () => {
       JSON.stringify(["chat-b"]),
     );
 
-    render(<App />);
+    const { rerender } = render(<App />);
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
     const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
-    await waitFor(() =>
-      expect(within(sidebar).getByRole("img", { name: "Agent running" })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(attachSpy).toHaveBeenCalledWith("chat-a"));
+    expect(within(sidebar).queryByRole("img", { name: "Agent running" })).not.toBeInTheDocument();
+    act(() => {
+      for (const handler of runStatusHandlers) handler("chat-a", 12_345);
+    });
+    expect(within(sidebar).getByRole("img", { name: "Agent running" })).toBeInTheDocument();
     expect(within(sidebar).getByRole("img", { name: "New activity" })).toBeInTheDocument();
-    expect(attachSpy).toHaveBeenCalledWith("chat-a");
+    act(() => {
+      for (const handler of runStatusHandlers) handler("chat-a", null);
+    });
+    mockSessions = mockSessions.map((session) => ({ ...session }));
+    rerender(<App />);
+    expect(within(sidebar).queryByRole("img", { name: "Agent running" })).not.toBeInTheDocument();
   });
 
   it("restores the active chat from the URL hash after a page reload", async () => {
