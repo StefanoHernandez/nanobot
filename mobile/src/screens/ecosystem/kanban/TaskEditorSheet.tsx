@@ -306,7 +306,7 @@ export function TaskEditorSheet({
 
   return (
     <>
-      <Sheet open={open} onClose={close} title={task ? task.title : t("kanban.add")}>
+      <Sheet open={open} onClose={close} title={task ? task.title : t("kanban.add")} scroll={false}>
         <ScrollView style={{ maxHeight: 560 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingBottom: 12 }}>
           <TextField label={t("kanban.taskTitle")} value={title} onChangeText={setTitle} />
           <TextField label={t("kanban.description")} value={description} onChangeText={setDescription} multiline />

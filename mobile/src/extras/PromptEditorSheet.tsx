@@ -135,6 +135,7 @@ export function PromptEditorSheet({
         open={open}
         onClose={onClose}
         title={t(prompt ? "prompts.edit" : "prompts.newPrompt")}
+        scroll={false}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"

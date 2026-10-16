@@ -196,6 +196,7 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved, onFe
       open={open}
       onClose={onClose}
       title={t("channels.sheetTitle", { name: channel.display_name || channel.name })}
+      scroll={false}
     >
       <KeyboardAvoidingView behavior="padding">
         <ScrollView contentContainerStyle={styles.scrollContent}>

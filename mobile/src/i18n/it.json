@@ -398,6 +398,8 @@
     "rotateFailed": "Rotazione non disponibile",
     "network": "Consenti rete",
     "networkOn": "Rete consentita",
+    "networkShort": "Rete",
+    "networkHint": "Se l'anteprima resta vuota o incompleta, tocca Rete",
     "networkTitle": "Consenti la rete a questo artefatto?",
     "networkBody": "Potrà contattare siti https. Vale solo per questa anteprima, e gli script restano quelli già nell'app.",
     "networkAllow": "Consenti",

@@ -148,7 +148,7 @@ export function PromptPickerSheet({
 
   return (
     <>
-      <Sheet open={open} onClose={onClose} title={t("prompts.title")}>
+      <Sheet open={open} onClose={onClose} title={t("prompts.title")} scroll={!selectedForVariables}>
         {selectedForVariables ? (
           <ScrollView
             keyboardShouldPersistTaps="handled"

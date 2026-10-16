@@ -3,12 +3,14 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as Print from "expo-print";
@@ -16,6 +18,7 @@ import { useStore } from "zustand";
 import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
 import { useT } from "../../i18n";
+import { kv } from "../../platform/storage";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, Dialog, IconButton, TextField, toast } from "../../ui/components";
 import { artifactFixText, freshArtifactId } from "../../artifacts/fix";
@@ -114,6 +117,8 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [network, setNetwork] = useState(false);
   const [askNetwork, setAskNetwork] = useState(false);
+  const { width: windowWidth } = useWindowDimensions();
+  const networkHinted = useRef(false);
 
   const ext = useMemo(() => langOf(name), [name]);
   const kind = useMemo(() => viewerKind(name), [name]);
@@ -135,6 +140,19 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     setAskNetwork(false);
     setFixError(null);
   }, [name, opened?.id, versionIndex]);
+
+  useEffect(() => {
+    if (networkHinted.current || !canNetwork) return;
+    networkHinted.current = true;
+    if (network) return;
+    try {
+      if (kv.get("artifact.networkHint")) return;
+      kv.set("artifact.networkHint", "1");
+      toast.show(t("artifact.networkHint"));
+    } catch {
+      // Storage can fail. The preview still works.
+    }
+  }, [canNetwork, network, t]);
 
   // Synchronize the viewed version index in artifactStore so that saving this artifact
   // from Gallery uploads the version the user was actively viewing.
@@ -870,19 +888,45 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         <IconButton icon="file-pdf-box" size={22} onPress={savePdf} disabled={pdfBusy} accessibilityLabel={t("artifact.exportPdf")} />
       ) : null}
       {canNetwork ? (
-        <View style={{ minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center" }}>
-          <Switch
-            accessibilityLabel={network ? t("artifact.networkOn") : t("artifact.network")}
-            value={network || askNetwork}
-            onValueChange={(on) => {
-              if (on) setAskNetwork(true);
-              else {
-                setAskNetwork(false);
-                setNetwork(false);
-              }
-            }}
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: network }}
+          accessibilityLabel={network ? t("artifact.networkOn") : t("artifact.network")}
+          onPress={() => {
+            if (network) {
+              setAskNetwork(false);
+              setNetwork(false);
+            } else setAskNetwork(true);
+          }}
+          style={{
+            minWidth: 48,
+            minHeight: 48,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            paddingHorizontal: 10,
+            borderRadius: th.radius.md,
+            backgroundColor: network ? th.colors.primary : "transparent",
+          }}
+        >
+          <MaterialCommunityIcons
+            name={network ? "web" : "web-off"}
+            size={22}
+            color={network ? th.colors.primaryForeground : th.colors.mutedForeground}
           />
-        </View>
+          {windowWidth >= 400 ? (
+            <Text
+              style={{
+                color: network ? th.colors.primaryForeground : th.colors.mutedForeground,
+                fontFamily: th.font.medium,
+                fontSize: 14,
+              }}
+            >
+              {t("artifact.networkShort")}
+            </Text>
+          ) : null}
+        </Pressable>
       ) : null}
     </View>
   ) : null;
