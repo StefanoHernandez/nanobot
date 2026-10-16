@@ -108,7 +108,7 @@ export function AboutSection() {
                         setPhoneUrl(val);
                         savePhoneUrl(val);
                       }}
-                      placeholder="https://arduino.tuo-tailnet.ts.net:8765"
+                      placeholder="https://arduino.tuo-tailnet.ts.net"
                       placeholderTextColor={th.colors.mutedForeground}
                       autoCapitalize="none"
                       autoCorrect={false}

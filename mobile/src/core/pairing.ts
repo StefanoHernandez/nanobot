@@ -51,14 +51,19 @@ export const pairedDevice = {
 
 export async function claimDevice(baseUrl: string, code: string, name: string): Promise<{ device_token: string; id: string | null }> {
   const root = baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/devices/claim`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, name }),
-  });
-  if (!res.ok) throw new Error("claim failed");
+  let res: Response;
+  try {
+    res = await fetch(`${root}/api/ext/devices/claim`, {
+      method: "POST",
+      redirect: "error",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, name }),
+    });
+  } catch {
+    throw Object.assign(new Error("claim failed"), { unreachable: true });
+  }
+  if (!res.ok) throw Object.assign(new Error("claim failed"), { status: res.status });
   const data = (await res.json()) as { device_token?: string; id?: string };
   if (!data.device_token) throw new Error("claim failed");
   return { device_token: data.device_token, id: typeof data.id === "string" ? data.id : null };

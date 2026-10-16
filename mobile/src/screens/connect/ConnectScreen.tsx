@@ -71,8 +71,11 @@ export function ConnectScreen() {
       const name = pairingDeviceName(values.name);
       const { device_token, id: deviceId } = await claimDevice(parsed.url, parsed.code, name);
       await finishPair(parsed.url, device_token, deviceId);
-    } catch {
-      toast.show(t("common.error"));
+    } catch (e) {
+      const err = e as { unreachable?: boolean; status?: number };
+      if (err.unreachable) toast.show(t("connect.pairUnreachable", { url: parsed.url }));
+      else if (err.status === 401) toast.show(t("connect.badCode"));
+      else toast.show(t("common.error"));
     } finally {
       busy.current = false;
       setLoading(false);
