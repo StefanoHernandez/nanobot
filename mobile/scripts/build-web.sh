@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Export the app as a static web build for the gateway (opt-in, see roadmap "app web build").
-# Output: mobile/dist-web/. Serve it with NANOBOT_APP_DIST=/path/to/mobile/dist-web on the gateway.
-# Not part of the Python wheel or the `arduino` branch: copy it to the server yourself.
+# Export the app as a static web build. Output: mobile/dist-web/.
+# build-arduino.yml copies it to nanobot/web/app, which the gateway serves by default (`nanobot ui`).
+# Locally: NANOBOT_APP_DIST=/path/to/mobile/dist-web overrides it.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 rm -rf dist-web

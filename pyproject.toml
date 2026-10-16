@@ -141,12 +141,15 @@ include = [
     "nanobot/skills/**/*.sh",
     "nanobot/channels/*/webui/**/*",
     "nanobot/web/dist/**/*",
+    "nanobot/web/app/**/*",
 ]
 # nanobot/web/dist/ is produced by `cd webui && bun run build` and is
 # git-ignored. List it as an artifact so hatch ships it in both wheel and
 # sdist even though VCS does not track it.
 artifacts = [
     "nanobot/web/dist/**/*",
+    # Fork: the app's web export (mobile/scripts/build-web.sh), copied in by build-arduino.yml.
+    "nanobot/web/app/**/*",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -161,6 +164,7 @@ include = [
     "docs/**/*.md",
     "nanobot/",
     "nanobot/web/dist/",
+    "nanobot/web/app/",
     "hatch_build.py",
     "README.md",
     "LICENSE",

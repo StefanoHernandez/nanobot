@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import hashlib
 import hmac
 import json
@@ -13,6 +14,7 @@ import threading
 import time
 import weakref
 from collections.abc import Awaitable, Callable
+from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 from typing import Any, cast
 
@@ -36,6 +38,13 @@ MAX_UNUSED_CODES = 5
 MAX_DEVICES = 20
 MAX_NAME_LEN = 40
 MAX_JSON_BODY_BYTES = 1024 * 1024
+# Browser login: the device token lives in an HttpOnly cookie, never in page storage.
+COOKIE_NAME = "nb_device"
+COOKIE_MAX_AGE_S = 400 * 24 * 3600
+# A cookie is honoured only with this header: a cross-site form or <img> cannot set it.
+COOKIE_AUTH_HEADER = "X-Nanobot-Cookie-Auth"
+WEB_LOGIN_MAX_FAILURES = 10
+WEB_LOGIN_WINDOW_S = 60
 
 _lock = threading.Lock()
 
@@ -207,6 +216,36 @@ def create_pairing_code(path: Path | None = None) -> tuple[str, int]:
     return cast(tuple[str, int], _with_state(target, mutate))
 
 
+def _add_device(state: dict[str, Any], name: str) -> tuple[str, str]:
+    live = sum(1 for device in state["devices"] if not device.get("revoked"))
+    if live >= MAX_DEVICES:
+        raise DeviceError(429, "too_many_devices")
+    device_id = secrets.token_urlsafe(9)
+    device_token = secrets.token_urlsafe(32)
+    state["devices"].append(
+        {
+            "id": device_id,
+            "name": name,
+            "hash": token_hash(device_token),
+            "created": int(time.time()),
+            "last_seen": None,
+            "revoked": False,
+        }
+    )
+    return device_token, device_id
+
+
+def register_device(name: str, path: Path | None = None) -> tuple[str, str, str]:
+    """A new device for a caller already proven by the master secret (browser login)."""
+    cleaned_name = _validate_name(name)
+
+    def mutate(state: dict[str, Any]) -> tuple[str, str, str]:
+        device_token, device_id = _add_device(state, cleaned_name)
+        return device_token, device_id, cleaned_name
+
+    return cast(tuple[str, str, str], _with_state(path or devices_file_path(), mutate))
+
+
 def claim_pairing_code(code: object, name: str, path: Path | None = None) -> tuple[str, str, str]:
     target = path or devices_file_path()
     cleaned_name = _validate_name(name)
@@ -223,22 +262,7 @@ def claim_pairing_code(code: object, name: str, path: Path | None = None) -> tup
                 break
         if match is None or match.get("used"):
             raise DeviceError(401, "unauthorized")
-        live = sum(1 for device in state["devices"] if not device.get("revoked"))
-        if live >= MAX_DEVICES:
-            raise DeviceError(429, "too_many_devices")
-        device_id = secrets.token_urlsafe(9)
-        device_token = secrets.token_urlsafe(32)
-        now = int(time.time())
-        state["devices"].append(
-            {
-                "id": device_id,
-                "name": cleaned_name,
-                "hash": token_hash(device_token),
-                "created": now,
-                "last_seen": None,
-                "revoked": False,
-            }
-        )
+        device_token, device_id = _add_device(state, cleaned_name)
         match["used"] = True
         return device_token, device_id, cleaned_name
 
@@ -276,9 +300,21 @@ def list_devices_public(path: Path | None = None) -> list[dict[str, Any]]:
     return devices
 
 
+def _cookie_token(headers: Any) -> str | None:
+    if case_insensitive_header(headers, COOKIE_AUTH_HEADER) != "1":
+        return None
+    try:
+        jar = SimpleCookie(case_insensitive_header(headers, "Cookie"))
+    except CookieError:
+        return None
+    morsel = jar.get(COOKIE_NAME)
+    return (morsel.value.strip() or None) if morsel is not None else None
+
+
 def live_device_id(headers: Any, path: Path | None = None) -> str | None:
-    """Id of the live (not revoked) device whose token is in the headers; updates last_seen."""
-    raw = _auth_token(headers)
+    """Id of the live (not revoked) device whose token is in the headers (or the browser
+    cookie, with the cookie-auth header); updates last_seen."""
+    raw = _auth_token(headers) or _cookie_token(headers)
     if not raw:
         return None
     digest = token_hash(raw)
@@ -429,10 +465,84 @@ async def read_json(request: web.BaseRequest) -> dict[str, Any]:
     return cast(dict[str, Any], data)
 
 
+_web_login_failures: collections.deque[float] = collections.deque()
+_web_login_lock = threading.Lock()
+
+
+def _web_login_blocked() -> bool:
+    cutoff = time.monotonic() - WEB_LOGIN_WINDOW_S
+    with _web_login_lock:
+        while _web_login_failures and _web_login_failures[0] < cutoff:
+            _web_login_failures.popleft()
+        return len(_web_login_failures) >= WEB_LOGIN_MAX_FAILURES
+
+
+def _web_login_failed() -> None:
+    with _web_login_lock:
+        _web_login_failures.append(time.monotonic())
+
+
+def _same_origin(headers: Any) -> bool:
+    """Browser login/logout only from the page the gateway itself serves."""
+    origin = case_insensitive_header(headers, "Origin").strip().rstrip("/")
+    try:
+        return bool(origin) and hmac.compare_digest(origin, _request_origin(headers))
+    except DeviceError:
+        return False
+
+
+def _device_cookie(value: str, headers: Any, *, max_age: int) -> str:
+    secure = "; Secure" if _request_origin(headers).startswith("https://") else ""
+    return f"{COOKIE_NAME}={value}; Max-Age={max_age}; Path=/; HttpOnly; SameSite=Strict{secure}"
+
+
+async def _web_login(secret: str, request: web.BaseRequest) -> web.StreamResponse:
+    if not _same_origin(request.headers):
+        return web.json_response({"error": "cross_origin"}, status=403)
+    if _web_login_blocked():
+        return web.json_response({"error": "too_many_attempts"}, status=429)
+    body = await read_json(request)
+    code, given_secret, name = body.get("code"), body.get("secret"), body.get("name", "")
+    if isinstance(given_secret, str) and given_secret:
+        if not secret or not hmac.compare_digest(given_secret.encode(), secret.encode()):
+            _web_login_failed()
+            return web.json_response({"error": "unauthorized"}, status=401)
+        device_token, device_id, cleaned = register_device(name)
+    else:
+        try:
+            device_token, device_id, cleaned = claim_pairing_code(code, name)
+        except DeviceError as exc:
+            if exc.status == 401:
+                _web_login_failed()
+            raise
+    response = web.json_response({"id": device_id, "name": cleaned}, status=201)
+    response.headers["Set-Cookie"] = _device_cookie(device_token, request.headers, max_age=COOKIE_MAX_AGE_S)
+    return response
+
+
+async def _web_logout(tokens: Any, request: web.BaseRequest) -> web.StreamResponse:
+    if not _same_origin(request.headers):
+        return web.json_response({"error": "cross_origin"}, status=403)
+    device_id = live_device_id(request.headers)
+    if device_id:
+        revoke_device(device_id)
+        drop_device_tokens(device_id, tokens)
+    response = web.json_response({"ok": True})
+    response.headers["Set-Cookie"] = _device_cookie("", request.headers, max_age=0)
+    return response
+
+
 async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> web.StreamResponse:
     if request.method != "POST":
         return web.json_response({"error": "method_not_allowed"}, status=405)
     path = request.path
+    if path in (PREFIX + "/web-login", PREFIX + "/web-logout"):
+        try:
+            if path == PREFIX + "/web-login":
+                return await _web_login(secret, request)
+            return await _web_logout(tokens, request)
+        except DeviceError as exc:
+            return web.json_response({"error": exc.code}, status=exc.status)
     if path == PREFIX + "/claim":
         try:
             body = await read_json(request)
