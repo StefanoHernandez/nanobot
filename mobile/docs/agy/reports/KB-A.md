@@ -103,3 +103,35 @@ TDD: the four new server tests failed first (`todo` instead of `ready`, `schedul
 ## Not verified
 
 Not run on a phone or an emulator. The web date input was not opened in a browser. No new APK.
+
+## fix1
+
+### What changed
+
+1. The claim query now skips a `ready` card while any parent is not `done` (`nanobot/ext/kanban.py:865`). `_promote_ready_children` is unchanged. Test: `tests/ext/test_kanban.py:227`.
+2. "Avvia" is shown only for a new card or when the status is `triage`, `todo`, `blocked` or `done` (`TaskEditorSheet.tsx:189` and `:447`). A `running` card keeps "Salva" only. Test: `mobile/test/screens/kanban-board.test.tsx:429`.
+3. "Ogni…" accepts only an integer of 1 or more, and only when the result is within 30 days (`TaskEditorSheet.tsx:31`). Otherwise "Avvia" and "Salva" stay disabled and the hint `kanban.repeatInvalid` is shown (`it.json` / `en.json`, "Inserisci un numero intero" / "Enter a whole number"). `recurrenceToExpr` is unchanged. Test: `kanban-board.test.tsx:456`.
+4. `npx jest test/screens/kanban-board.test.tsx --detectOpenHandles` passed (14 tests) and printed no open handles. The full suite with `--detectOpenHandles` also printed none (891 passed). The parallel `npx jest` still prints `A worker process has failed to exit gracefully`. The same line appears when kanban tests are excluded (106 suites, 872 passed), so it does not come from KB-A. Left as-is. No `forceExit`.
+
+### Checks
+
+```
+.venv/bin/python -m pytest -p no:cacheprovider tests/ext/test_kanban.py
+15 passed
+
+.venv/bin/ruff check nanobot/ext/kanban.py
+All checks passed!
+
+.venv/bin/basedpyright nanobot/ext/kanban.py
+0 errors, 0 warnings, 0 notes
+
+cd mobile && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest --no-coverage
+Test Suites: 108 passed, 108 total
+Tests:       891 passed, 891 total
+Snapshots:   0 total
+Time:        9.321 s
+
+npx tsc --noEmit --pretty false
+```
+
+tsc printed nothing and exited 0.

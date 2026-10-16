@@ -727,6 +727,7 @@
     "repeat": "Repeat",
     "never": "Never",
     "every": "Every…",
+    "repeatInvalid": "Enter a whole number",
     "minutes": "minutes",
     "hours": "hours",
     "days": "days",

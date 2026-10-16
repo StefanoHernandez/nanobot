@@ -727,6 +727,7 @@
     "repeat": "Ripeti",
     "never": "Mai",
     "every": "Ogni…",
+    "repeatInvalid": "Inserisci un numero intero",
     "minutes": "minuti",
     "hours": "ore",
     "days": "giorni",
