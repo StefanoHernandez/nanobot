@@ -197,6 +197,8 @@
     "language": "Lingua",
     "sound": "Suono notifiche",
     "soundHelp": "Riproduci un suono per le notifiche",
+    "kanbanNotifications": "Notifiche lavagna",
+    "kanbanNotificationsHelp": "Avvisa quando una scheda finisce, fallisce o richiede attenzione",
     "voiceAutoRead": "Leggi risposte ai messaggi vocali",
     "voiceAutoReadHelp": "Legge automaticamente la risposta quando usi la dettatura vocale",
     "usage30": "Utilizzo, ultimi 30 giorni",
@@ -759,6 +761,12 @@
       "invalid_id": "Scheda non valida.",
       "not_found": "Scheda non trovata.",
       "invalid_parent_ids": "Dipendenza non valida."
+    },
+    "notify": {
+      "done": "Scheda completata",
+      "failed": "Scheda fallita",
+      "review": "Da revisionare",
+      "blocked": "Scheda bloccata"
     }
   },
   "memory": {

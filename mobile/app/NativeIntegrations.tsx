@@ -3,7 +3,7 @@ import { router, useRootNavigationState } from "expo-router";
 import { useLastNotificationResponse } from "expo-notifications";
 import { useShareIntent } from "expo-share-intent";
 import { profiles } from "../src/core/profiles";
-import { chatPath, keyOfResponse, setupNotifications, startTurnNotifications } from "../src/extras/notifications";
+import { pathOfResponse, setupNotifications, startTurnNotifications } from "../src/extras/notifications";
 import { handleShare } from "../src/extras/share";
 import { useSession } from "../src/state/sessionStore";
 
@@ -11,7 +11,7 @@ import { useSession } from "../src/state/sessionStore";
 export function NativeIntegrations() {
   const { state } = useSession();
   const ready = !!useRootNavigationState()?.key;
-  const tapped = keyOfResponse(useLastNotificationResponse());
+  const tapped = pathOfResponse(useLastNotificationResponse());
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export function NativeIntegrations() {
   }, []);
 
   useEffect(() => {
-    if (ready && tapped) router.push(chatPath(tapped) as never);
+    if (ready && tapped) router.push(tapped as never);
   }, [ready, tapped]);
 
   // newChat needs an open session, unless there is no profile at all (handleShare then routes to /connect).

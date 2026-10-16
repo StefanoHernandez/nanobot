@@ -1694,7 +1694,8 @@ ${commonHead}
       if (!window.pptxPreview || typeof window.pptxPreview.init !== "function") {
         throw new Error("pptxPreview not available");
       }
-      var previewer = window.pptxPreview.init(container, {});
+      // pptx-preview sizes slides from the width option; without it every slide is 0 px wide (blank screen).
+      var previewer = window.pptxPreview.init(container, { width: Math.max(240, container.clientWidth - 32) });
       return previewer.preview(bytes.buffer);
     }).then(function() {
       postReady();

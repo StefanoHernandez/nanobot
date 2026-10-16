@@ -1107,6 +1107,70 @@ class KanbanStore:
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _task_public(row)
 
+    def events_since(self, since_ms: int) -> dict[str, Any]:
+        now = _now_ms()
+        with self._lock, self._connect() as conn:
+            run_rows = conn.execute(
+                """
+                SELECT r.id AS run_id, r.status AS kind, r.finished_at_ms AS event_ms,
+                       t.id AS task_id, t.board_id AS board_id, t.title AS title
+                FROM task_runs r
+                JOIN tasks t ON t.id = r.task_id
+                WHERE r.finished_at_ms > ? AND r.finished_at_ms <= ?
+                  AND r.status IN ('done', 'failed')
+                """,
+                (since_ms, now),
+            ).fetchall()
+            task_rows = conn.execute(
+                """
+                SELECT t.id AS task_id, t.status AS kind, t.updated_at_ms AS event_ms,
+                       t.board_id AS board_id, t.title AS title
+                FROM tasks t
+                WHERE t.status IN ('review', 'blocked')
+                  AND t.updated_at_ms > ? AND t.updated_at_ms <= ?
+                """,
+                (since_ms, now),
+            ).fetchall()
+        events: list[dict[str, Any]] = []
+        for row in run_rows:
+            events.append(
+                {
+                    "key": f"run:{row['run_id']}",
+                    "kind": str(row["kind"]),
+                    "task_id": str(row["task_id"]),
+                    "board_id": str(row["board_id"]),
+                    "title": str(row["title"]),
+                    "_ms": int(row["event_ms"]),
+                }
+            )
+        for row in task_rows:
+            task_id = str(row["task_id"])
+            kind = str(row["kind"])
+            updated = int(row["event_ms"])
+            events.append(
+                {
+                    "key": f"{kind}:{task_id}:{updated}",
+                    "kind": kind,
+                    "task_id": task_id,
+                    "board_id": str(row["board_id"]),
+                    "title": str(row["title"]),
+                    "_ms": updated,
+                }
+            )
+        events.sort(key=lambda e: (e["_ms"], e["key"]))
+        if len(events) > 50:
+            trimmed = events[:50]
+            # Cursor sits 1 ms before the cut. The next poll retries that
+            # millisecond; the phone drops keys it already showed.
+            cursor = int(trimmed[-1]["_ms"]) - 1
+        else:
+            trimmed = events
+            cursor = now
+        return {
+            "now": cursor,
+            "events": [{k: v for k, v in e.items() if k != "_ms"} for e in trimmed],
+        }
+
     def _resolve_mentions(self, conn: sqlite3.Connection, content: str) -> list[str]:
         bots = conn.execute("SELECT id, name FROM bots").fetchall()
         by_token: dict[str, str] = {}
@@ -1261,6 +1325,22 @@ def _router_admin_authorized(secret: str, router: Any, request: WsRequest) -> bo
     return bool(router.check_api_token(request))
 
 
+def _parse_since_ms(raw: Any) -> int:
+    if raw is None or raw == "":
+        raise KanbanError(400, "invalid_since")
+    if isinstance(raw, bool):
+        raise KanbanError(400, "invalid_since")
+    if isinstance(raw, int):
+        if raw < 0:
+            raise KanbanError(400, "invalid_since")
+        return raw
+    if isinstance(raw, str):
+        if not raw.isdigit():
+            raise KanbanError(400, "invalid_since")
+        return int(raw)
+    raise KanbanError(400, "invalid_since")
+
+
 def dispatch_kanban_get(router: Any, request: WsRequest, got: str) -> Response | None:
     if got != PREFIX and not got.startswith(PREFIX + "/"):
         return None
@@ -1277,6 +1357,14 @@ def dispatch_kanban_get(router: Any, request: WsRequest, got: str) -> Response |
             payload = store.get_task_detail(task_id)
         except KanbanError as exc:
             return http_json_response({"error": exc.code}, status=exc.status, extra_headers=[("Cache-Control", "no-store")])
+        return http_json_response(payload, extra_headers=[("Cache-Control", "no-store")])
+    if got == PREFIX + "/events":
+        try:
+            since_ms = _parse_since_ms(query_first(query, "since"))
+        except KanbanError as exc:
+            return http_json_response({"error": exc.code}, status=exc.status, extra_headers=[("Cache-Control", "no-store")])
+        store = KanbanStore()
+        payload = store.events_since(since_ms)
         return http_json_response(payload, extra_headers=[("Cache-Control", "no-store")])
     if got == PREFIX:
         store = KanbanStore()

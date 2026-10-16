@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import type { NanobotSession } from "../../../core/session";
 import {
   DEFAULT_BOARD_ID,
@@ -32,7 +32,8 @@ import { useT } from "../../../i18n";
 import { sessionStore } from "../../../state/sessionStore";
 import { SettingsShell } from "../../settings/SettingsShell";
 import { Chips } from "../../settings/common";
-import { Button, Dialog, IconButton, TextField, goBackOr } from "../../../ui/components";
+import { Button, Dialog, IconButton, TextField, goBackOr, toast } from "../../../ui/components";
+import { setOnKanbanScreen } from "../../../extras/kanbanNotify";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { TaskEditorSheet, toastKanbanError } from "./TaskEditorSheet";
 
@@ -52,9 +53,12 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
   const t = useT();
   const th = useTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const params = useLocalSearchParams<{ task?: string | string[]; board?: string | string[] }>();
+  const deepTaskId = typeof params.task === "string" ? params.task : undefined;
+  const deepBoardId = typeof params.board === "string" ? params.board : undefined;
   const [phase, setPhase] = useState<Phase>("loading");
   const [snapshot, setSnapshot] = useState<KanbanSnapshot | null>(null);
-  const [boardId, setBoardId] = useState(DEFAULT_BOARD_ID);
+  const [boardId, setBoardId] = useState(deepBoardId ?? DEFAULT_BOARD_ID);
   const [tab, setTab] = useState<KanbanTab>("board");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<KanbanTask | null>(null);
@@ -71,14 +75,37 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
   const [boardBusy, setBoardBusy] = useState(false);
   const genRef = useRef(0);
   const mountedRef = useRef(true);
+  const deepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
+    setOnKanbanScreen(true);
     return () => {
       mountedRef.current = false;
       genRef.current++;
+      setOnKanbanScreen(false);
     };
   }, []);
+
+  useEffect(() => {
+    if (deepBoardId) setBoardId(deepBoardId);
+  }, [deepBoardId]);
+
+  useEffect(() => {
+    if (phase !== "ok" || !snapshot || !deepTaskId) return;
+    if (deepLinkRef.current === deepTaskId) return;
+    const task = snapshot.tasks.find((row) => row.id === deepTaskId);
+    if (!task) {
+      if (deepLinkRef.current !== `missing:${deepTaskId}`) {
+        deepLinkRef.current = `missing:${deepTaskId}`;
+        toast.show(t("common.error"));
+      }
+      return;
+    }
+    deepLinkRef.current = deepTaskId;
+    setEditingTask(task);
+    setEditorOpen(true);
+  }, [phase, snapshot, deepTaskId, t]);
 
   const load = useCallback(async () => {
     const currentGen = ++genRef.current;

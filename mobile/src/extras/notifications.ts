@@ -32,10 +32,34 @@ export async function setupNotifications(): Promise<void> {
 
 export const chatPath = (key: string) => `/chat/${encodeURIComponent(key)}`;
 
+/** Maps notification payload data to an in-app route. */
+export function notificationTapPath(data: Record<string, unknown> | null | undefined): string | null {
+  if (!data) return null;
+  const key = data.key;
+  if (typeof key === "string" && key) return chatPath(key);
+  const kanbanTask = data.kanbanTask;
+  const board = data.board;
+  if (typeof kanbanTask === "string" && kanbanTask && typeof board === "string" && board) {
+    return `/ecosystem/kanban?task=${encodeURIComponent(kanbanTask)}&board=${encodeURIComponent(board)}`;
+  }
+  return null;
+}
+
 /** Key carried by a tapped notification, if it is ours. */
 export function keyOfResponse(r: Notifications.NotificationResponse | null | undefined): string | null {
   const k = r?.notification.request.content.data?.key;
   return typeof k === "string" ? k : null;
+}
+
+/** Route for a tapped notification (chat or kanban). */
+export function pathOfResponse(r: Notifications.NotificationResponse | null | undefined): string | null {
+  const data = r?.notification.request.content.data;
+  if (data && typeof data === "object") {
+    const fromData = notificationTapPath(data as Record<string, unknown>);
+    if (fromData) return fromData;
+  }
+  const key = keyOfResponse(r);
+  return key ? chatPath(key) : null;
 }
 
 /**
