@@ -23,13 +23,17 @@ jest.mock("../../src/settings/store", () => ({
   useRestart: () => ({ pending: false, state: "idle", run: jest.fn() }),
 }));
 
+const searchParams: Record<string, string> = {};
+
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn() },
   useNavigation: () => ({ addListener: jest.fn(() => () => {}) }),
+  useLocalSearchParams: () => searchParams,
 }));
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  for (const key of Object.keys(searchParams)) delete searchParams[key];
   global.fetch = fetchMock as typeof fetch;
   await i18n.changeLanguage("en");
 });
@@ -493,4 +497,15 @@ test("a bad repeat disables Start and Save and shows the hint", async () => {
   expect(screen.getByText("Enter a whole number")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Start" }).props.accessibilityState.disabled).toBe(true);
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("task and board params open that card in the editor", async () => {
+  searchParams.task = "t1";
+  searchParams.board = "main";
+  mockGet.mockResolvedValue(snapshot);
+
+  show();
+
+  await waitFor(() => expect(screen.getByLabelText("Title")).toBeTruthy());
+  expect(screen.getByDisplayValue("Ship feature")).toBeTruthy();
 });
