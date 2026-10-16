@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { Platform, StyleSheet, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -311,6 +311,20 @@ export function Composer({ chatKey }: { chatKey: string }) {
     }
   };
 
+  const handleKeyPress = (e: any) => {
+    if (Platform.OS === "web") {
+      const ne = e?.nativeEvent;
+      if (ne?.key === "Enter" && !ne.shiftKey && !ne.isComposing) {
+        if (typeof e.preventDefault === "function") {
+          e.preventDefault();
+        } else if (typeof ne.preventDefault === "function") {
+          ne.preventDefault();
+        }
+        handleSend();
+      }
+    }
+  };
+
   const isRunningEmpty = running && !hasContent;
 
   return (
@@ -345,6 +359,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
           value={draft}
           onChangeText={handleDraftChange}
           onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
+          onKeyPress={handleKeyPress}
           placeholder={t("composer.placeholder")}
           placeholderTextColor={th.colors.mutedForeground}
           style={[
