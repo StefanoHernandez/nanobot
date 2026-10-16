@@ -447,6 +447,11 @@ def serve(
 
 app.command(name="webui")(webui)
 
+# Fork (nanobot/ext): choose the served web client, our app or the legacy WebUI.
+from nanobot.ext.webui_mode import ui_command  # noqa: E402
+
+app.command(name="ui")(ui_command)
+
 
 # ============================================================================
 # Gateway / Server

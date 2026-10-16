@@ -1,4 +1,5 @@
-# Fork-only: publish branch `arduino` = main + prebuilt WebUI (nanobot/web/dist).
+# Fork-only: publish branch `arduino` = main + prebuilt legacy WebUI (nanobot/web/dist)
+# + the app's web export (nanobot/web/app, served by default; `nanobot ui legacy` switches).
 # The arduino server (Arduino UNO Q) never compiles the WebUI; it installs this branch with
 #   NANOBOT_SKIP_WEBUI_BUILD=1 uv tool install --force "nanobot-ai @ git+https://github.com/StefanoHernandez/nanobot@arduino"
 name: build-arduino
@@ -27,12 +28,21 @@ jobs:
       - name: Build WebUI
         working-directory: webui
         run: bun install --frozen-lockfile && bun run build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Build the app for the web
+        working-directory: mobile
+        run: npm ci && bash scripts/build-web.sh && rm -rf ../nanobot/web/app && cp -r dist-web ../nanobot/web/app
       - name: Publish branch arduino
         run: |
           test -f nanobot/web/dist/index.html
+          test -f nanobot/web/app/index.html
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --detach
-          git add -f nanobot/web/dist
-          git commit -q -m "chore(build): prebuilt WebUI for arduino ($(git rev-parse --short HEAD~0))"
+          git add -f nanobot/web/dist nanobot/web/app
+          git commit -q -m "chore(build): prebuilt WebUI and app for arduino ($(git rev-parse --short HEAD~0))"
           git push -f origin HEAD:refs/heads/arduino
