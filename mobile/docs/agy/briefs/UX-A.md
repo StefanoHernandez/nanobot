@@ -1,4 +1,4 @@
-# UX-A: a clear network button for artifacts, and "back" from a chat returns to the chat list (owner: Grok)
+# UX-A: a clear network button for artifacts, "back" from a chat returns to the chat list, and sheets stay above the keyboard (owner: Grok)
 
 Branch `grok/UX-A`, from `origin/main`, **in your own worktree** (see the prompt). Follow `mobile/docs/agy/README.md`: no rebase, one branch, a report at the end. App only: no server changes.
 
@@ -36,6 +36,26 @@ Branch `grok/UX-A`, from `origin/main`, **in your own worktree** (see the prompt
 - **The Android hardware back button** in a chat must do the same: open the drawer instead of showing Home. Use `BackHandler` inside `useFocusEffect` on the chat route, and return `true` only while the chat is focused.
 - **When the drawer is already open**, hardware back closes it, which is the drawer's default. Do not break that.
 - **Do not change** how other screens go back (settings, ecosystem, viewer).
+
+## 3. The keyboard covers the fields of every bottom sheet
+**What goes wrong:** for example, Progetti → new project. The sheet opens at the bottom, the keyboard comes up over it, and the user cannot see what they type.
+
+**The cause is in the shared component, not in the projects screen.** `src/ui/components/Sheet.tsx` is a `Modal` whose panel sits at the bottom. It has **no** keyboard handling. `Dialog.tsx` already wraps its content in `<KeyboardAvoidingView behavior="padding">`. `Sheet` is used in about 28 places, so the bug is everywhere a sheet has a text field: the Kanban card editor, prompts, automations, skills…
+
+**Fix it once, in `Sheet.tsx`:**
+- Wrap the backdrop and the panel in `KeyboardAvoidingView`. Use `behavior="padding"` on iOS and `"height"` or `"padding"` on Android: pick the one that works inside a `statusBarTranslucent` Modal. Copy what `Dialog` does if it works there.
+- **Cap the panel height** so a long sheet never goes above the screen: `maxHeight` at about 90% of the window height, minus the top inset.
+- **Make the content scroll.** When the children are taller than the cap, wrap them in a `ScrollView` with `keyboardShouldPersistTaps="handled"`.
+  - Do not nest a second ScrollView where a sheet already has its own, such as `TaskEditorSheet`. Either accept a prop (`scroll={false}`) or remove the inner one. Pick the smaller change and list the call sites you touched.
+- **When the keyboard is open,** the focused field and the sheet's buttons must be visible above it.
+- **Do not change** any sheet's content or layout beyond this.
+
+**Tests:**
+- `Sheet` renders its children inside a `KeyboardAvoidingView`;
+- a sheet taller than the window scrolls: the ScrollView is present with `keyboardShouldPersistTaps="handled"`;
+- the existing sheet and screen tests stay green.
+
+**Checking it:** jest cannot open a real keyboard. In the report, list the sheets with text fields you checked by reading the code. Stefano will test on the phone: Progetti → new project, the Kanban card editor, and one more.
 
 ## Tests (jest)
 - Network button:
