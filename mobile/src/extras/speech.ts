@@ -59,7 +59,7 @@ export type SpeechState = {
   speak(id: string, markdownText: string): void;
   stop(): void;
   toggle(id: string, markdownText: string): void;
-  markVoiceDictated(chatKey: string): void;
+  markVoiceDictated(chatKey: string, force?: boolean): void;
 };
 
 export const speechStore = createStore<SpeechState>((set, get) => ({
@@ -109,8 +109,8 @@ export const speechStore = createStore<SpeechState>((set, get) => ({
     }
   },
 
-  markVoiceDictated(chatKey: string) {
-    if (get().enabled && prefs.voiceAutoRead()) {
+  markVoiceDictated(chatKey: string, force = false) {
+    if (get().enabled && (force || prefs.voiceAutoRead())) {
       set({ voicePending: chatKey });
     }
   },
