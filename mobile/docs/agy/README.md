@@ -23,17 +23,23 @@ Key design points (full spec: `mobile/docs/superpowers/specs/2026-10-13-nanobot-
 | Who | Does |
 |---|---|
 | **Stefano** (owner) | Decides scope; passes briefs to agy; approves agy's permissions; tests on the phone |
-| **Claude** (Claude Code) | Architecture, spec, plans, hard parts (connection/session, protocol, streaming thread, effort logic, security). Writes every agy brief. **Reviews all of agy's work and is the only one who merges into `dev`** |
+| **Claude** (Claude Code) | Architecture, spec, plans, hard parts (connection/session, protocol, streaming thread, effort logic, security). Writes every agy brief. **Reviews all of agy's work and is the only one who merges into `main`** |
 | **agy** (you) | Medium/simple tasks with a closed spec: screens, forms, lists, UI components, i18n, component tests. One brief = one task |
 
-The two of us work **in parallel in separate folders**:
-- Claude works in `nanobot_androidapp/` on branch `dev`.
-- You work in the git worktree `nanobot_androidapp-agy/` on branch `agy/T<n>`, which Claude creates from `dev`.
-- Never touch the other folder.
+The work happens **in parallel in separate folders**:
+- Claude works in `nanobot/` on branch `main`.
+- You work in the git worktree `nanobot-agy/` or `nanobot-agy3/` (whichever is free), on branch `agy/<TASK>`.
+- Never touch the other folders.
+
+### Branches: never rebase
+- **Start every new task** with `git fetch`, then `git switch -c agy/<TASK> origin/main`. If the worktree has leftovers from the previous task, stop and tell Stefano.
+- **Never rebase, never merge `main` into your branch, never pull mid-task.** It is fine for `main` to move on while you work: Claude merges and resolves the conflicts.
+- A **fix brief** (`<TASK>-fix<k>.md`) is applied on the same branch. If the brief is not in your worktree yet, read it with `git fetch && git show origin/main:mobile/docs/agy/briefs/<file>`.
+- Jest on this PC: `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest` (the Italian locale breaks 2 tests).
 
 ## Workflow per task
 1. Stefano tells you which brief to run: `mobile/docs/agy/briefs/T<n>.md`.
-2. Make sure you are on branch `agy/T<n>`. If `mobile/node_modules` is missing or stale, run `cd mobile && npm ci`.
+2. Create the branch as described above (`agy/<TASK>` from `origin/main`). If `mobile/node_modules` is missing or stale, run `cd mobile && npm ci`.
 3. **TDD:** write the tests listed in the brief first, run them, and see them fail. Then implement until they pass.
 4. In `mobile/`, run `npx jest`, then `npx tsc --noEmit`. **Both must pass with no warnings.**
 5. Commit on `agy/T<n>` with the message given in the brief.
