@@ -631,6 +631,16 @@ def _run_gateway(
                 prune_dream_sessions(agent.sessions)
             return None
 
+        # Fork (nanobot/ext/journal.py): today's journal. Never deliver it to a chat.
+        if job.name == "journal":
+            from nanobot.ext.journal import run_journal_job
+
+            try:
+                await run_journal_job(agent, tz_name=config.agents.defaults.timezone)
+            except Exception:
+                logger.exception("Journal cron job failed")
+            return None
+
         # Heartbeat is a system job that checks HEARTBEAT.md for active tasks.
         if job.name == "heartbeat":
             heartbeat_file = config.workspace_path / "HEARTBEAT.md"
@@ -853,6 +863,11 @@ def _run_gateway(
         # Cursor repair must not depend on a healthy cron store.
         _advance_dream_cursor_if_behind(agent.context.memory)
         cron.remove_system_job("dream")
+
+    # Fork (nanobot/ext/journal.py): schedule the journal only when it is enabled.
+    from nanobot.ext.journal import sync_journal_job
+
+    sync_journal_job(cron, config.workspace_path, config.agents.defaults.timezone)
 
     # Register Heartbeat system job (idempotent on restart)
     if hb_cfg.enabled:

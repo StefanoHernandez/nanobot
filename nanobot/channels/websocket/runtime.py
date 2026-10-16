@@ -723,6 +723,17 @@ class WebSocketChannel(BaseChannel):
             backup_post_handler,
         ):
             chain = wrap(secret, self.gateway.tokens, chain)
+        # Fork (nanobot/ext/journal.py): journal settings and "write today".
+        from nanobot.ext.journal import journal_post_handler
+
+        chain = journal_post_handler(
+            secret,
+            self.gateway.tokens,
+            chain,
+            cron=self.gateway.cron_service,
+            workspace=self.gateway.skills_workspace_path,
+            sessions=self.gateway.session_manager,
+        )
         bridge = BinaryHTTPBridge(chain)
 
         async def prune_uploads() -> None:

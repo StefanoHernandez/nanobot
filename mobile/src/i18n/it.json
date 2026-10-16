@@ -780,7 +780,15 @@
     "everyHours": "Ogni {{count}} ore",
     "empty": "Ancora vuoto",
     "truncated": "Testo accorciato",
-    "latest": "Ultima modifica"
+    "latest": "Ultima modifica",
+    "journal": "Diario",
+    "journalAuto": "Diario automatico",
+    "journalHour": "Ora",
+    "journalWrite": "Scrivi il diario di oggi",
+    "journalNothing": "Niente da scrivere oggi.",
+    "journalEmpty": "Nessun diario.",
+    "hourEarlier": "Ora prima",
+    "hourLater": "Ora dopo"
   },
   "channels": {
     "title": "Canali",

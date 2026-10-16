@@ -1,14 +1,23 @@
-import React, { useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { useMemory } from "../../../ecosystem/memory";
+import {
+  fetchJournal,
+  fetchJournalDay,
+  runJournal,
+  saveJournalSettings,
+  type JournalIndex,
+} from "../../../ecosystem/journal";
+import { useSession } from "../../../state/sessionStore";
 import { Chips } from "../../settings/common";
-import { IconButton, goBackOr } from "../../../ui/components";
+import { IconButton, goBackOr, toast } from "../../../ui/components";
+import { Markdown } from "../../../ui/markdown/Markdown";
 import { useTheme } from "../../../ui/ThemeProvider";
 
-type MemoryTab = "user" | "memory" | "soul";
+type MemoryTab = "user" | "memory" | "soul" | "journal";
 
 function formatSchedule(schedule: string, t: (key: string, opts?: { count?: number }) => string): string {
   const m = /^every (\d+)h$/.exec(schedule.trim());
@@ -21,8 +30,25 @@ function formatSchedule(schedule: string, t: (key: string, opts?: { count?: numb
 export function MemoryScreen() {
   const t = useT();
   const th = useTheme();
+  const { session } = useSession();
   const { pages, loading, error, refresh } = useMemory();
   const [tab, setTab] = useState<MemoryTab>("user");
+  const [journal, setJournal] = useState<JournalIndex | null>(null);
+  const [dayText, setDayText] = useState<string | null>(null);
+  const [writing, setWriting] = useState(false);
+
+  const loadJournal = useCallback(async () => {
+    if (!session) return;
+    try {
+      setJournal(await fetchJournal(session));
+    } catch {
+      setJournal(null);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    void loadJournal();
+  }, [loadJournal]);
 
   const tabOptions = useMemo(
     () =>
@@ -30,11 +56,34 @@ export function MemoryScreen() {
         { value: "user" as const, label: t("memory.profile") },
         { value: "memory" as const, label: t("memory.notes") },
         { value: "soul" as const, label: t("memory.voice") },
+        { value: "journal" as const, label: t("memory.journal") },
       ] satisfies { value: MemoryTab; label: string }[],
     [t],
   );
 
-  const page = pages?.pages[tab];
+  const page = tab === "journal" ? undefined : pages?.pages[tab];
+  const enabled = journal?.enabled === true;
+  const hour = journal?.hour ?? 22;
+
+  const changeSettings = async (next: { enabled: boolean; hour: number }) => {
+    if (!session) return;
+    const saved = await saveJournalSettings(session, next);
+    setJournal((prev) => ({ enabled: saved.enabled, hour: saved.hour, days: prev?.days ?? [] }));
+  };
+
+  const writeToday = async () => {
+    if (!session || writing) return;
+    setWriting(true);
+    try {
+      const result = await runJournal(session);
+      if (!result.written) toast.show(t("memory.journalNothing"));
+      await loadJournal();
+    } catch {
+      toast.show(t("common.operationFailed"));
+    } finally {
+      setWriting(false);
+    }
+  };
   const dreamLine = pages
     ? pages.dream.enabled
       ? t("memory.dreamOn")
@@ -118,6 +167,81 @@ export function MemoryScreen() {
 
       <Chips options={tabOptions} value={tab} onChange={setTab} />
 
+        {tab === "journal" ? (
+          <View style={styles.journalBlock}>
+            <View style={styles.journalRow}>
+              <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 16, flex: 1 }}>
+                {t("memory.journalAuto")}
+              </Text>
+              <Switch
+                accessibilityLabel={t("memory.journalAuto")}
+                value={enabled}
+                onValueChange={(value) => void changeSettings({ enabled: value, hour })}
+              />
+            </View>
+            <View style={styles.journalRow}>
+              <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 16, flex: 1 }}>
+                {t("memory.journalHour")}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("memory.hourEarlier")}
+                onPress={() => void changeSettings({ enabled, hour: hour === 0 ? 23 : hour - 1 })}
+                style={styles.hourButton}
+              >
+                <Text style={{ color: th.colors.foreground, fontSize: 20 }}>−</Text>
+              </Pressable>
+              <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 16, minWidth: 48, textAlign: "center" }}>
+                {`${hour}:00`}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("memory.hourLater")}
+                onPress={() => void changeSettings({ enabled, hour: hour === 23 ? 0 : hour + 1 })}
+                style={styles.hourButton}
+              >
+                <Text style={{ color: th.colors.foreground, fontSize: 20 }}>+</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("memory.journalWrite")}
+              disabled={writing}
+              onPress={() => void writeToday()}
+              style={[styles.writeButton, { backgroundColor: th.colors.primary, borderRadius: th.radius.md }]}
+            >
+              {writing ? (
+                <ActivityIndicator color={th.colors.primaryForeground} />
+              ) : (
+                <Text style={{ color: th.colors.primaryForeground, fontFamily: th.font.medium, fontSize: 16 }}>
+                  {t("memory.journalWrite")}
+                </Text>
+              )}
+            </Pressable>
+            {(journal?.days.length ?? 0) === 0 ? (
+              <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15 }}>
+                {t("memory.journalEmpty")}
+              </Text>
+            ) : (
+              journal?.days.map((day) => (
+                <Pressable
+                  key={day}
+                  accessibilityRole="button"
+                  accessibilityLabel={day}
+                  onPress={() => {
+                    if (!session) return;
+                    void fetchJournalDay(session, day).then((pageDay) => setDayText(pageDay.text));
+                  }}
+                  style={styles.dayButton}
+                >
+                  <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 16 }}>{day}</Text>
+                </Pressable>
+              ))
+            )}
+            {dayText ? <Markdown text={dayText} /> : null}
+          </View>
+        ) : null}
+
         {loading && !pages ? (
           <ActivityIndicator accessibilityLabel={t("common.loading")} color={th.colors.primary} />
         ) : null}
@@ -192,5 +316,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 24,
     flexGrow: 1,
+  },
+  journalBlock: {
+    gap: 8,
+    marginTop: 8,
+  },
+  journalRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  hourButton: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  writeButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  dayButton: {
+    minHeight: 48,
+    justifyContent: "center",
   },
 });
