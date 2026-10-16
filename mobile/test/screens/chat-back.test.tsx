@@ -1,7 +1,6 @@
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
 import { BackHandler } from "react-native";
-import { DrawerActions } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
 import ChatRoute from "../../app/(main)/chat/[key]";
@@ -70,11 +69,11 @@ test("header back opens the chat list", async () => {
     fireEvent.press(view.getByLabelText("Back"));
   });
   expect(mockReplace).toHaveBeenCalledWith("/");
-  expect(mockDispatch).toHaveBeenCalledWith(DrawerActions.openDrawer());
+  expect(mockDispatch).toHaveBeenCalledWith({ type: "OPEN_DRAWER" });
 });
 
 test("hardware back on a focused chat opens the drawer and consumes the event", async () => {
   await renderRoute();
   expect(hardwareBack?.()).toBe(true);
-  expect(mockDispatch).toHaveBeenCalledWith(DrawerActions.openDrawer());
+  expect(mockDispatch).toHaveBeenCalledWith({ type: "OPEN_DRAWER" });
 });
