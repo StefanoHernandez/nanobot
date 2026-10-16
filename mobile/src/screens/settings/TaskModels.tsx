@@ -47,7 +47,7 @@ export function TaskModels() {
   return (
     <>
       <Head>{t("models.tasks.title")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         {rows.map((r, i) => (
           <View key={r.task} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
             <ListItem

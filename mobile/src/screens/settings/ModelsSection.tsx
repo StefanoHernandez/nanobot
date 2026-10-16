@@ -47,7 +47,7 @@ export function ModelsSection() {
   return (
     <>
       <Head>{t("models.title")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         {order.map((name, i) => (
           <View key={`${name}-${i}`} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
             <ListItem
@@ -71,7 +71,7 @@ export function ModelsSection() {
       {disabled.length > 0 && editable ? (
         <>
           <Head>{t("models.disabled")}</Head>
-          <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+          <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
             {disabled.map((g, idx) => (
               <View key={g.preset.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
                 <ListItem

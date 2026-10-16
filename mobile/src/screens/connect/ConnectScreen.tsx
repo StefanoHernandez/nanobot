@@ -139,7 +139,7 @@ export function ConnectScreen() {
         {list.length === 0 ? (
           <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 16, lineHeight: 23, marginBottom: 20 }}>{t("connect.empty")}</Text>
         ) : (
-          <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, overflow: "hidden", marginBottom: 24 }}>
+          <View style={{ ...th.surface, overflow: "hidden", marginBottom: 24 }}>
             {list.map((p) => (
               <ListItem key={p.id} title={p.name} subtitle={p.baseUrl} onPress={() => open(p.id)} onLongPress={() => setToDelete(p)} />
             ))}

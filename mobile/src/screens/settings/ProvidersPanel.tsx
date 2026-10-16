@@ -31,7 +31,7 @@ export function ProvidersPanel() {
     <>
       <Head>{t("providers.title")}</Head>
       {configured.length > 0 ? (
-        <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+        <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
           {configured.map((p, idx) => (
             <View key={p.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
               <ListItem title={p.label} subtitle={p.oauth_account ?? p.api_key_hint ?? t("providers.configured")} onPress={() => setSel(p.name)} />

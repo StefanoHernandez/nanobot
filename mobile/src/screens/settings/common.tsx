@@ -5,7 +5,7 @@ import { useTheme } from "../../ui/ThemeProvider";
 
 export function Head({ children }: { children: string }) {
   const th = useTheme();
-  return <Text accessibilityRole="header" style={{ color: th.colors.foreground, fontFamily: th.font.displayBold, fontSize: 17, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 6 }}>{children}</Text>;
+  return <Text accessibilityRole="header" style={{ color: th.colors.mutedForeground, fontFamily: th.font.displayBold, fontSize: 15, paddingHorizontal: 22, paddingTop: 30, paddingBottom: 10 }}>{children}</Text>;
 }
 
 /** Single-choice chips (>= 48 dp via Button). */

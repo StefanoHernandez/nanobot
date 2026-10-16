@@ -90,7 +90,7 @@ function ImageCard() {
   return (
     <>
       <Head>{t("caps.image.title")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <Row
           label={t("caps.image.enable")} value={f.enabled}
           onChange={(v) => (v && !configured(f.provider) ? setHint(true) : (setHint(false), apply({ ...f, enabled: v })))}
@@ -205,7 +205,7 @@ function WebCard() {
   return (
     <>
       <Head>{t("caps.web.title")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <Row
           label={t("caps.web.enable")} value={web.enable}
           onChange={(v) => void run(() => runtime({ "tools.web.enable": v }))}
@@ -277,7 +277,7 @@ function TranscriptionCard() {
   return (
     <>
       <Head>{t("caps.tr.title")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <Row label={t("caps.tr.enable")} value={f.enabled} onChange={(v) => apply({ ...f, enabled: v })} />
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border, padding: 16, gap: 12 }}>
           <Chips options={tr.providers.map((p) => ({ value: p.name, label: p.label ?? p.name }))} value={f.provider} onChange={(p) => apply({ ...f, provider: p })} />
@@ -302,7 +302,7 @@ function MemoryCard() {
   return (
     <>
       <Head>{t("caps.memory.title")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
         <Row
           label={t("caps.memory.dream")} value={data!.runtime_config?.["agents.defaults.dream.enabled"] === true} disabled={busy}
           onChange={(v) => void run(() => runtime({ "agents.defaults.dream.enabled": v }))}

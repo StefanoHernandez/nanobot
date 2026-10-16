@@ -40,7 +40,7 @@ export function AppearanceSection() {
   return (
     <>
       <Head>{t("settings.theme")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 12 }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 12 }}>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {THEMES.map((p) => (
             <Button key={p} title={t(`settings.${p}`)} variant={pref === p ? "primary" : "secondary"} onPress={() => setPref(p)} />
@@ -49,7 +49,7 @@ export function AppearanceSection() {
       </View>
 
       <Head>{t("settings.language")}</Head>
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, padding: 12 }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 12 }}>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {LANGS.map((l) => (
             <Button
@@ -65,7 +65,7 @@ export function AppearanceSection() {
         </View>
       </View>
 
-      <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, marginTop: 16, overflow: "hidden" }}>
+      <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 16, overflow: "hidden" }}>
         <ListItem
           title={t("settings.sound")}
           subtitle={t("settings.soundHelp")}

@@ -16,6 +16,8 @@ export function withAlpha(hex: string, alpha: number): string {
   return hex + Math.round(alpha * 255).toString(16).padStart(2, "0");
 }
 
+import type { ViewStyle } from "react-native";
+
 export type Theme = {
   scheme: "light" | "dark";
   colors: {
@@ -56,33 +58,37 @@ export type Theme = {
     chartWarn: string;
   };
   radius: { sm: number; md: number; lg: number };
+  /** A floating card: hairline edge, lit top edge and a wide, soft shadow. Spread it into a View style. */
+  surface: ViewStyle;
+  /** The outer tray of a "double bezel" (composer, dialogs): a faint shell around the surface. */
+  bezel: ViewStyle;
   spacing: (n: number) => number;
   /** Atkinson Hyperlegible for UI/body, Bricolage Grotesque for display (see docs/design/companion.md). */
   font: { regular: string; medium: string; mono: string; display: string; displayBold: string };
 };
 
-// Compagno, 2026-10-15: black, purple, gold. Light is the same trio on paper.
-// Gold is the bot (eyes, send). Purple is you and the actions. Surfaces step up in the dark.
+// Look test "Soft", 2026-10-16: the same black, purple and gold, on softer, floating surfaces.
+// Light: silver-lilac paper, white cards lifted by a wide diffused shadow, ink hairlines.
 const LIGHT: Theme["colors"] = {
-  background: "#f7f4fb",
+  background: "#f3f1f7",
   foreground: "#1c1428",
   card: "#ffffff",
   cardForeground: "#1c1428",
   popover: "#ffffff",
   popoverForeground: "#1c1428",
-  primary: "#4a2c72",
+  primary: "#3f2564",
   primaryForeground: "#ffffff",
-  secondary: "#efe6f6",
+  secondary: "#ebe7f2",
   secondaryForeground: "#1c1428",
-  muted: "#efe6f6",
+  muted: "#ebe7f2",
   mutedForeground: "#5c4e70",
-  accent: "#e4d8f2",
+  accent: "#e6e0f0",
   accentForeground: "#1c1428",
   destructive: "#b42318",
   destructiveForeground: "#ffffff",
   success: "#176b42",
-  border: "#e0d6ec",
-  input: "#e0d6ec",
+  border: "#1c142812",
+  input: "#1c14281c",
   ring: "#c9840a",
   overlay: "#120c18",
   overlayForeground: "#ffffff",
@@ -90,7 +96,7 @@ const LIGHT: Theme["colors"] = {
   brandForeground: "#1c1428",
   brandSoft: "#f8e7c0",
   brandSoftForeground: "#5c3d06",
-  userBubble: "#4a2c72",
+  userBubble: "#3f2564",
   userBubbleForeground: "#ffffff",
   chartInput: "#4a2c72",
   chartOutput: "#8a5608",
@@ -98,34 +104,35 @@ const LIGHT: Theme["colors"] = {
   chartWarn: "#b42318",
 };
 
+// Dark: near-OLED black with a violet cast, glassy cards edged by white hairlines.
 const DARK: Theme["colors"] = {
-  background: "#0c0b10",
+  background: "#08070b",
   foreground: "#f4f0f8",
-  card: "#16141e",
+  card: "#131119",
   cardForeground: "#f4f0f8",
-  popover: "#221e2c",
+  popover: "#1b1823",
   popoverForeground: "#f4f0f8",
-  primary: "#c9a6e8",
+  primary: "#cfb0ec",
   primaryForeground: "#1a1022",
-  secondary: "#2a2436",
+  secondary: "#211d2b",
   secondaryForeground: "#f4f0f8",
-  muted: "#1c1826",
+  muted: "#18151f",
   mutedForeground: "#c4b4d4",
-  accent: "#2e2840",
+  accent: "#272233",
   accentForeground: "#f4f0f8",
   destructive: "#ff9a94",
   destructiveForeground: "#2a0d0b",
   success: "#7dcca0",
-  border: "#3a3348",
-  input: "#3a3348",
+  border: "#ffffff14",
+  input: "#ffffff1f",
   ring: "#f0b429",
-  overlay: "#05040a",
+  overlay: "#020203",
   overlayForeground: "#ffffff",
   brand: "#f0b429",
   brandForeground: "#1a1404",
   brandSoft: "#3a3218",
   brandSoftForeground: "#f8e2a8",
-  userBubble: "#6b4589",
+  userBubble: "#5d3b7c",
   userBubbleForeground: "#ffffff",
   chartInput: "#e4d0f5",
   chartOutput: "#f0b429",
@@ -136,7 +143,26 @@ const DARK: Theme["colors"] = {
 const build = (scheme: Theme["scheme"], colors: Theme["colors"]): Theme => ({
   scheme,
   colors,
-  radius: { sm: 10, md: 18, lg: 24 },
+  radius: { sm: 12, md: 22, lg: 30 },
+  surface: {
+    backgroundColor: colors.card,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    // The top edge catches the light, like a glass plate in a tray.
+    borderTopColor: scheme === "dark" ? "#ffffff24" : "#ffffff",
+    boxShadow:
+      scheme === "dark"
+        ? "0 1px 0 0 rgba(0,0,0,0.6), 0 18px 40px -16px rgba(0,0,0,0.8)"
+        : "0 1px 2px 0 rgba(28,20,40,0.04), 0 16px 36px -14px rgba(28,20,40,0.14)",
+  },
+  bezel: {
+    padding: 5,
+    borderRadius: 30 + 5,
+    backgroundColor: scheme === "dark" ? "#ffffff08" : "#1c142808",
+    borderWidth: 1,
+    borderColor: scheme === "dark" ? "#ffffff0d" : "#1c14280a",
+  },
   spacing: (n) => 4 * n,
   // Embedded by the expo-font config plugin (app.json): Android family name = file name.
   font: {
