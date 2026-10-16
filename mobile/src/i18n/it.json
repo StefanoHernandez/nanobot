@@ -1125,5 +1125,17 @@
     "tooMany": "Limite prompt raggiunto (massimo 500)",
     "tooLong": "Titolo o testo troppo lungo",
     "sectionTitle": "Prompt"
+  },
+  "voiceLoop": {
+    "start": "Conversazione vocale continua",
+    "stop": "Termina conversazione",
+    "interrupt": "Interrompi",
+    "listening": "Ti ascolto…",
+    "transcribing": "Trascrivo…",
+    "waiting": "nanobot risponde…",
+    "speaking": "Parlo…",
+    "idle": "Conversazione terminata",
+    "noSpeech": "Nessuna voce rilevata",
+    "audioRepliesRequired": "Attiva l'audio delle risposte nelle impostazioni per usare la conversazione vocale"
   }
 }

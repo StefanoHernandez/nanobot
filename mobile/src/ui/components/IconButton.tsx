@@ -7,6 +7,7 @@ export type IconButtonProps = {
   icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
   onPress: () => void;
   accessibilityLabel: string;
+  accessibilityHint?: string;
   size?: number;
   disabled?: boolean;
   loading?: boolean;
@@ -15,13 +16,14 @@ export type IconButtonProps = {
   fill?: string;
 };
 
-export function IconButton({ icon, onPress, accessibilityLabel, size = 24, disabled, loading, color, fill }: IconButtonProps) {
+export function IconButton({ icon, onPress, accessibilityLabel, accessibilityHint, size = 24, disabled, loading, color, fill }: IconButtonProps) {
   const th = useTheme();
   const isDisabled = !!disabled || !!loading;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: isDisabled, busy: !!loading }}
       disabled={isDisabled}
       onPress={isDisabled ? undefined : onPress}
