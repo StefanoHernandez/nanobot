@@ -471,7 +471,8 @@
       "sameAsChat": "Come la chat",
       "selected": "Selezionato",
       "saveFailed": "Impossibile salvare la scelta del modello"
-    }
+    },
+    "moreMatches": "Altri {{n}} modelli: scrivi per cercare"
   },
   "providers": {
     "title": "Provider",

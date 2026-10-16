@@ -100,6 +100,8 @@ export function ModelsSection() {
 
 type Errors = Partial<Record<keyof PresetForm, string>>;
 
+const MATCH_CAP = 30;
+
 function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () => void }) {
   const t = useT();
   const th = useTheme();
@@ -131,7 +133,10 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const info = cat.models.find((m) => m.id === model);
   const deferred = DEFERRED_PROVIDERS.includes(provider);
   const q = model.trim().toLowerCase();
-  const matches = catalogued && (!deferred || q.length >= 2) ? cat.models.filter((m) => !q || m.id.toLowerCase().includes(q) || (m.label ?? "").toLowerCase().includes(q)).filter((m) => m.id !== model).slice(0, 8) : [];
+  const allMatches = catalogued && (!deferred || q.length >= 2) ? cat.models.filter((m) => !q || m.id.toLowerCase().includes(q) || (m.label ?? "").toLowerCase().includes(q)).filter((m) => m.id !== model) : [];
+  // The Sheet scrolls, so show a real list; past the cap, say how many more there are so it is clear typing filters them.
+  const matches = allMatches.slice(0, MATCH_CAP);
+  const hidden = allMatches.length - matches.length;
   const efforts = info?.reasoning_efforts?.length ? info.reasoning_efforts : preset?.reasoning_effort_values ?? [];
   const supported = (info?.api ?? preset?.api)?.supported_apis ?? ((row?.request_apis ?? []).filter((a) => ["chat_completions", "responses", "anthropic_messages"].includes(a)) as ModelRequestAPI[]);
 
@@ -215,6 +220,9 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
           {matches.map((m) => (
             <ListItem key={m.id} title={m.id} subtitle={m.label && m.label !== m.id ? m.label : undefined} onPress={() => pickModel(m.id)} />
           ))}
+          {hidden > 0 ? (
+            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, paddingHorizontal: 16, paddingVertical: 8 }}>{t("models.moreMatches", { n: hidden })}</Text>
+          ) : null}
           {efforts.length ? (
             <>
               <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginTop: 8, marginBottom: 4 }}>{t("models.effort")}</Text>

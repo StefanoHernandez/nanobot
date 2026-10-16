@@ -98,6 +98,20 @@ test("deferred providers search only after 2 characters", async () => {
   expect(screen.getByText("llama3")).toBeTruthy();
 });
 
+test("the model list shows 30 matches and says how many more there are", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
+  get.mockResolvedValue({ status: "available", models: Array.from({ length: 40 }, (_, i) => ({ id: `gpt-${i}` })) });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(screen.getByText("gpt-0")).toBeTruthy());
+  expect(screen.getByText("gpt-29")).toBeTruthy();
+  expect(screen.queryByText("gpt-30")).toBeNull();
+  expect(screen.getByText("10 more models: type to search")).toBeTruthy();
+  await fireEvent.changeText(screen.getByLabelText("Model"), "gpt-3");
+  expect(screen.getByText("gpt-35")).toBeTruthy();
+  expect(screen.queryByText(/more models/)).toBeNull();
+});
+
 test("provider key shows the hint and save omits api_key when untouched", async () => {
   await show();
   await fireEvent.press(screen.getByText("OpenAI"));
