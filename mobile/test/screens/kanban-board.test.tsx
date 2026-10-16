@@ -6,6 +6,7 @@ import { i18n } from "../../src/i18n";
 import type { NanobotSession } from "../../src/core/session";
 import { KanbanScreen } from "../../src/screens/ecosystem/kanban/KanbanScreen";
 import { fetchKanban } from "../../src/ecosystem/kanban";
+import { toast } from "../../src/ui/components";
 import { ThemeProvider } from "../../src/ui/ThemeProvider";
 
 const fetchMock = jest.fn();
@@ -31,6 +32,10 @@ beforeEach(async () => {
   jest.clearAllMocks();
   global.fetch = fetchMock as typeof fetch;
   await i18n.changeLanguage("en");
+});
+
+afterEach(() => {
+  toast.show("");
 });
 
 const snapshot = {
@@ -266,4 +271,157 @@ test("bot delete opens confirm and POSTs id only after confirm", async () => {
   );
   const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as Record<string, unknown>;
   expect(Object.keys(body)).toEqual(["id"]);
+});
+
+test("Start sends status ready with the chosen bot", async () => {
+  mockGet.mockResolvedValue(snapshot);
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Ship feature")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "New task" }));
+  });
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Title"), "Launch me");
+  });
+  await act(async () => {
+    fireEvent.press(screen.getAllByRole("button", { name: "🤖 Helper" })[0]);
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Start" }));
+  });
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  const saveCall = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/tasks/save"));
+  expect(saveCall).toBeTruthy();
+  const body = JSON.parse((saveCall?.[1] as RequestInit).body as string) as {
+    status: string;
+    assignee_bot_id: string;
+    title: string;
+  };
+  expect(body.status).toBe("ready");
+  expect(body.assignee_bot_id).toBe("bot1");
+  expect(body.title).toBe("Launch me");
+});
+
+test("Start stays disabled until a bot is chosen", async () => {
+  mockGet.mockResolvedValue(snapshot);
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Ship feature")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "New task" }));
+  });
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Title"), "Launch me");
+  });
+
+  expect(screen.getByRole("button", { name: "Start" }).props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByText("Choose a bot to start it")).toBeTruthy();
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Start" }));
+  });
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("editing sends the task id and the chosen parents", async () => {
+  mockGet.mockResolvedValue({
+    ...snapshot,
+    tasks: [
+      ...snapshot.tasks,
+      {
+        id: "t3",
+        title: "Other card",
+        status: "todo",
+        priority: "low",
+        assignee_bot_id: null,
+        description: "",
+      },
+    ],
+  });
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Ship feature")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("Ship feature"));
+  });
+  await act(async () => {
+    const cards = screen.getAllByText("Other card");
+    fireEvent.press(cards[cards.length - 1]);
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Save" }));
+  });
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  const saveCall = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/tasks/save"));
+  const body = JSON.parse((saveCall?.[1] as RequestInit).body as string) as { id?: string; parent_ids?: string[] };
+  expect(body.id).toBe("t1");
+  expect(body.parent_ids).toEqual(["t3"]);
+});
+
+test("delete asks first, then POSTs tasks/delete", async () => {
+  mockGet.mockResolvedValue(snapshot);
+  fetchMock.mockResolvedValue({ ok: true });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Ship feature")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("Ship feature"));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+  });
+  expect(fetchMock).not.toHaveBeenCalled();
+
+  await act(async () => {
+    const deletes = screen.getAllByText("Delete");
+    fireEvent.press(deletes[deletes.length - 1]);
+  });
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  expect(fetchMock).toHaveBeenCalledWith(
+    "https://srv.test/api/ext/kanban/tasks/delete",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ id: "t1" }),
+    }),
+  );
+});
+
+test("a failed save shows a toast and leaves the board up", async () => {
+  mockGet.mockResolvedValue(snapshot);
+  fetchMock.mockResolvedValue({
+    ok: false,
+    status: 409,
+    json: async () => ({ error: "task_limit" }),
+  });
+
+  show();
+  await waitFor(() => expect(screen.getByText("Ship feature")).toBeTruthy());
+
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "New task" }));
+  });
+  await act(async () => {
+    fireEvent.changeText(screen.getByLabelText("Title"), "Launch me");
+  });
+  await act(async () => {
+    fireEvent.press(screen.getAllByRole("button", { name: "🤖 Helper" })[0]);
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Start" }));
+  });
+
+  await waitFor(() => expect(screen.getByText("Too many tasks.")).toBeTruthy());
+  expect(screen.getByText("To do (1)")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
+  expect(screen.queryByText("This server has no board yet.")).toBeNull();
 });
