@@ -152,8 +152,8 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
         },
         isCancelled: () => cancelExportRef.current,
       });
-    } catch (e: any) {
-      toast.show(e?.message || t("common.operationFailed"));
+    } catch {
+      toast.show(t("common.operationFailed"));
     } finally {
       setExportProgress(null);
     }

@@ -16,7 +16,7 @@ export type TextFieldProps = {
   mono?: boolean;
   inputStyle?: StyleProp<TextStyle>;
   rowStyle?: StyleProp<ViewStyle>;
-} & Pick<TextInputProps, "autoCorrect" | "spellCheck" | "autoComplete" | "multiline" | "editable" | "onBlur" | "numberOfLines">;
+} & Pick<TextInputProps, "autoCorrect" | "spellCheck" | "autoComplete" | "multiline" | "editable" | "onBlur" | "numberOfLines" | "maxLength">;
 
 export function TextField({ label, value, onChangeText, secureTextEntry, helper, error, placeholder, autoCapitalize, keyboardType, right, mono, inputStyle, rowStyle, ...passThrough }: TextFieldProps) {
   const th = useTheme();
