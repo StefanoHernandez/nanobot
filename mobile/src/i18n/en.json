@@ -471,7 +471,8 @@
       "sameAsChat": "Same as the chat",
       "selected": "Selected",
       "saveFailed": "Couldn't save the model choice"
-    }
+    },
+    "moreMatches": "{{n}} more models: type to search"
   },
   "providers": {
     "title": "Providers",
