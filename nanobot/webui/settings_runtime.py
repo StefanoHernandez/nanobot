@@ -29,6 +29,9 @@ RUNTIME_CONFIG_PATHS = (
     # Fork: model choice for Dream and subagents (None = same as the chat)
     "agents.defaults.dream.model_override",
     "agents.defaults.subagent_model_preset",
+    # Fork: prompt cache lifetime and the idle compaction that would discard it
+    "agents.defaults.prompt_cache_ttl",
+    "agents.defaults.session_ttl_minutes",
     "gateway.host",
     "gateway.port",
     "gateway.restart_mode",

@@ -561,6 +561,8 @@
       "agents.defaults.max_tool_iterations": "Max tool iterations",
       "agents.defaults.max_concurrent_subagents": "Max concurrent subagents",
       "agents.defaults.max_tool_result_chars": "Max tool result characters",
+      "agents.defaults.prompt_cache_ttl": "Prompt cache lifetime",
+      "agents.defaults.session_ttl_minutes": "Summarize the chat after idle minutes (0 = never)",
       "agents.defaults.tool_hint_max_length": "Tool hint max length",
       "tools.max_session_messages_per_minute": "Session messages per minute",
       "tools.exec.timeout": "Shell timeout (s)",

@@ -28,6 +28,9 @@ const RAW: Raw[] = [
   { group: "execution", path: "agents.defaults.max_tool_iterations", kind: "number", min: 1 },
   { group: "execution", path: "agents.defaults.max_concurrent_subagents", kind: "number", min: 1 },
   { group: "execution", path: "agents.defaults.max_tool_result_chars", kind: "number", min: 1 },
+  // Fork: prompt cache lifetime; idle compaction rewrites history, so keep it near the cache TTL.
+  { group: "execution", path: "agents.defaults.prompt_cache_ttl", kind: "toggle", options: ["5m", "1h"] },
+  { group: "sessions", path: "agents.defaults.session_ttl_minutes", kind: "number", min: 0 },
   { group: "execution", path: "agents.defaults.tool_hint_max_length", kind: "number", min: 20, max: 500 },
   { group: "execution", path: "tools.max_session_messages_per_minute", kind: "number", min: 1 },
   { group: "sessions", path: "agents.defaults.unified_session", kind: "boolean" },
