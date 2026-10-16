@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { fetchBootstrap, BootstrapAuthRequiredError } from "@/lib/bootstrap";
 import { NanobotClient } from "@/lib/nanobot-client";
 import { uploadCapability, type UploadCapability } from "../../vendor/nanobot/packages/client-events/attachments";
@@ -67,8 +68,10 @@ export class NanobotSession {
 
   constructor(profile: Profile, private secret: string, deps: SessionDeps = {}) {
     this.baseUrl = profile.baseUrl;
+    // Native only: there `location` is the polyfill stub. In a browser it is the real one, and
+    // assigning href navigates the page, which recreates the session and reloads forever.
     const loc = (globalThis as { location?: { href?: string } }).location;
-    if (loc) loc.href = this.baseUrl;
+    if (loc && Platform.OS !== "web") loc.href = this.baseUrl;
     // ponytail: bootstrap goes through vendor fetchBootstrap, which uses the global fetch; deps.fetch only covers get().
     this.now = deps.now ?? (() => Date.now());
     this.f = deps.fetch ?? ((...a) => fetch(...a));
