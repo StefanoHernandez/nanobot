@@ -85,7 +85,19 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
           </View>
         </View>
         {temporary ? <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{t("temporary.label")}</Text> : null}
-        <View>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {exporting ? (
+            <Text
+              style={{
+                color: th.colors.mutedForeground,
+                fontFamily: th.font.regular,
+                fontSize: 12,
+                marginRight: 4,
+              }}
+            >
+              {t("export.exporting")}
+            </Text>
+          ) : null}
           <IconButton icon="dots-vertical" accessibilityLabel={t("thread.more")} loading={exporting} disabled={exporting} onPress={() => setMenu(true)} />
           {running || activeSubs > 0 ? (
             <View

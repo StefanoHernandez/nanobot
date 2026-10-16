@@ -25,6 +25,12 @@
     "logoutBrowser": "Log out from this browser",
     "logoutConfirm": "You will be disconnected from this browser."
   },
+  "about": {
+    "devices": "Paired phones",
+    "devicesAll": "Linked devices",
+    "pairPhone": "Pair a phone",
+    "pairDevice": "Link a device"
+  },
   "thread": {
     "reasoning": "Reasoning",
     "activityWorkingFor": "Working for {{duration}}",
@@ -144,8 +150,10 @@
     "server": "Server",
     "changeServer": "Change server",
     "pairPhone": "Pair a phone",
+    "pairDevice": "Link a device",
     "pairHint": "Good for 5 minutes.",
     "devices": "Paired phones",
+    "devicesAll": "Linked devices",
     "devicesEmpty": "No other phones.",
     "deviceNever": "Never seen",
     "revokeDevice": "Revoke",

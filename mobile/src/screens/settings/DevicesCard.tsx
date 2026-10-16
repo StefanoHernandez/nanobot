@@ -61,13 +61,21 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   const activeProfile = sessionStore?.getState ? sessionStore.getState()?.profile : null;
   const activeProfileId = activeProfile?.id ?? null;
   const storedId = activeProfileId ? pairedDevice.get(activeProfileId) : null;
-  const isRevokingSelf = Boolean(storedId && revokeTarget && revokeTarget.id === storedId);
+  const live = devices.filter((d) => d.revoked !== true);
+  const showFallbackBrowserLogout =
+    isWeb &&
+    activeProfile?.auth === "cookie" &&
+    (!storedId || !live.some((d) => d.id === storedId));
+  const isRevokingSelf = Boolean(
+    (storedId && revokeTarget && revokeTarget.id === storedId) ||
+    (isWeb && revokeTarget && revokeTarget.id === "__self_browser__")
+  );
 
   const onRevokeConfirm = async () => {
     if (!revokeTarget || revokeBusy) return;
     setRevokeBusy(true);
     try {
-      if (isWeb && storedId && revokeTarget.id === storedId) {
+      if (isWeb && (revokeTarget.id === "__self_browser__" || (storedId && revokeTarget.id === storedId))) {
         await webLogout(session.baseUrl);
         if (activeProfileId) {
           await profiles.remove(activeProfileId);
@@ -82,7 +90,7 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
       setRevokeTarget(null);
       await load();
     } catch {
-      toast.show(t("common.error"));
+      toast.show(t("common.operationFailed"));
     } finally {
       setRevokeBusy(false);
     }
@@ -90,39 +98,70 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
 
   if (phase === "404" || phase === "loading") return null;
 
-  const live = devices.filter((d) => d.revoked !== true);
-
   return (
     <>
-      <Head>{t("settings.devices")}</Head>
+      <Head>{isWeb ? t("about.devicesAll", { defaultValue: t("settings.devicesAll") }) : t("settings.devices")}</Head>
       <View style={{ backgroundColor: th.colors.card, borderRadius: th.radius.md, marginHorizontal: 16, overflow: "hidden" }}>
         {phase === "error" ? (
-          <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, padding: 16 }}>{t("common.error")}</Text>
-        ) : live.length === 0 ? (
-          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, padding: 16 }}>{t("settings.devicesEmpty")}</Text>
-        ) : (
-          live.map((d, i) => {
-            const isSelf = storedId != null && d.id === storedId;
-            const title = isSelf && isWeb ? `${d.name} (${t("devices.thisBrowser")})` : d.name;
-            const buttonTitle = isSelf && isWeb ? t("devices.logoutBrowser") : t("settings.revokeDevice");
-
-            return (
-              <View key={d.id}>
-                {i > 0 ? <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }} /> : null}
+          <>
+            <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, padding: 16 }}>{t("common.error")}</Text>
+            {showFallbackBrowserLogout ? (
+              <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
                 <ListItem
-                  title={title}
-                  subtitle={formatLastSeen(d.last_seen, i18n.language, t("settings.deviceNever"))}
+                  title={t("devices.thisBrowser")}
                   right={
                     <Button
-                      title={buttonTitle}
+                      title={t("devices.logoutBrowser")}
                       variant="destructive"
-                      onPress={() => setRevokeTarget(d)}
+                      onPress={() => setRevokeTarget({ id: "__self_browser__", name: t("devices.thisBrowser"), created: 0, last_seen: null, revoked: false })}
                     />
                   }
                 />
               </View>
-            );
-          })
+            ) : null}
+          </>
+        ) : (
+          <>
+            {live.length === 0 && !showFallbackBrowserLogout ? (
+              <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, padding: 16 }}>{t("settings.devicesEmpty")}</Text>
+            ) : null}
+            {live.map((d, i) => {
+              const isSelf = storedId != null && d.id === storedId;
+              const title = isSelf && isWeb ? `${d.name} (${t("devices.thisBrowser")})` : d.name;
+              const buttonTitle = isSelf && isWeb ? t("devices.logoutBrowser") : t("settings.revokeDevice");
+
+              return (
+                <View key={d.id}>
+                  {i > 0 ? <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }} /> : null}
+                  <ListItem
+                    title={title}
+                    subtitle={formatLastSeen(d.last_seen, i18n.language, t("settings.deviceNever"))}
+                    right={
+                      <Button
+                        title={buttonTitle}
+                        variant="destructive"
+                        onPress={() => setRevokeTarget(d)}
+                      />
+                    }
+                  />
+                </View>
+              );
+            })}
+            {showFallbackBrowserLogout ? (
+              <View style={live.length > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+                <ListItem
+                  title={t("devices.thisBrowser")}
+                  right={
+                    <Button
+                      title={t("devices.logoutBrowser")}
+                      variant="destructive"
+                      onPress={() => setRevokeTarget({ id: "__self_browser__", name: t("devices.thisBrowser"), created: 0, last_seen: null, revoked: false })}
+                    />
+                  }
+                />
+              </View>
+            ) : null}
+          </>
         )}
       </View>
       <Dialog
