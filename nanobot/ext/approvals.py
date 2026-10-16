@@ -10,6 +10,7 @@ the model as an ordinary tool error, so upstream turn handling is unchanged.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import secrets
@@ -180,14 +181,17 @@ def install() -> None:
         return
     original = ExecTool.execute
 
+    signature = inspect.signature(original)
+
     async def guarded(self: Any, *args: Any, **kwargs: Any) -> Any:
-        if args:  # positional use is not part of the tool-call path; keep it untouched
-            return await original(self, *args, **kwargs)
+        # Bind positionals too, so no calling style skips the gate.
+        params = dict(signature.bind_partial(self, *args, **kwargs).arguments)
+        params.pop("self", None)
         session_key = current_request_session_key() or "unknown"
-        if not await GATE.request(session_key, _GUARDED_TOOL, _summary(kwargs)):
+        if not await GATE.request(session_key, _GUARDED_TOOL, _summary(params)):
             logger.info("approvals: exec denied for {}", session_key)
             return ToolResult.error(DENIED)
-        return await original(self, **kwargs)
+        return await original(self, *args, **kwargs)
 
     guarded._approval_guarded = True  # type: ignore[attr-defined]
     ExecTool.execute = guarded  # type: ignore[method-assign]
