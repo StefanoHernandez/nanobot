@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useStore } from "zustand";
 import { speechStore } from "../../extras/speech";
-import { StyleSheet, Switch, View } from "react-native";
+import { Platform, StyleSheet, Switch, Text, View } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useT } from "../../i18n";
 import { lockSettings } from "../../extras/lock";
-import { prefs, type Language } from "../../settings/prefs";
+import { prefs, type Language, type VoiceEngine } from "../../settings/prefs";
+import { isOfflineLocaleInstalled } from "../../extras/sttEngine";
 import { Button, ListItem, toast } from "../../ui/components";
 import { useThemePreference, useTheme, type ThemePref } from "../../ui/ThemeProvider";
 import { Head } from "./common";
@@ -22,7 +23,15 @@ export function AppearanceSection() {
   const [lang, setLang] = useState<Language>(prefs.language());
   const [sound, setSound] = useState(prefs.notificationSound());
   const [voiceAutoRead, setVoiceAutoRead] = useState(prefs.voiceAutoRead?.() ?? false);
+  const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(prefs.voiceEngine?.() ?? "device");
+  const [offlineReady, setOfflineReady] = useState<boolean | null>(null);
   const audioOn = useStore(speechStore, (s) => s.enabled);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      void isOfflineLocaleInstalled("it-IT").then((ready) => setOfflineReady(ready));
+    }
+  }, []);
 
   const onLock = async (v: boolean) => {
     if (v) {
@@ -93,6 +102,43 @@ export function AppearanceSection() {
             }
           />
         </View>
+        {Platform.OS !== "web" ? (
+          <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border, paddingBottom: 8 }}>
+            <ListItem
+              title={t("settings.voiceEngine")}
+              subtitle={
+                offlineReady === null
+                  ? undefined
+                  : offlineReady
+                  ? t("voice.offlineReady")
+                  : t("voice.offlineMissing")
+              }
+              right={
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Button
+                    title={t("voice.engineDevice")}
+                    variant={voiceEngine === "device" ? "primary" : "secondary"}
+                    onPress={() => {
+                      prefs.setVoiceEngine?.("device");
+                      setVoiceEngineState("device");
+                    }}
+                  />
+                  <Button
+                    title={t("voice.engineServer")}
+                    variant={voiceEngine === "server" ? "primary" : "secondary"}
+                    onPress={() => {
+                      prefs.setVoiceEngine?.("server");
+                      setVoiceEngineState("server");
+                    }}
+                  />
+                </View>
+              }
+            />
+            <Text style={{ fontFamily: th.font.regular, fontSize: 13, color: th.colors.mutedForeground, paddingHorizontal: 16, paddingBottom: 4 }}>
+              {t("voice.offlineHint")}
+            </Text>
+          </View>
+        ) : null}
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem
             title={t("settings.voiceAutoRead")}

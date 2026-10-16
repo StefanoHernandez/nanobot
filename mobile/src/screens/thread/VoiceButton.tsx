@@ -1,10 +1,15 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Text, View } from "react-native";
 import { speechStore } from "../../extras/speech";
-import { useVoiceInput } from "../../extras/voice";
+import { useVoiceInput, voiceAvailable } from "../../extras/voice";
+import { DeviceSttEngine, isRecognitionAvailable, warnEngineUnavailableOnce } from "../../extras/sttEngine";
+import { prefs } from "../../settings/prefs";
+import { settingsStore } from "../../settings/store";
+import { useSession } from "../../state/sessionStore";
 import { useT } from "../../i18n";
 import { IconButton, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
+import type { SettingsPayload } from "@/lib/types";
 
 const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 
@@ -23,35 +28,207 @@ function Dot() {
 }
 
 /** The transcript is handed to onTranscript (appended to the draft by the caller); never sent. */
-export function VoiceButton({ chatKey, onTranscript }: { chatKey: string; onTranscript: (text: string) => void }) {
+export function VoiceButton({
+  chatKey,
+  onTranscript,
+  onPartial,
+}: {
+  chatKey: string;
+  onTranscript: (text: string) => void;
+  onPartial?: (text: string) => void;
+}) {
   const t = useT();
   const th = useTheme();
-  const handleTranscript = (text: string) => {
+  const { session } = useSession();
+
+  const handleTranscript = useCallback((text: string) => {
     if (text) {
       speechStore.getState().markVoiceDictated(chatKey);
       onTranscript(text);
     }
-  };
-  const { state, elapsedMs, error, start, stop, cancel } = useVoiceInput(handleTranscript);
+  }, [chatKey, onTranscript]);
+
+  const serverVoice = useVoiceInput(handleTranscript);
+
+  // Device engine state
+  const [deviceState, setDeviceState] = useState<"idle" | "recording">("idle");
+  const [deviceElapsed, setDeviceElapsed] = useState(0);
+  const deviceEngineRef = useRef<DeviceSttEngine | null>(null);
+  const deviceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const deviceStartAtRef = useRef(0);
+  const lastFinalRef = useRef("");
+  const handledRef = useRef(false);
 
   useEffect(() => {
-    if (!error) return;
-    const [code, ...detail] = error.split(": ");
+    if (!serverVoice.error) return;
+    const [code, ...detail] = serverVoice.error.split(": ");
     toast.show(code === "transcription" && detail.length ? detail.join(": ") : t(`voice.error.${code}`, { defaultValue: t("voice.error.transcription") }));
-  }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [serverVoice.error, t]);
 
-  if (state === "transcribing") {
+  const clearDeviceTimer = useCallback(() => {
+    if (deviceTimerRef.current) {
+      clearInterval(deviceTimerRef.current);
+      deviceTimerRef.current = null;
+    }
+  }, []);
+
+  const stopDeviceRecording = useCallback(async () => {
+    clearDeviceTimer();
+    onPartial?.("");
+    setDeviceState("idle");
+    const engine = deviceEngineRef.current;
+    deviceEngineRef.current = null;
+    if (!engine) return;
+    try {
+      const text = await engine.stop();
+      if (!handledRef.current) {
+        handledRef.current = true;
+        const res = (text ?? lastFinalRef.current).trim();
+        if (res) handleTranscript(res);
+      }
+    } catch {
+      if (!handledRef.current) {
+        handledRef.current = true;
+        const res = lastFinalRef.current.trim();
+        if (res) handleTranscript(res);
+      }
+    }
+  }, [clearDeviceTimer, onPartial, handleTranscript]);
+
+  const cancelDeviceRecording = useCallback(async () => {
+    clearDeviceTimer();
+    onPartial?.("");
+    setDeviceState("idle");
+    handledRef.current = true;
+    const engine = deviceEngineRef.current;
+    deviceEngineRef.current = null;
+    if (!engine) return;
+    try {
+      await engine.cancel();
+    } catch {}
+  }, [clearDeviceTimer, onPartial]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      clearDeviceTimer();
+      if (deviceEngineRef.current) {
+        deviceEngineRef.current.cancel().catch(() => {});
+      }
+    };
+  }, [clearDeviceTimer]);
+
+  const checkServerConfigured = async (): Promise<boolean> => {
+    const cur = settingsStore.getState().data;
+    if (cur) return voiceAvailable(cur);
+    if (session?.get) {
+      try {
+        const st = await session.get<SettingsPayload>("/api/settings");
+        settingsStore.getState().setData(st);
+        return voiceAvailable(st);
+      } catch {}
+    }
+    return false;
+  };
+
+  const startDevice = useCallback(async () => {
+    const engine = new DeviceSttEngine();
+    deviceEngineRef.current = engine;
+    lastFinalRef.current = "";
+    handledRef.current = false;
+
+    engine.on("partial", (text) => {
+      onPartial?.(text);
+    });
+
+    engine.on("final", (text) => {
+      lastFinalRef.current = text;
+    });
+
+    engine.on("end", () => {
+      clearDeviceTimer();
+      onPartial?.("");
+      setDeviceState("idle");
+      if (!handledRef.current) {
+        handledRef.current = true;
+        const res = lastFinalRef.current.trim();
+        if (res) handleTranscript(res);
+      }
+    });
+
+    engine.on("error", async (code) => {
+      clearDeviceTimer();
+      onPartial?.("");
+      setDeviceState("idle");
+      deviceEngineRef.current = null;
+
+      if (code === "language-not-supported" || code === "service-not-allowed") {
+        toast.show(t(`voice.error.${code}`, { defaultValue: t("voice.error.transcription") }));
+        const canFallback = await checkServerConfigured();
+        if (canFallback) {
+          void serverVoice.start();
+        }
+      } else {
+        toast.show(t(`voice.error.${code}`, { defaultValue: t("voice.error.transcription") }));
+      }
+    });
+
+    try {
+      await engine.start({ continuous: true });
+      deviceStartAtRef.current = Date.now();
+      setDeviceElapsed(0);
+      setDeviceState("recording");
+      clearDeviceTimer();
+      deviceTimerRef.current = setInterval(() => {
+        setDeviceElapsed(Date.now() - deviceStartAtRef.current);
+      }, 200);
+    } catch {
+      clearDeviceTimer();
+      onPartial?.("");
+      setDeviceState("idle");
+      toast.show(t("voice.error.unavailable"));
+    }
+  }, [clearDeviceTimer, onPartial, handleTranscript, serverVoice, t]);
+
+  const handleStart = useCallback(async () => {
+    const pref = prefs.voiceEngine();
+    if (pref === "server") {
+      void serverVoice.start();
+      return;
+    }
+    if (!isRecognitionAvailable()) {
+      warnEngineUnavailableOnce();
+      void serverVoice.start();
+      return;
+    }
+    await startDevice();
+  }, [serverVoice, startDevice]);
+
+  if (serverVoice.state === "transcribing") {
     return <View accessibilityLabel={t("voice.transcribing")} style={{ minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={th.colors.foreground} /></View>;
   }
-  if (state === "recording") {
+
+  if (serverVoice.state === "recording") {
     return (
       <View style={{ flexDirection: "row", alignItems: "center" }}>
         <Dot />
-        <Text style={{ color: th.colors.foreground, marginHorizontal: 6, fontVariant: ["tabular-nums"] }}>{mmss(elapsedMs)}</Text>
-        <IconButton icon="close" accessibilityLabel={t("voice.cancel")} onPress={cancel} />
-        <IconButton icon="stop-circle-outline" accessibilityLabel={t("voice.stop")} onPress={() => void stop().then((x) => x && handleTranscript(x))} />
+        <Text style={{ color: th.colors.foreground, marginHorizontal: 6, fontVariant: ["tabular-nums"] }}>{mmss(serverVoice.elapsedMs)}</Text>
+        <IconButton icon="close" accessibilityLabel={t("voice.cancel")} onPress={serverVoice.cancel} />
+        <IconButton icon="stop-circle-outline" accessibilityLabel={t("voice.stop")} onPress={() => void serverVoice.stop().then((x) => x && handleTranscript(x))} />
       </View>
     );
   }
-  return <IconButton icon="microphone" accessibilityLabel={t("voice.start")} onPress={() => void start()} />;
+
+  if (deviceState === "recording") {
+    return (
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Dot />
+        <Text style={{ color: th.colors.foreground, marginHorizontal: 6, fontVariant: ["tabular-nums"] }}>{mmss(deviceElapsed)}</Text>
+        <IconButton icon="close" accessibilityLabel={t("voice.cancel")} onPress={cancelDeviceRecording} />
+        <IconButton icon="stop-circle-outline" accessibilityLabel={t("voice.stop")} onPress={stopDeviceRecording} />
+      </View>
+    );
+  }
+
+  return <IconButton icon="microphone" accessibilityLabel={t("voice.start")} onPress={handleStart} />;
 }
