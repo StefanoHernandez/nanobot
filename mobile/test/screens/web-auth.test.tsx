@@ -122,6 +122,8 @@ describe("Web Login Screen (ConnectScreen.web)", () => {
     expect(active?.auth).toBe("cookie");
     expect(active?.baseUrl).toBe("http://localhost:8765");
     expect(active?.hasSecret).toBe(false);
+    // The profile names the bot (greeting, thread header), not this browser.
+    expect(active?.name).not.toBe("Browser – Chrome on Linux");
 
     // Paired device id saved
     expect(pairedDevice.get(active!.id)).toBe("device-123");
