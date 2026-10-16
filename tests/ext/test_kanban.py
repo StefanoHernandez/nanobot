@@ -462,6 +462,42 @@ def test_events_since_keeps_oldest_fifty(store_path, monkeypatch):
     assert "t50" not in titles
 
 
+def test_events_since_pages_past_fifty(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    base = 20_000_000
+    for i in range(60):
+        monkeypatch.setattr(kb, "_now_ms", lambda i=i: base + i * 10)
+        tid = f"p{i:02d}"
+        store.save_task({"id": tid, "board_id": "main", "title": tid, "status": "review"})
+    monkeypatch.setattr(kb, "_now_ms", lambda: base + 10_000)
+    first = store.events_since(base - 1)
+    assert len(first["events"]) == 50
+    assert first["now"] < base + 50 * 10
+    second = store.events_since(first["now"])
+    keys = {e["key"] for e in first["events"]} | {e["key"] for e in second["events"]}
+    assert len(keys) == 60
+
+
+def test_events_since_hides_events_after_the_clock(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "late", status="ready", assignee="coder")
+    monkeypatch.setattr(kb, "_now_ms", lambda: 5_000)
+    store.claim_ready_tasks(0)
+    store.complete_task("late", "finished", [])
+    monkeypatch.setattr(kb, "_now_ms", lambda: 4_000)
+    first = store.events_since(0)
+    assert not any(e["task_id"] == "late" for e in first["events"])
+    assert first["now"] == 4_000
+    monkeypatch.setattr(kb, "_now_ms", lambda: 6_000)
+    second = store.events_since(first["now"])
+    late = [e for e in second["events"] if e["task_id"] == "late"]
+    assert len(late) == 1
+    assert late[0]["kind"] == "done"
+
+
 def test_parse_since_rejects_bad_values():
     with pytest.raises(kb.KanbanError) as exc:
         kb._parse_since_ms(True)

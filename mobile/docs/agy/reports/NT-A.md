@@ -59,3 +59,27 @@ Jest still prints `A worker process has failed to exit gracefully` at the end. S
 - The poller subscribes to the board-notification pref. The main layout does not re-render when that switch changes, so without the subscription turning it back on would not start polling until the next session change.
 - On web the hook is mounted (rules of hooks) but `enabled` is false, so it does not poll and does not schedule a notification. `NativeIntegrations.web.tsx` was not changed.
 - Not verified on a phone or emulator.
+
+## fix1
+
+The phone no longer skips events when a poll has more than 50, or when one lands between the queries and the clock.
+
+`events_since` reads `now` before the queries and ignores anything newer than that clock. If more than 50 match, it still returns the 50 oldest, but `now` is the time of the last one minus 1 ms. The next poll continues from there. Same-millisecond events come back; the phone already drops duplicate keys. When the list fits, `now` is the clock read before the queries. The phone still saves `now` and was not changed.
+
+```
+.venv/bin/python -m pytest -p no:cacheprovider tests/ext/test_kanban.py
+25 passed in 0.64s
+
+.venv/bin/ruff check nanobot/ext/kanban.py
+All checks passed!
+
+.venv/bin/basedpyright nanobot/ext/kanban.py
+0 errors, 0 warnings, 0 notes
+
+cd mobile && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest
+Test Suites: 109 passed, 109 total
+Tests:       903 passed, 903 total
+
+cd mobile && npx tsc --noEmit
+(no output, exit 0)
+```
