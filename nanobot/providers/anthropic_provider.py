@@ -557,7 +557,10 @@ class AnthropicProvider(LLMProvider):
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
     ) -> tuple[str | list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]] | None]:
-        marker = {"type": "ephemeral"}
+        # Fork (nanobot/ext/prompt_cache.py): configurable TTL.
+        from nanobot.ext.prompt_cache import marker as cache_marker
+
+        marker = cache_marker()
 
         if isinstance(system, str) and system:
             system = [{"type": "text", "text": system, "cache_control": marker}]
@@ -565,16 +568,18 @@ class AnthropicProvider(LLMProvider):
             system = list(system)
             system[-1] = {**system[-1], "cache_control": marker}
 
+        # Fork: mark the newest message, so the next request reads it from cache
+        # instead of paying it in full now and writing it to cache then.
         new_msgs = list(messages)
-        if len(new_msgs) >= 3:
-            m = new_msgs[-2]
+        if new_msgs:
+            m = new_msgs[-1]
             c = m.get("content")
             if isinstance(c, str):
-                new_msgs[-2] = {**m, "content": [{"type": "text", "text": c, "cache_control": marker}]}
+                new_msgs[-1] = {**m, "content": [{"type": "text", "text": c, "cache_control": marker}]}
             elif isinstance(c, list) and c:
                 nc = list(cast(list[dict[str, Any]], c))
                 nc[-1] = {**nc[-1], "cache_control": marker}
-                new_msgs[-2] = {**m, "content": nc}
+                new_msgs[-1] = {**m, "content": nc}
 
         new_tools = tools
         if tools:
