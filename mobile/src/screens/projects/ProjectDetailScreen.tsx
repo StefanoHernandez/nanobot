@@ -23,6 +23,8 @@ import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from ".
 import { BotFace } from "../../ui/BotFace";
 import { sessionStore, useSession } from "../../state/sessionStore";
 import { chatsStore, useChats } from "../../state/chatsStore";
+import { PromptItem, usePrompts } from "../../extras/prompts";
+import { PromptEditorSheet } from "../../extras/PromptEditorSheet";
 import {
   archiveProject,
   deleteProjectFile,
@@ -156,6 +158,11 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
       setExportProgress(null);
     }
   };
+
+  // Prompts
+  const { prompts: projectPromptsList } = usePrompts(id);
+  const [editingPrompt, setEditingPrompt] = useState<PromptItem | "new" | null>(null);
+  const projectPrompts = projectPromptsList.filter((p) => p.project_id === id);
 
   const loadData = async () => {
     const currentGen = ++genRef.current;
@@ -638,6 +645,72 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
           )}
         </View>
 
+        {/* Section: Prompts */}
+        <View style={[styles.section, { borderTopColor: th.colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
+              {t("prompts.title")}
+            </Text>
+            <Button title={t("prompts.newPrompt")} onPress={() => setEditingPrompt("new")} />
+          </View>
+
+          {projectPrompts.length > 0 ? (
+            <View style={{ marginHorizontal: -8 }}>
+              {projectPrompts.map((p) => (
+                <Pressable
+                  key={p.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={p.title}
+                  onPress={() => setEditingPrompt(p)}
+                  style={({ pressed }) => [
+                    {
+                      backgroundColor: pressed ? th.colors.accent : "transparent",
+                      borderRadius: th.radius.sm,
+                      paddingHorizontal: 8,
+                      paddingVertical: 8,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    },
+                  ]}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: th.colors.foreground,
+                        fontFamily: th.font.medium,
+                        fontSize: 16,
+                      }}
+                    >
+                      {p.title}
+                    </Text>
+                    <Text
+                      numberOfLines={2}
+                      style={{
+                        color: th.colors.mutedForeground,
+                        fontFamily: th.font.regular,
+                        fontSize: 13,
+                      }}
+                    >
+                      {p.body}
+                    </Text>
+                  </View>
+                  <IconButton
+                    icon="dots-horizontal"
+                    accessibilityLabel={t("prompts.edit")}
+                    onPress={() => setEditingPrompt(p)}
+                  />
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 14, paddingVertical: 8 }}>
+              {t("prompts.empty")}
+            </Text>
+          )}
+        </View>
+
         {/* Section 5: Esporta e Archivia progetto */}
         <View style={[styles.section, { borderTopColor: th.colors.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16, gap: 12 }]}>
           {exportProgress ? (
@@ -800,6 +873,14 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
         destructive
         onConfirm={() => void handleArchive()}
         onCancel={() => setShowArchiveDialog(false)}
+      />
+
+      <PromptEditorSheet
+        open={editingPrompt !== null}
+        onClose={() => setEditingPrompt(null)}
+        prompt={editingPrompt === "new" ? null : editingPrompt}
+        projectId={id}
+        initialScopeToProject={true}
       />
     </SafeAreaView>
   );
