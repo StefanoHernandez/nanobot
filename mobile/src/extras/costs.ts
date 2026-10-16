@@ -59,6 +59,8 @@ export type CostsState = {
   error: string | null;
   days: number;
   onCostsScreen: boolean;
+  /** Daily cap seen by the background watcher (its own 1-day fetch); null when no cap. */
+  watchCap: number | null;
   refresh: (days?: number) => Promise<void>;
   saveSettings: (partial: CostSettingsPayload) => Promise<boolean>;
   setOnCostsScreen: (on: boolean) => void;
@@ -125,8 +127,39 @@ export async function saveCostSettings(
   return (await res.json()) as { ok: boolean };
 }
 
+/** One local notification per day per kind, only when a cap is set and the costs screen is not in front. */
+function notifyIfNeeded(data: CostsPayload): void {
+  const isBackground = AppState.currentState !== "active";
+  if ((isBackground || !onCostsScreen) && data.daily_cap_usd != null) {
+    if (data.over_cap) {
+      const key = `costs.notified.${data.today}.over_cap`;
+      if (!kv.get(key)) {
+        kv.set(key, "1");
+        void Notifications.scheduleNotificationAsync({
+          content: {
+            title: i18n.t("costs.overNotify"),
+          },
+          trigger: { channelId: CHANNEL },
+        });
+      }
+    } else if (data.alert) {
+      const key = `costs.notified.${data.today}.alert`;
+      if (!kv.get(key)) {
+        kv.set(key, "1");
+        void Notifications.scheduleNotificationAsync({
+          content: {
+            title: i18n.t("costs.alertNotify"),
+          },
+          trigger: { channelId: CHANNEL },
+        });
+      }
+    }
+  }
+}
+
 export const costsStore = createStore<CostsState>((set, get) => ({
   data: null,
+  watchCap: null,
   loading: false,
   error: null,
   days: 30,
@@ -155,32 +188,7 @@ export const costsStore = createStore<CostsState>((set, get) => ({
       const currentProfileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
       if (profileId !== currentProfileId) return;
 
-      const isBackground = AppState.currentState !== "active";
-      if ((isBackground || !onCostsScreen) && data.daily_cap_usd != null) {
-        if (data.over_cap) {
-          const key = `costs.notified.${data.today}.over_cap`;
-          if (!kv.get(key)) {
-            kv.set(key, "1");
-            void Notifications.scheduleNotificationAsync({
-              content: {
-                title: i18n.t("costs.overNotify"),
-              },
-              trigger: { channelId: CHANNEL },
-            });
-          }
-        } else if (data.alert) {
-          const key = `costs.notified.${data.today}.alert`;
-          if (!kv.get(key)) {
-            kv.set(key, "1");
-            void Notifications.scheduleNotificationAsync({
-              content: {
-                title: i18n.t("costs.alertNotify"),
-              },
-              trigger: { channelId: CHANNEL },
-            });
-          }
-        }
-      }
+      notifyIfNeeded(data);
 
       set({
         data,
@@ -217,6 +225,7 @@ export const costsStore = createStore<CostsState>((set, get) => ({
       error: null,
       days: 30,
       onCostsScreen: false,
+      watchCap: null,
     });
   },
 }));
@@ -253,21 +262,36 @@ export function useCosts(days: number = 30) {
   };
 }
 
+/**
+ * Background cap check. Separate from the screen data: it fetches 1 day on its own and never touches
+ * `data`/`days`/`generation`, so it cannot collapse the 7/30-day chart or cancel the screen's fetch.
+ */
+export async function checkCostCap(): Promise<void> {
+  const { session, profile } = sessionStore.getState();
+  if (!session) return;
+  try {
+    const data = await fetchCosts(session, 1);
+    if (sessionStore.getState().profile?.id !== profile?.id) return;
+    costsStore.setState({ watchCap: data.daily_cap_usd ?? null });
+    notifyIfNeeded(data);
+  } catch {
+    // quiet: the next tick retries
+  }
+}
+
 export function useCostsBackgroundWatcher(): void {
   const isOpen = useStore(sessionStore, (s) => s.state === "open");
   const profileId = useStore(sessionStore, (s) => s.profile?.id);
-  const dailyCap = useStore(costsStore, (s) => s.data?.daily_cap_usd);
+  const cap = useStore(costsStore, (s) => s.watchCap ?? s.data?.daily_cap_usd ?? null);
 
   useEffect(() => {
-    if (isOpen) {
-      void costsStore.getState().refresh(1);
-    }
+    if (isOpen) void checkCostCap();
   }, [isOpen, profileId]);
 
   usePolling({
-    enabled: isOpen && dailyCap != null,
+    enabled: isOpen && cap != null,
     intervalMs: 600000,
-    tick: () => costsStore.getState().refresh(1),
+    tick: checkCostCap,
     background: true,
   });
 }

@@ -175,6 +175,27 @@ describe("FX-1: Review fixes for MD-A and CO-A", () => {
     unmount();
   });
 
+  test("the background cap check never overwrites the screen's 30-day data", async () => {
+    const f = fakeSession();
+    sessionStore.setState({
+      session: f.session,
+      state: "open" as never,
+      profile: { id: "p1", baseUrl: "http://h", name: "nanobot" } as never,
+    });
+    const screenData = { ...sampleCostsPayload, total_cost_usd: 123 };
+    costsStore.setState({ data: screenData, days: 30 });
+    const fetchMock = jest.fn(async () => ({ ok: true, status: 200, json: async () => sampleCostsPayload }) as Response);
+    global.fetch = fetchMock as never;
+
+    const { unmount } = await renderHook(() => useCostsBackgroundWatcher());
+    await waitFor(() => expect(costsStore.getState().watchCap).toBe(sampleCostsPayload.daily_cap_usd));
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("days=1"), expect.anything());
+    expect(costsStore.getState().data).toBe(screenData);
+    expect(costsStore.getState().days).toBe(30);
+    unmount();
+  });
+
   // 2. Editing a price carries cache_write
   test("Item 2: editing a model that has cache_write preserves cache_write when only output is modified", async () => {
     const f = fakeSession();
