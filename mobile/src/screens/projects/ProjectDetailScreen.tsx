@@ -19,7 +19,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { File } from "expo-file-system";
 import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
-import { Button, Dialog, IconButton, Sheet, TextField, toast } from "../../ui/components";
+import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
 import { BotFace } from "../../ui/BotFace";
 import { sessionStore, useSession } from "../../state/sessionStore";
 import { chatsStore, useChats } from "../../state/chatsStore";
@@ -38,6 +38,7 @@ import { projectsStore } from "../../projects/store";
 import { ChatRow } from "../chats/ChatRow";
 import { viewerKind } from "../viewer/formats";
 import { openLocal } from "../thread/media/media";
+import { exportProject, type ExportFormat } from "../../extras/exportChat";
 
 export type ProjectDetailScreenProps = {
   id: string;
@@ -128,6 +129,33 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
   // Archive project dialog
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [archiving, setArchiving] = useState(false);
+
+  // Export project sheet and progress
+  const [exportSheetOpen, setExportSheetOpen] = useState(false);
+  const [exportProgress, setExportProgress] = useState<string | null>(null);
+  const cancelExportRef = React.useRef(false);
+
+  const handleExportProject = async (format: ExportFormat) => {
+    if (!session || !detail) return;
+    setExportSheetOpen(false);
+    cancelExportRef.current = false;
+    setExportProgress(t("export.exporting"));
+    try {
+      await exportProject({
+        session,
+        detail,
+        format,
+        onProgress: (current, total) => {
+          setExportProgress(t("projects.exportProgress", { current, total }));
+        },
+        isCancelled: () => cancelExportRef.current,
+      });
+    } catch (e: any) {
+      toast.show(e?.message || t("common.operationFailed"));
+    } finally {
+      setExportProgress(null);
+    }
+  };
 
   const loadData = async () => {
     const currentGen = ++genRef.current;
@@ -610,8 +638,32 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
           )}
         </View>
 
-        {/* Section 5: Archivia progetto */}
-        <View style={[styles.section, { borderTopColor: th.colors.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 24 }]}>
+        {/* Section 5: Esporta e Archivia progetto */}
+        <View style={[styles.section, { borderTopColor: th.colors.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16, gap: 12 }]}>
+          {exportProgress ? (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <ActivityIndicator size="small" color={th.colors.primary} />
+                <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 14 }}>
+                  {exportProgress}
+                </Text>
+              </View>
+              <Button
+                title={t("common.cancel")}
+                variant="ghost"
+                onPress={() => {
+                  cancelExportRef.current = true;
+                }}
+              />
+            </View>
+          ) : (
+            <Button
+              title={t("projects.exportProject")}
+              variant="secondary"
+              onPress={() => setExportSheetOpen(true)}
+            />
+          )}
+
           <Button
             title={t("projects.archive")}
             variant="ghost"
@@ -621,6 +673,22 @@ export function ProjectDetailScreen({ id }: ProjectDetailScreenProps) {
           />
         </View>
       </ScrollView>
+
+      {/* Export Project Sheet */}
+      <Sheet open={exportSheetOpen} onClose={() => setExportSheetOpen(false)} title={t("projects.exportProject")}>
+        <View style={{ paddingVertical: 8 }}>
+          <ListItem
+            title={t("export.markdown")}
+            left={<MaterialCommunityIcons name="file-document-outline" size={22} color={th.colors.foreground} />}
+            onPress={() => void handleExportProject("md")}
+          />
+          <ListItem
+            title={t("export.pdf")}
+            left={<MaterialCommunityIcons name="file-pdf-box" size={22} color={th.colors.foreground} />}
+            onPress={() => void handleExportProject("pdf")}
+          />
+        </View>
+      </Sheet>
 
       {/* Edit Metadata Sheet */}
       <Sheet open={editSheetOpen} onClose={() => setEditSheetOpen(false)} title={t("projects.editProject")}>

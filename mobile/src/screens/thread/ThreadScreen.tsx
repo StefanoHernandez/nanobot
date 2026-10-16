@@ -7,7 +7,7 @@ import { IconButton } from "../../ui/components/IconButton";
 import { ListItem, Sheet } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { router } from "expo-router";
-import { isWritable } from "../../state/chatsStore";
+import { isWritable, chatsStore } from "../../state/chatsStore";
 import { threadStore, useThread } from "../../state/threadStore";
 import { useStore } from "zustand";
 import { sessionStore, useSession } from "../../state/sessionStore";
@@ -15,6 +15,7 @@ import { Button } from "../../ui/components/Button";
 import { BotFace, faceStateOf } from "../../ui/BotFace";
 import { CommandDrawerButton } from "../../extras/CommandDrawer";
 import { OutboxBar } from "../../extras/OutboxBar";
+import { exportChat } from "../../extras/exportChat";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { isActive, SubagentsButton } from "./SubagentsSheet";
@@ -107,6 +108,28 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
         {showCommands ? (
           <ListItem title={t("extras.commands")} left={<MaterialCommunityIcons name="console-line" size={22} color={th.colors.foreground} />} onPress={() => openPanel("commands")} />
         ) : null}
+        <ListItem
+          title={t("export.markdown")}
+          left={<MaterialCommunityIcons name="file-document-outline" size={22} color={th.colors.foreground} />}
+          onPress={() => {
+            setMenu(false);
+            if (session) {
+              const title = chatsStore.getState().chats.find((c) => c.key === chatKey)?.title || t("chats.untitled");
+              void exportChat({ session, chatKey, title, format: "md" });
+            }
+          }}
+        />
+        <ListItem
+          title={t("export.pdf")}
+          left={<MaterialCommunityIcons name="file-pdf-box" size={22} color={th.colors.foreground} />}
+          onPress={() => {
+            setMenu(false);
+            if (session) {
+              const title = chatsStore.getState().chats.find((c) => c.key === chatKey)?.title || t("chats.untitled");
+              void exportChat({ session, chatKey, title, format: "pdf" });
+            }
+          }}
+        />
       </Sheet> : null}
       {showWorkspace ? (
         <WorkspaceButton chatKey={chatKey} trigger={false} open={panel === "workspace"} onOpenChange={(next) => { if (!next) setPanel(null); }} />
