@@ -29,7 +29,7 @@ export function AppearanceSection() {
 
   useEffect(() => {
     if (Platform.OS !== "web") {
-      void isOfflineLocaleInstalled("it-IT").then((ready) => setOfflineReady(ready));
+      void isOfflineLocaleInstalled().then((ready) => setOfflineReady(ready));
     }
   }, []);
 

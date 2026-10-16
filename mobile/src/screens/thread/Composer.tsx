@@ -382,6 +382,8 @@ export function Composer({ chatKey }: { chatKey: string }) {
             multiline
             textAlignVertical="top"
             value={voicePartial ? (draft ? `${draft} ${voicePartial}` : voicePartial) : draft}
+            // Read-only while the partial is shown: typing would commit it and the final would repeat it.
+            editable={!voicePartial}
             onChangeText={handleDraftChange}
             onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
             onKeyPress={handleKeyPress}
@@ -492,6 +494,8 @@ export function Composer({ chatKey }: { chatKey: string }) {
     );
   };
 
+  // ponytail: flipping voiceOk remounts the composer (once, at load, when only the server engine works);
+  // a stable tree needs the loop hook lifted out of a wrapper.
   if (!voiceOk) {
     return renderContent(null);
   }

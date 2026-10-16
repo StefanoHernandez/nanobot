@@ -132,6 +132,7 @@ export function VoiceButton({
   };
 
   const startDevice = useCallback(async () => {
+    if (deviceEngineRef.current) return; // a second tap while the first one is still starting
     const engine = new DeviceSttEngine();
     deviceEngineRef.current = engine;
     lastFinalRef.current = "";
@@ -146,6 +147,7 @@ export function VoiceButton({
     });
 
     engine.on("end", () => {
+      if (deviceEngineRef.current === engine) deviceEngineRef.current = null;
       clearDeviceTimer();
       onPartial?.("");
       setDeviceState("idle");
@@ -169,12 +171,14 @@ export function VoiceButton({
           void serverVoice.start();
         }
       } else {
-        toast.show(t(`voice.error.${code}`, { defaultValue: t("voice.error.transcription") }));
+        const key = code === "not-allowed" ? "permission" : code;
+        toast.show(t(`voice.error.${key}`, { defaultValue: t("voice.error.transcription") }));
       }
     });
 
     try {
       await engine.start({ continuous: true });
+      if (deviceEngineRef.current !== engine) return; // refused (permission) or cancelled while starting
       deviceStartAtRef.current = Date.now();
       setDeviceElapsed(0);
       setDeviceState("recording");
