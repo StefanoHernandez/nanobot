@@ -12,6 +12,7 @@ import type {
 import { useSession } from "../state/sessionStore";
 import { useSettings } from "../settings/store";
 import { installGate, longMutation } from "./common";
+import { usePrivileged } from "./privilege";
 
 const policyError = () =>
   Object.assign(new Error("Remote package installation is disabled on the host"), { policy: true, status: 403 });
@@ -19,6 +20,7 @@ const policyError = () =>
 export function useSkills() {
   const { session } = useSession();
   const { data: settings, mutate } = useSettings();
+  const privileged = usePrivileged();
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +76,7 @@ export function useSkills() {
 
   const install = useCallback(
     async (provider: string, source: string, skill: string, version?: string) => {
-      if (!installGate(settings).allowed) {
+      if (!installGate(settings, privileged).allowed) {
         throw policyError();
       }
       const res = await longMutation<SkillInstallPayload>(mutate, "skill.install", {
@@ -90,7 +92,7 @@ export function useSkills() {
       }
       return res;
     },
-    [settings, mutate, refresh],
+    [settings, privileged, mutate, refresh],
   );
 
   const update = useCallback(

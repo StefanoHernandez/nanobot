@@ -8,9 +8,9 @@ const INSTALL_FLAG = "tools.webui_allow_remote_package_install";
 
 type Mutate = <T = unknown>(action: string, payload: object, opts?: { timeoutMs?: number }) => Promise<T>;
 
-/** Host flag for remote package installs; fails closed when settings are missing. Read-only on mobile. */
-export const installGate = (s: SettingsPayload | null | undefined): { allowed: boolean } => ({
-  allowed: s?.runtime_config?.[INSTALL_FLAG] === true,
+/** Host flag for remote package installs, or a privileged client (see privilege.ts); fails closed. */
+export const installGate = (s: SettingsPayload | null | undefined, privileged = false): { allowed: boolean } => ({
+  allowed: privileged || s?.runtime_config?.[INSTALL_FLAG] === true,
 });
 
 /** Host policy refusal (403): never retried, UI shows the "enable on host" copy. */

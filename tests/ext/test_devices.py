@@ -428,3 +428,16 @@ async def test_the_server_browser_names_the_address_in_the_qr(devices_path):
     assert bad.status == 400
     remote = await handler(codes({"url": "https://evil.example"}, "100.64.0.7"))
     assert json.loads(_json(remote)["qr"])["url"] == "http://127.0.0.1:8765"  # body ignored
+
+
+def test_device_list_says_whether_the_caller_has_full_power(devices_path, monkeypatch):
+    _, device_id = _paired_phone(devices_path)
+    monkeypatch.setitem(dev._DEVICE_TOKENS, API, device_id)
+    assert _json(dev.dispatch_devices_get(_router(), _get(dev.PREFIX, auth=API), dev.PREFIX))["self"] == {
+        "id": device_id,
+        "full_power": False,
+    }
+    dev.set_full_power(device_id, True)
+    assert _json(dev.dispatch_devices_get(_router(), _get(dev.PREFIX, auth=API), dev.PREFIX))["self"]["full_power"]
+    master = _json(dev.dispatch_devices_get(_router(), _get(dev.PREFIX), dev.PREFIX))
+    assert master["self"] == {"id": None, "full_power": False}
