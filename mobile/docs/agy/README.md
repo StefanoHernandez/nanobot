@@ -36,6 +36,9 @@ The work happens **in parallel in separate folders**:
 - **Never rebase, never merge `main` into your branch, never pull mid-task.** It is fine for `main` to move on while you work: Claude merges and resolves the conflicts.
 - A **fix brief** (`<TASK>-fix<k>.md`) is applied on the same branch. If the brief is not in your worktree yet, read it with `git fetch && git show origin/main:mobile/docs/agy/briefs/<file>`.
 - Jest on this PC: `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest` (the Italian locale breaks 2 tests).
+- **Always run these too, whatever the brief lists:**
+  - if you touched server files: the whole `pytest tests`, not only the folders in the brief. A `# Fork` hook in the gateway can break startup, and only `tests/cli` and `tests/webui` catch that. Three tests already fail on this PC and are not yours: `test_channel_setup` (optional Matrix dependency), `test_remote_pairing` (this PC's umask 002), and `test_exec_rejects_home_path` (flaky in the full run);
+  - if you touched app files: `cd mobile && npx expo export --platform android --output-dir /tmp/nb-export`. Jest and tsc do not catch a broken release bundle. For example, expo-router (SDK 56+) rejects any `@react-navigation/*` import.
 
 ## Workflow per task
 1. Stefano tells you which brief to run: `mobile/docs/agy/briefs/T<n>.md`.
