@@ -174,7 +174,7 @@ First-run WebUI setup binds to `127.0.0.1` by default. Use manual configuration 
 | `nanobot gateway install-service --dry-run` | Preview the generated service file and system commands |
 | `nanobot gateway uninstall-service` | Remove the installed system service |
 
-For custom instances, pass the same selector flags to management commands:
+For custom instances, pass the same selector flags after the management subcommand, as shown below. `--config` and `--workspace` before a management subcommand are rejected with a usage error; they are not inherited.
 
 ```bash
 nanobot gateway --background --config ./bot-a/config.json --workspace ./bot-a/workspace
@@ -294,7 +294,7 @@ The `plugins` command name is retained for compatibility, but these entries are 
 | `api` | Dependencies required by the OpenAI-compatible `nanobot serve` process |
 | `azure` | Azure identity support for Azure-hosted models |
 | `bedrock` | AWS Bedrock model provider support |
-| `langfuse` | Langfuse tracing support for OpenAI-compatible providers |
+| `langfuse` | Langfuse tracing support for OpenAI-compatible providers and the Codex OAuth provider |
 | `olostep` | Olostep web search provider support |
 | A channel name such as `telegram` or `slack` | The connector package and saved channel enablement |
 
