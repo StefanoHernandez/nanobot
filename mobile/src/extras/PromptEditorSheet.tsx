@@ -98,6 +98,8 @@ export function PromptEditorSheet({
     } catch (e: any) {
       if (e?.code === "too_many_prompts" || e?.status === 409) {
         toast.show(t("prompts.tooMany"));
+      } else if (e?.code === "invalid_title" || e?.code === "invalid_body") {
+        toast.show(t("prompts.tooLong"));
       } else {
         toast.show(t("common.operationFailed"));
       }
@@ -141,6 +143,7 @@ export function PromptEditorSheet({
           <TextField
             label={t("prompts.promptTitle")}
             value={title}
+            maxLength={120}
             onChangeText={(v) => {
               titleRef.current = v;
               setTitle(v);
@@ -151,6 +154,7 @@ export function PromptEditorSheet({
           <TextField
             label={t("prompts.body")}
             value={body}
+            maxLength={20000}
             onChangeText={(v) => {
               bodyRef.current = v;
               setBody(v);

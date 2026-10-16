@@ -1109,6 +1109,7 @@
     "deleteConfirmTitle": "Delete prompt?",
     "deleteConfirmMessage": "Delete \"{{title}}\"? This cannot be undone.",
     "tooMany": "Prompt limit reached (maximum 500)",
+    "tooLong": "Title or body is too long",
     "sectionTitle": "Prompts"
   }
 }

@@ -10,17 +10,20 @@ export type ListItemProps = {
   right?: React.ReactNode;
   left?: React.ReactNode;
   accessibilityLabel?: string;
+  disabled?: boolean;
 };
 
-export function ListItem({ title, subtitle, onPress, onLongPress, right, left, accessibilityLabel }: ListItemProps) {
+export function ListItem({ title, subtitle, onPress, onLongPress, right, left, accessibilityLabel, disabled }: ListItemProps) {
   const th = useTheme();
   return (
     <Pressable
-      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityRole={onPress && !disabled ? "button" : undefined}
       accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? th.colors.accent : "transparent" }]}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress}
+      onLongPress={disabled ? undefined : onLongPress}
+      style={({ pressed }) => [styles.row, { backgroundColor: pressed && !disabled ? th.colors.accent : "transparent", opacity: disabled ? 0.4 : 1 }]}
     >
       {left}
       <View style={styles.body}>

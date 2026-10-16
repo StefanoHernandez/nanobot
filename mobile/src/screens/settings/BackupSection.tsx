@@ -107,11 +107,6 @@ export function BackupSection() {
           disabled={creating || !!acting}
           onPress={() => void create()}
         />
-        {creating ? (
-          <View testID="backup-creating-spinner" style={{ position: "absolute", opacity: 0 }}>
-            <ActivityIndicator />
-          </View>
-        ) : null}
       </View>
 
       <Head>{t("backup.title")}</Head>
