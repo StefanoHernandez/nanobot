@@ -30,7 +30,10 @@ beforeEach(async () => {
   jest.clearAllMocks();
   clearCatalogCache();
   mutate.mockImplementation(async () => ({}));
-  get.mockResolvedValue({});
+  get.mockImplementation(async (path: string) => {
+    if (String(path).includes("/api/ext/journal")) throw new Error("missing");
+    return {};
+  });
   settingsStore.getState().reset();
   settingsStore.getState().setData(base() as never);
   await i18n.changeLanguage("en");
@@ -195,5 +198,61 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     await waitFor(() =>
       expect(mutate).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.dream.model_override": null } }, undefined),
     );
+  });
+
+  test("the journal row is hidden when the route is missing", async () => {
+    settingsStore.getState().setData(withTasks({}) as never);
+    await show();
+    expect(screen.queryByText("Journal")).toBeNull();
+    expect(screen.getByText("Subagents")).toBeTruthy();
+  });
+
+  test("the journal row shows the chosen preset", async () => {
+    get.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal")) return { enabled: true, hour: 21, model: "b", days: [] };
+      return {};
+    });
+    settingsStore.getState().setData(withTasks({}) as never);
+    await show();
+    expect(await screen.findByText("b · The model that writes the evening journal")).toBeTruthy();
+  });
+
+  test("the journal row shows the chat model when none is chosen", async () => {
+    get.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal")) return { enabled: false, hour: 22, model: null, days: [] };
+      return {};
+    });
+    settingsStore.getState().setData(withTasks({}) as never);
+    await show();
+    expect(await screen.findByText("Same as the chat · The model that writes the evening journal")).toBeTruthy();
+  });
+
+  test("picking a journal preset keeps enabled and hour", async () => {
+    get.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal")) return { enabled: true, hour: 21, model: null, days: ["2026-10-16"] };
+      return {};
+    });
+    sessionStore.setState({
+      profile: { id: "p1", name: "Home", baseUrl: "https://x.ts.net" },
+      session: { get, mutate, baseUrl: "https://x.ts.net", apiToken: () => "tok" },
+    } as never);
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ enabled: true, hour: 21, model: "c" }),
+    }));
+    const previous = global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
+    settingsStore.getState().setData(withTasks({}) as never);
+    try {
+      await show();
+      await fireEvent.press(await screen.findByText("Journal"));
+      await fireEvent.press(screen.getAllByText("c").at(-1)!);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      const call = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
+      expect(String(call[0])).toContain("/api/ext/journal/settings");
+      expect(JSON.parse(String(call[1].body))).toEqual({ enabled: true, hour: 21, model: "c" });
+    } finally {
+      global.fetch = previous;
+    }
   });
 });
