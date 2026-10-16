@@ -19,7 +19,11 @@
     "operationFailed": "Operazione non riuscita"
   },
   "devices": {
-    "revokeSelf": "È questo telefono: verrai disconnesso"
+    "revokeSelf": "È questo telefono: verrai disconnesso",
+    "pairFromServer": "Genera il codice dal telefono già abbinato o dal server",
+    "thisBrowser": "questo browser",
+    "logoutBrowser": "Esci da questo browser",
+    "logoutConfirm": "Verrai disconnesso da questo browser."
   },
   "thread": {
     "reasoning": "Ragionamento",
@@ -115,7 +119,15 @@
     "deleteConfirm": "Eliminare {{name}}?",
     "scan": "Scansiona codice",
     "scanFailed": "Codice non valido",
-    "pasteCode": "Incolla il codice"
+    "pasteCode": "Incolla il codice",
+    "pairingCodeTab": "Codice di abbinamento",
+    "serverSecretTab": "Secret del server",
+    "pairingCode": "Codice di abbinamento",
+    "pairingCodeHelp": "Generato dal server con `nanobot pair` o dall'app mobile",
+    "badCode": "Codice non valido o scaduto",
+    "badSecret": "Segreto del server errato",
+    "tooManyAttempts": "Troppi tentativi. Riprova tra poco.",
+    "webSessionEnded": "Sessione terminata o revocata. Accedi di nuovo."
   },
   "settings": {
     "title": "Impostazioni",
