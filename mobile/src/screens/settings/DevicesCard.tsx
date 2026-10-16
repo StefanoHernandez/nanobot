@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
 import type { NanobotSession } from "../../core/session";
 import { listDevices, revokeDevice, type PairedDevice } from "../../core/pairing";
+import { webLogout } from "../../core/cookieBootstrap";
+import { profiles } from "../../core/profiles";
 import { i18n, useT } from "../../i18n";
 import { Button, Dialog, ListItem, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
@@ -54,10 +57,27 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
     void load();
   }, [load]);
 
+  const isWeb = Platform.OS === "web";
+  const activeProfile = sessionStore?.getState ? sessionStore.getState()?.profile : null;
+  const activeProfileId = activeProfile?.id ?? null;
+  const storedId = activeProfileId ? pairedDevice.get(activeProfileId) : null;
+  const isRevokingSelf = Boolean(storedId && revokeTarget && revokeTarget.id === storedId);
+
   const onRevokeConfirm = async () => {
     if (!revokeTarget || revokeBusy) return;
     setRevokeBusy(true);
     try {
+      if (isWeb && storedId && revokeTarget.id === storedId) {
+        await webLogout(session.baseUrl);
+        if (activeProfileId) {
+          await profiles.remove(activeProfileId);
+          pairedDevice.clear(activeProfileId);
+        }
+        sessionStore.getState().close();
+        setRevokeTarget(null);
+        router.replace("/connect");
+        return;
+      }
       await revokeDevice(session, revokeTarget.id);
       setRevokeTarget(null);
       await load();
@@ -71,9 +91,6 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
   if (phase === "404" || phase === "loading") return null;
 
   const live = devices.filter((d) => d.revoked !== true);
-  const activeProfileId = sessionStore?.getState ? sessionStore.getState()?.profile?.id : null;
-  const storedId = activeProfileId ? pairedDevice.get(activeProfileId) : null;
-  const isRevokingSelf = Boolean(storedId && revokeTarget && revokeTarget.id === storedId);
 
   return (
     <>
@@ -84,36 +101,44 @@ export function DevicesCard({ session }: { session: NanobotSession }) {
         ) : live.length === 0 ? (
           <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, padding: 16 }}>{t("settings.devicesEmpty")}</Text>
         ) : (
-          live.map((d, i) => (
-            <View key={d.id}>
-              {i > 0 ? <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }} /> : null}
-              <ListItem
-                title={d.name}
-                subtitle={formatLastSeen(d.last_seen, i18n.language, t("settings.deviceNever"))}
-                right={
-                  <Button
-                    title={t("settings.revokeDevice")}
-                    variant="destructive"
-                    onPress={() => setRevokeTarget(d)}
-                  />
-                }
-              />
-            </View>
-          ))
+          live.map((d, i) => {
+            const isSelf = storedId != null && d.id === storedId;
+            const title = isSelf && isWeb ? `${d.name} (${t("devices.thisBrowser")})` : d.name;
+            const buttonTitle = isSelf && isWeb ? t("devices.logoutBrowser") : t("settings.revokeDevice");
+
+            return (
+              <View key={d.id}>
+                {i > 0 ? <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }} /> : null}
+                <ListItem
+                  title={title}
+                  subtitle={formatLastSeen(d.last_seen, i18n.language, t("settings.deviceNever"))}
+                  right={
+                    <Button
+                      title={buttonTitle}
+                      variant="destructive"
+                      onPress={() => setRevokeTarget(d)}
+                    />
+                  }
+                />
+              </View>
+            );
+          })
         )}
       </View>
       <Dialog
         open={!!revokeTarget}
         destructive
-        title={t("settings.revokeDevice")}
+        title={isRevokingSelf && isWeb ? t("devices.logoutBrowser") : t("settings.revokeDevice")}
         message={
           revokeTarget
             ? isRevokingSelf
-              ? `${t("settings.revokeDeviceConfirm", { name: revokeTarget.name })}\n\n${t("devices.revokeSelf")}`
+              ? isWeb
+                ? t("devices.logoutConfirm")
+                : `${t("settings.revokeDeviceConfirm", { name: revokeTarget.name })}\n\n${t("devices.revokeSelf")}`
               : t("settings.revokeDeviceConfirm", { name: revokeTarget.name })
             : undefined
         }
-        confirmLabel={t("settings.revokeDevice")}
+        confirmLabel={isRevokingSelf && isWeb ? t("devices.logoutBrowser") : t("settings.revokeDevice")}
         cancelLabel={t("common.cancel")}
         onConfirm={() => void onRevokeConfirm()}
         onCancel={() => setRevokeTarget(null)}
