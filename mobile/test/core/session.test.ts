@@ -217,3 +217,19 @@ test("frameLimit comes from bootstrap limits.transport.max_frame_bytes", async (
   expect(s.frameLimit).toBe(1234);
   s.stop();
 });
+
+test("on web the session never assigns the page location (it would reload the page forever)", () => {
+  const { Platform } = require("react-native");
+  const os = Platform.OS;
+  const g = globalThis as { location?: { href: string } };
+  const saved = g.location;
+  g.location = { href: "http://page/" };
+  Object.defineProperty(Platform, "OS", { value: "web", configurable: true });
+  try {
+    setup();
+    expect(g.location.href).toBe("http://page/");
+  } finally {
+    Object.defineProperty(Platform, "OS", { value: os, configurable: true });
+    g.location = saved;
+  }
+});
