@@ -7,7 +7,7 @@ import { MemoryScreen } from "../../src/screens/ecosystem/memory/MemoryScreen";
 import type { MemoryPages } from "../../src/ecosystem/memory";
 
 const mockGet = jest.fn();
-const mockSession = { get: mockGet };
+const mockSession = { get: mockGet, baseUrl: "http://h", apiToken: () => "t" };
 
 jest.mock("../../src/state/sessionStore", () => ({
   useSession: () => ({ session: mockSession }),
@@ -91,5 +91,69 @@ describe("Ecosystem memory screen", () => {
     const view = await renderScreen();
     expect(await view.findByText("Operation failed")).toBeTruthy();
     expect(view.queryByText(/Super secret server traceback/)).toBeNull();
+  });
+
+  test("the journal switch sends the settings", async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal")) return { enabled: false, hour: 22, days: [] };
+      return memoryFixture;
+    });
+    const fetchMock = jest.fn(async () => ({ ok: true, json: async () => ({ enabled: true, hour: 22 }) }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const view = await renderScreen();
+    await act(async () => {
+      fireEvent.press(await view.findByText("Journal"));
+    });
+    await fireEvent(view.getByLabelText("Automatic journal"), "valueChange", true);
+    const firstCall = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
+    expect(JSON.parse(String(firstCall[1].body))).toEqual({ enabled: true, hour: 22 });
+  });
+
+  test("Write today calls run and refreshes the list", async () => {
+    let journalGets = 0;
+    mockGet.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal")) {
+        journalGets += 1;
+        return journalGets < 2
+          ? { enabled: false, hour: 22, days: [] }
+          : { enabled: false, hour: 22, days: ["2026-10-16"] };
+      }
+      return memoryFixture;
+    });
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ date: "2026-10-16", written: true }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const view = await renderScreen();
+    await act(async () => {
+      fireEvent.press(await view.findByText("Journal"));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByLabelText("Write today's journal"));
+    });
+    const runCall = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
+    expect(String(runCall[0])).toContain("/api/ext/journal/run");
+    expect(await view.findByText("2026-10-16")).toBeTruthy();
+  });
+
+  test("tapping a day shows its text", async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal/day")) {
+        return { date: "2026-10-16", text: "Decided two disks." };
+      }
+      if (String(path).includes("/api/ext/journal")) {
+        return { enabled: true, hour: 21, days: ["2026-10-16"] };
+      }
+      return memoryFixture;
+    });
+    const view = await renderScreen();
+    await act(async () => {
+      fireEvent.press(await view.findByText("Journal"));
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText("2026-10-16"));
+    });
+    expect(await view.findByText("Decided two disks.")).toBeTruthy();
   });
 });

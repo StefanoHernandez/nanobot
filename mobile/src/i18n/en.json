@@ -780,7 +780,15 @@
     "everyHours": "Every {{count}} hours",
     "empty": "Still empty",
     "truncated": "Text shortened",
-    "latest": "Latest change"
+    "latest": "Latest change",
+    "journal": "Journal",
+    "journalAuto": "Automatic journal",
+    "journalHour": "Time",
+    "journalWrite": "Write today's journal",
+    "journalNothing": "Nothing to write today.",
+    "journalEmpty": "No journal yet.",
+    "hourEarlier": "Earlier hour",
+    "hourLater": "Later hour"
   },
   "channels": {
     "title": "Channels",
