@@ -107,6 +107,16 @@ def _request_origin(headers: Any) -> str:
     return f"{scheme}://{host}"
 
 
+def _phone_origin(raw: object) -> str:
+    if not isinstance(raw, str):
+        raise DeviceError(400, "invalid_url")
+    scheme, sep, rest = raw.strip().rstrip("/").partition("://")
+    host = safe_host_header(rest) if sep else ""
+    if scheme.lower() not in {"http", "https"} or not host or host != rest:
+        raise DeviceError(400, "invalid_url")
+    return f"{scheme.lower()}://{host}"
+
+
 def _empty_state() -> dict[str, Any]:
     return {"codes": [], "devices": []}
 
@@ -610,8 +620,10 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
             # A browser on the server itself may pair phones even when it logged in as a device.
             if _is_device_minted(request) and not local_browser:
                 return web.json_response({"error": "device_cannot_pair"}, status=403)
+            # The server's own browser sees 127.0.0.1; it names the address phones should use.
+            body = await read_json(request) if local_browser else {}
+            origin = _phone_origin(body["url"]) if "url" in body else _request_origin(request.headers)
             code, expires_in = create_pairing_code()
-            origin = _request_origin(request.headers)
             qr = json.dumps({"v": 1, "url": origin, "code": code}, separators=(",", ":"))
             return web.json_response({"code": code, "expires_in": expires_in, "qr": qr}, status=201)
         if path == PREFIX + "/full-power":
