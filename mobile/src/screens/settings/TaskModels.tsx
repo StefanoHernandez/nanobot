@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { fetchJournal, saveJournalSettings, type JournalIndex } from "../../ecosystem/journal";
 import { useT } from "../../i18n";
 import { useSettings } from "../../settings/store";
+import { useSession } from "../../state/sessionStore";
 import { ListItem, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Head } from "./common";
@@ -11,19 +13,42 @@ export const TASK_MODEL_PATHS = {
   subagent: "agents.defaults.subagent_model_preset",
   dream: "agents.defaults.dream.model_override",
 } as const;
-type Task = keyof typeof TASK_MODEL_PATHS;
+type Task = keyof typeof TASK_MODEL_PATHS | "journal";
 
-/** "Models for tasks": which preset runs subagents and Dream. Older servers without the fields hide it. */
+/** "Models for tasks": which preset runs subagents, Dream, and the journal. Older servers without the fields hide it. */
 export function TaskModels() {
   const t = useT();
   const th = useTheme();
   const { data, mutate } = useSettings();
+  const { session } = useSession();
   const [picking, setPicking] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
+  const [journal, setJournal] = useState<JournalIndex | null>(null);
   const config = (data?.runtime_config ?? {}) as Record<string, unknown>;
-  if (!data || !(TASK_MODEL_PATHS.subagent in config)) return null;
+  const showSection = !!data && TASK_MODEL_PATHS.subagent in config;
+
+  useEffect(() => {
+    if (!showSection || !session) {
+      setJournal(null);
+      return;
+    }
+    let alive = true;
+    fetchJournal(session)
+      .then((next) => {
+        if (alive) setJournal(next);
+      })
+      .catch(() => {
+        if (alive) setJournal(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [showSection, session]);
+
+  if (!showSection || !data) return null;
 
   const current = (task: Task) => {
+    if (task === "journal") return journal?.model ?? null;
     const v = config[TASK_MODEL_PATHS[task]];
     return typeof v === "string" && v && v !== "default" ? v : null;
   };
@@ -32,7 +57,17 @@ export function TaskModels() {
     if (preset === current(task)) return;
     setBusy(true);
     try {
-      await mutate("settings.runtime_config.update", { values: { [TASK_MODEL_PATHS[task]]: preset } });
+      if (task === "journal") {
+        if (!session || !journal) return;
+        const saved = await saveJournalSettings(session, {
+          enabled: journal.enabled,
+          hour: journal.hour,
+          model: preset,
+        });
+        setJournal({ ...saved, days: journal.days });
+      } else {
+        await mutate("settings.runtime_config.update", { values: { [TASK_MODEL_PATHS[task]]: preset } });
+      }
     } catch {
       toast.show(t("models.tasks.saveFailed"));
     } finally {
@@ -42,6 +77,9 @@ export function TaskModels() {
   const rows: { task: Task; title: string; help: string }[] = [
     { task: "subagent", title: t("models.tasks.subagent"), help: t("models.tasks.subagentHelp") },
     { task: "dream", title: t("models.tasks.dream"), help: t("models.tasks.dreamHelp") },
+    ...(journal
+      ? [{ task: "journal" as const, title: t("models.tasks.journal"), help: t("models.tasks.journalHelp") }]
+      : []),
   ];
 
   return (

@@ -466,6 +466,8 @@
       "subagentHelp": "aiutanti che il bot avvia per lavorare in parallelo",
       "dream": "Dream (memoria)",
       "dreamHelp": "consolidamento periodico della memoria",
+      "journal": "Diario",
+      "journalHelp": "Il modello che scrive il diario della sera",
       "sameAsChat": "Come la chat",
       "selected": "Selezionato",
       "saveFailed": "Impossibile salvare la scelta del modello"

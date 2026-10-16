@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiohttp import web
+from loguru import logger
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
@@ -55,29 +56,61 @@ def load_settings(workspace: Path) -> dict[str, Any]:
     try:
         parsed: object = json.loads(settings_path(workspace).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {"enabled": False, "hour": 22}
+        return {"enabled": False, "hour": 22, "model": None}
     if not isinstance(parsed, dict):
-        return {"enabled": False, "hour": 22}
+        return {"enabled": False, "hour": 22, "model": None}
     raw = cast(dict[str, Any], parsed)
     enabled = raw.get("enabled") is True
     hour = raw.get("hour")
     if isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23:
         hour = 22
-    return {"enabled": enabled, "hour": hour}
+    model_raw = raw.get("model")
+    if model_raw is None or model_raw == "default":
+        model: str | None = None
+    elif isinstance(model_raw, str) and model_raw:
+        model = model_raw
+    else:
+        model = None
+    return {"enabled": enabled, "hour": hour, "model": model}
 
 
-def parse_settings(body: dict[str, Any]) -> dict[str, Any]:
+def _parse_model_value(value: object, preset_names: frozenset[str]) -> str | None:
+    if value is None or value == "default":
+        return None
+    if not isinstance(value, str):
+        raise JournalError(400, "invalid_model")
+    if value not in preset_names:
+        raise JournalError(400, "invalid_model")
+    return value
+
+
+def parse_settings(
+    body: dict[str, Any],
+    *,
+    previous_model: str | None = None,
+    preset_names: frozenset[str] | None = None,
+) -> dict[str, Any]:
     enabled = body.get("enabled")
     hour = body.get("hour")
     if not isinstance(enabled, bool):
         raise JournalError(400, "invalid_settings")
     if isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23:
         raise JournalError(400, "invalid_hour")
-    return {"enabled": enabled, "hour": hour}
+    if "model" in body:
+        names = preset_names if preset_names is not None else frozenset[str]()
+        model = _parse_model_value(body.get("model"), names)
+    else:
+        model = previous_model
+    return {"enabled": enabled, "hour": hour, "model": model}
 
 
-def save_settings(workspace: Path, settings: dict[str, Any]) -> dict[str, Any]:
-    clean = parse_settings(settings)
+def save_settings(workspace: Path, settings: dict[str, Any], *, preset_names: frozenset[str]) -> dict[str, Any]:
+    previous = load_settings(workspace)
+    clean = parse_settings(
+        settings,
+        previous_model=previous.get("model"),
+        preset_names=preset_names,
+    )
     path = settings_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(clean), encoding="utf-8")
@@ -353,13 +386,27 @@ def agent_turn(agent: Any) -> _Turn:
         return None
 
     async def turn(prompt: str) -> str:
+        settings = load_settings(Path(agent.context.memory.workspace))
+        model_name = settings.get("model")
+        runtime: Any | None = None
+        if isinstance(model_name, str) and model_name:
+            try:
+                runtime = agent.runtime_resolver.resolve_preset(model_name)
+            except Exception as exc:
+                logger.warning(
+                    "Journal model preset unavailable, using the chat model: {}",
+                    type(exc).__name__,
+                )
+                runtime = None
+        direct_kwargs: dict[str, Any] = {
+            "session_key": f"journal:{datetime.now():%Y%m%d-%H%M%S}",
+            "ephemeral": True,
+            "on_progress": _silent,
+        }
+        if runtime is not None:
+            direct_kwargs["runtime"] = runtime
         try:
-            resp = await agent.process_direct(
-                prompt,
-                session_key=f"journal:{datetime.now():%Y%m%d-%H%M%S}",
-                ephemeral=True,
-                on_progress=_silent,
-            )
+            resp = await agent.process_direct(prompt, **direct_kwargs)
         finally:
             prune_journal_sessions(agent.sessions)
         content = getattr(resp, "content", "") if resp is not None else ""
@@ -397,7 +444,12 @@ def dispatch_journal_get(router: Any, request: WsRequest, got: str) -> Response 
     if got == PREFIX:
         settings = load_settings(workspace)
         return http_json_response(
-            {"enabled": settings["enabled"], "hour": settings["hour"], "days": list_days(workspace)},
+            {
+                "enabled": settings["enabled"],
+                "hour": settings["hour"],
+                "model": settings["model"],
+                "days": list_days(workspace),
+            },
             extra_headers=[("Cache-Control", "no-store")],
         )
     if got == PREFIX + "/day":
@@ -482,7 +534,10 @@ async def _handle_post(
     try:
         body = await _read_json(request)
         if request.path == PREFIX + "/settings":
-            saved = save_settings(workspace, body)
+            from nanobot.config.loader import load_config
+
+            preset_names = frozenset(load_config().model_presets.keys())
+            saved = save_settings(workspace, body, preset_names=preset_names)
             if cron is not None:
                 sync_journal_job(cron, workspace, timezone)
             return web.json_response(saved)
