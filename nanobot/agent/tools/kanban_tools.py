@@ -219,6 +219,10 @@ def _create_task(store: KanbanStore, kwargs: dict[str, Any]) -> str | ToolResult
 
 
 def _update_task(store: KanbanStore, task_id: str, kwargs: dict[str, Any]) -> str | ToolResult:
+    # Raises not_found for an unknown id; save_task would treat it as a new card and say invalid_board_id.
+    current = cast(dict[str, Any], store.get_task_detail(task_id)["task"])
+    if kwargs.get("start") is True and current.get("status") in ("running", "review"):
+        return ToolResult.error("kanban error: already_working")
     body: dict[str, Any] = {"id": task_id}
     for key in ("title", "description", "priority", "status"):
         if key in kwargs:
