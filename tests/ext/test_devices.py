@@ -268,3 +268,70 @@ async def test_revoke_closes_the_phone_open_websocket(devices_path):
         await asyncio.sleep(0)
     assert phone.closed == (dev.REVOKED_CLOSE_CODE, "device revoked")
     assert laptop.closed is None
+
+
+def _web(path: str, body: dict, *, origin: str = "http://gw.test:8765", cookie: str | None = None):
+    raw = json.dumps(body).encode("utf-8")
+
+    class _Content:
+        @staticmethod
+        async def read(_limit: int) -> bytes:
+            return raw
+
+    headers = {"Content-Type": "application/json", "Host": "gw.test:8765", "Origin": origin}
+    if cookie is not None:
+        headers.update({"Cookie": f"{dev.COOKIE_NAME}={cookie}", dev.COOKIE_AUTH_HEADER: "1"})
+    return SimpleNamespace(
+        method="POST", path=dev.PREFIX + path, headers=headers, content_length=len(raw), content=_Content()
+    )
+
+
+def _cookie_value(resp) -> str:
+    raw = resp.headers["Set-Cookie"]
+    assert "HttpOnly" in raw and "SameSite=Strict" in raw and "Path=/" in raw
+    return raw.split(";", 1)[0].split("=", 1)[1]
+
+
+@pytest.mark.asyncio
+async def test_web_login_with_secret_sets_an_httponly_cookie_only(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    handler = dev.devices_post_handler(MASTER, GatewayTokenStore(), fallback=_fail_fallback)
+    resp = await handler(_web("/web-login", {"secret": MASTER, "name": "PC studio"}))
+    assert resp.status == 201
+    assert "device_token" not in resp.text and MASTER not in resp.text  # nothing for page JS to keep
+    token = _cookie_value(resp)
+    assert "Secure" not in resp.headers["Set-Cookie"]  # plain http (tailnet): Secure would drop it
+
+    cookie_headers = {"Cookie": f"{dev.COOKIE_NAME}={token}"}
+    assert dev.live_device_id(cookie_headers) is None  # cookie alone (cross-site form, img) is ignored
+    assert dev.live_device_id({**cookie_headers, dev.COOKIE_AUTH_HEADER: "1"}) is not None
+
+
+@pytest.mark.asyncio
+async def test_web_login_with_a_pairing_code_and_logout_revokes(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    code, _ = dev.create_pairing_code()
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+    resp = await handler(_web("/web-login", {"code": code, "name": "Laptop"}))
+    token = _cookie_value(resp)
+    device_id = json.loads(resp.text)["id"]
+    out = await handler(_web("/web-logout", {}, cookie=token))
+    assert out.status == 200 and "Max-Age=0" in out.headers["Set-Cookie"]
+    assert {d["id"]: d for d in dev.list_devices_public()}[device_id]["revoked"] is True
+
+
+@pytest.mark.asyncio
+async def test_web_login_refuses_cross_origin_and_brute_force(devices_path, monkeypatch):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    monkeypatch.setattr(dev, "_web_login_failures", dev.collections.deque())
+    handler = dev.devices_post_handler(MASTER, GatewayTokenStore(), fallback=_fail_fallback)
+    evil = await handler(_web("/web-login", {"secret": MASTER, "name": "x"}, origin="https://evil.example"))
+    assert evil.status == 403
+    for _ in range(dev.WEB_LOGIN_MAX_FAILURES):
+        assert (await handler(_web("/web-login", {"secret": "wrong", "name": "x"}))).status == 401
+    blocked = await handler(_web("/web-login", {"secret": MASTER, "name": "x"}))
+    assert blocked.status == 429

@@ -49,16 +49,22 @@ if TYPE_CHECKING:
 
 
 def _default_webui_dist() -> Path | None:
-    """Bundled legacy WebUI, or the exported app when NANOBOT_APP_DIST points at it.
+    """Web client to serve: NANOBOT_APP_DIST, else our bundled app (``nanobot ui``), else legacy.
 
-    A missing or unusable override falls back to the legacy folder. Unset keeps the legacy site.
+    A missing or unusable choice falls back to the legacy folder.
     """
+    from nanobot.ext.webui_mode import bundled_app_dist, get_mode
+
     override = os.environ.get("NANOBOT_APP_DIST", "").strip()
     if override:
         candidate = Path(override).expanduser().resolve()
         if candidate.is_dir() and (candidate / "index.html").is_file():
             return candidate
         logger.warning("NANOBOT_APP_DIST has no index.html; serving the legacy WebUI")
+    elif get_mode() == "app":
+        if (bundled := bundled_app_dist()) is not None:
+            return bundled
+        logger.warning("web client 'app' is not bundled in this install; serving the legacy WebUI")
     try:
         import nanobot.web as web_pkg  # type: ignore[import-not-found]
     except ImportError:
