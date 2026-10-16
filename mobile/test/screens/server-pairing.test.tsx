@@ -78,7 +78,7 @@ describe("Server Mode Pairing (AboutSection)", () => {
     await renderScreen();
 
     // 1. Text field "Phone address" is present with placeholder
-    const phoneInput = screen.getByPlaceholderText("https://arduino.tuo-tailnet.ts.net:8765");
+    const phoneInput = screen.getByPlaceholderText("https://arduino.tuo-tailnet.ts.net");
     expect(phoneInput).toBeTruthy();
 
     // When empty, hint is shown
@@ -137,7 +137,7 @@ describe("Server Mode Pairing (AboutSection)", () => {
     await renderScreen();
 
     // No phone address input
-    expect(screen.queryByPlaceholderText("https://arduino.tuo-tailnet.ts.net:8765")).toBeNull();
+    expect(screen.queryByPlaceholderText("https://arduino.tuo-tailnet.ts.net")).toBeNull();
 
     // Hint is shown
     expect(screen.getByText(i18n.t("devices.pairFromServer"))).toBeTruthy();
