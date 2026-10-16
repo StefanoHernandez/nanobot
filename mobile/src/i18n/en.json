@@ -398,6 +398,8 @@
     "rotateFailed": "Rotation isn't available",
     "network": "Allow network",
     "networkOn": "Network allowed",
+    "networkShort": "Network",
+    "networkHint": "If the preview looks empty or incomplete, tap Network",
     "networkTitle": "Allow network for this artifact?",
     "networkBody": "It can contact https sites. This lasts only for this preview, and scripts stay the ones already in the app.",
     "networkAllow": "Allow",

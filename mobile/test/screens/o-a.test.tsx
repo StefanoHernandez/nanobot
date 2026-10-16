@@ -188,7 +188,7 @@ describe("O-A Task 1: Network permission is per version & fixError cleared", () 
 
     // Initial state: network switch is off
     const switchOff = screen.getByRole("switch", { name: "Allow network" });
-    expect(switchOff.props.value).toBe(false);
+    expect(switchOff.props.accessibilityState.checked).toBe(false);
     expect(capturedWebViewProps.source.html).toContain("connect-src 'none'");
 
     // Simulate an error on v1
@@ -197,9 +197,7 @@ describe("O-A Task 1: Network permission is per version & fixError cleared", () 
     });
 
     // Turn network on: flips askNetwork dialog
-    await act(async () => {
-      fireEvent(switchOff, "valueChange", true);
-    });
+    await fireEvent.press(switchOff);
     // Confirm in dialog
     const allowBtn = screen.getByRole("button", { name: "Allow" });
     await act(async () => {
@@ -207,7 +205,7 @@ describe("O-A Task 1: Network permission is per version & fixError cleared", () 
     });
 
     // Network is now on
-    expect(screen.getByRole("switch", { name: "Network allowed" }).props.value).toBe(true);
+    expect(screen.getByRole("switch", { name: "Network allowed" }).props.accessibilityState.checked).toBe(true);
     expect(capturedWebViewProps.source.html).toContain("connect-src https:");
 
     // Tap "Next version"
@@ -218,7 +216,7 @@ describe("O-A Task 1: Network permission is per version & fixError cleared", () 
 
     // Version 2 should have network switch back to off
     const switchV2 = screen.getByRole("switch", { name: "Allow network" });
-    expect(switchV2.props.value).toBe(false);
+    expect(switchV2.props.accessibilityState.checked).toBe(false);
     expect(capturedWebViewProps.source.html).toContain("connect-src 'none'");
     expect(capturedWebViewProps.source.html).not.toContain("connect-src https:");
     // V1 error prompt should not persist as v2 error

@@ -22,6 +22,7 @@ const mockUseLocalSearchParams = jest.fn(() => mockRouteParams);
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) },
   useLocalSearchParams: () => mockUseLocalSearchParams(),
+  useNavigation: () => ({ dispatch: jest.fn(), getState: () => ({ type: "stack" }), getParent: () => undefined }),
   useFocusEffect: (cb: any) => {
     const React = require("react");
     React.useEffect(() => {
