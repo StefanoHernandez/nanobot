@@ -71,8 +71,8 @@ async def test_exec_tool_returns_an_error_when_denied(gate, monkeypatch):
     gate.set_enabled(True)
     ran: list[str] = []
 
-    async def fake_original(self, **kwargs):
-        ran.append(kwargs["command"])
+    async def fake_original(self, command=None, **kwargs):
+        ran.append(command)
         return "ok"
 
     # Re-guard a stand-in for the real exec so no shell command runs in the test.
@@ -87,6 +87,17 @@ async def test_exec_tool_returns_an_error_when_denied(gate, monkeypatch):
     finally:
         reset_request_context(token)
     assert ran == [] and "denied" in str(result)
+
+    token = bind_request_context(RequestContext(channel="websocket", chat_id="c1", session_key="websocket:c1"))
+    try:
+        task = asyncio.create_task(tool.execute("rm -rf /tmp/y"))  # positional: still gated
+        pending = await _wait_pending(gate)
+        assert pending["summary"].startswith("rm -rf /tmp/y")
+        gate.decide(pending["id"], allow=False, always=False)
+        assert "denied" in str(await task)
+    finally:
+        reset_request_context(token)
+    assert ran == []
 
 
 def _post(path: str, body: dict, auth: str | None):
