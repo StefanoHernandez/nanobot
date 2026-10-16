@@ -23,7 +23,13 @@
     "pairFromServer": "Genera il codice dal telefono già abbinato o dal server",
     "thisBrowser": "questo browser",
     "logoutBrowser": "Esci da questo browser",
-    "logoutConfirm": "Verrai disconnesso da questo browser."
+    "logoutConfirm": "Verrai disconnesso da questo browser.",
+    "phoneUrl": "Indirizzo per il telefono",
+    "phoneUrlHint": "Usa l'indirizzo Tailscale del server: il telefono non raggiunge 127.0.0.1",
+    "phoneUrlInvalid": "Indirizzo non valido",
+    "fullPower": "Pieni poteri",
+    "fullPowerConfirm": "Questo dispositivo potrà installare ed eliminare skill e plugin e cambiare le impostazioni riservate al server. Concedi solo a dispositivi tuoi.",
+    "fullPowerLocalOnly": "Serve un browser sul server o i Pieni poteri per questo dispositivo"
   },
   "about": {
     "devices": "Telefoni collegati",
@@ -861,7 +867,11 @@
     "emptyInstalled": "Nessuna skill installata",
     "version": "v{{version}}",
     "source": "Fonte: {{source}}",
-    "detailTitle": "Dettagli skill"
+    "detailTitle": "Dettagli skill",
+    "delete": "Elimina skill",
+    "deleteConfirm": "Eliminare {{name}}? I file della skill vengono cancellati dal server.",
+    "deleteNeedsFullPower": "Serve un browser sul server o i Pieni poteri per questo dispositivo",
+    "installNeedsFullPower": "Serve un browser sul server o i Pieni poteri per questo dispositivo"
   },
   "automations": {
     "title": "Automazioni",

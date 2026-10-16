@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Linking, Platform, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import type { VersionCheckResult } from "@/lib/api";
 import { useT } from "../../i18n";
 import { VENDOR_COMMIT, VENDOR_DATE } from "../../platform/vendorVersion";
+import { isServerBrowser } from "../../platform/serverMode";
 import { useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
 import { mintPairingCode, pairingQrValue } from "../../core/pairing";
@@ -17,11 +18,30 @@ const appVersion: string = require("../../../app.json").expo.version;
 const REPO = "https://github.com/HKUDS/nanobot";
 const DOCS = "https://nanobot.wiki";
 
+const PHONE_URL_KEY = "nanobot.pairing.phoneUrl";
+function getStorage(): Storage | null {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) return window.localStorage;
+    if (typeof localStorage !== "undefined") return localStorage;
+  } catch {}
+  return null;
+}
+
+function getSavedPhoneUrl(): string {
+  return getStorage()?.getItem(PHONE_URL_KEY) ?? "";
+}
+
+function savePhoneUrl(val: string): void {
+  getStorage()?.setItem(PHONE_URL_KEY, val);
+}
+
 export function AboutSection() {
   const t = useT();
   const th = useTheme();
   const { session, profile } = useSession();
   const { data } = useSettings();
+  const isServer = isServerBrowser();
+  const [phoneUrl, setPhoneUrl] = useState(() => getSavedPhoneUrl());
   const [check, setCheck] = useState<"idle" | "busy" | "latest" | "failed" | string>("idle");
   const [pair, setPair] = useState<{ code: string; qr: string } | null>(null);
   const [pairBusy, setPairBusy] = useState(false);
@@ -30,12 +50,18 @@ export function AboutSection() {
     if (!session || pairBusy) return;
     setPairBusy(true);
     try {
-      const minted = await mintPairingCode(session);
-      const qr = pairingQrValue(session.baseUrl, minted.code);
+      const cleanUrl = isServer && phoneUrl.trim() ? phoneUrl.trim() : undefined;
+      const minted = await mintPairingCode(session, cleanUrl);
+      const qr = minted.qr || pairingQrValue(cleanUrl || session.baseUrl, minted.code);
       if (!qr) throw new Error("mint failed");
       setPair({ code: minted.code, qr });
-    } catch {
-      toast.show(t("common.error"));
+    } catch (e) {
+      const err = e as Error & { error?: string };
+      if (err.error === "invalid_url" || err.message === "invalid_url") {
+        toast.show(t("devices.phoneUrlInvalid"));
+      } else {
+        toast.show(t("common.error"));
+      }
     } finally {
       setPairBusy(false);
     }
@@ -63,12 +89,55 @@ export function AboutSection() {
           <Button title={t("settings.changeServer")} variant="secondary" onPress={() => router.push("/connect")} />
           {session ? (
             Platform.OS === "web" ? (
-              <View style={{ gap: 4 }}>
-                <Button title={t("about.pairDevice", { defaultValue: t("settings.pairDevice") })} variant="secondary" disabled onPress={() => {}} />
-                <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
-                  {t("devices.pairFromServer")}
-                </Text>
-              </View>
+              isServer ? (
+                <View style={{ gap: 8 }}>
+                  <View style={{ gap: 4 }}>
+                    <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 14 }}>
+                      {t("devices.phoneUrl")}
+                    </Text>
+                    <TextInput
+                      value={phoneUrl}
+                      onChangeText={(val) => {
+                        setPhoneUrl(val);
+                        savePhoneUrl(val);
+                      }}
+                      placeholder="https://arduino.tuo-tailnet.ts.net:8765"
+                      placeholderTextColor={th.colors.mutedForeground}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      style={{
+                        height: 40,
+                        borderWidth: 1,
+                        borderColor: th.colors.border,
+                        borderRadius: th.radius.md,
+                        paddingHorizontal: 12,
+                        color: th.colors.foreground,
+                        fontFamily: th.font.regular,
+                        fontSize: 14,
+                        backgroundColor: th.colors.background,
+                      }}
+                    />
+                    {!phoneUrl.trim() ? (
+                      <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
+                        {t("devices.phoneUrlHint")}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Button
+                    title={t("about.pairDevice", { defaultValue: t("settings.pairDevice") })}
+                    variant="secondary"
+                    loading={pairBusy}
+                    onPress={() => void onPairPhone()}
+                  />
+                </View>
+              ) : (
+                <View style={{ gap: 4 }}>
+                  <Button title={t("about.pairDevice", { defaultValue: t("settings.pairDevice") })} variant="secondary" disabled onPress={() => {}} />
+                  <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13 }}>
+                    {t("devices.pairFromServer")}
+                  </Text>
+                </View>
+              )
             ) : (
               <Button title={t("settings.pairPhone")} variant="secondary" loading={pairBusy} onPress={() => void onPairPhone()} />
             )
