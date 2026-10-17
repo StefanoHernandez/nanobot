@@ -187,24 +187,3 @@ def automations_post_handler(
 
     return handler
 
-
-def register_automations_routes(
-    channels: Any,
-    *,
-    cron: CronService | None = None,
-    sessions: SessionManager | None = None,
-) -> None:
-    ws_channel = getattr(channels, "channels", {}).get("websocket")
-    if ws_channel is None:
-        return
-    secret = (getattr(ws_channel.config, "token_issue_secret", "") or "").strip() or (
-        getattr(ws_channel.config, "token", "") or ""
-    ).strip()
-    tokens = getattr(ws_channel.gateway, "tokens", None)
-    uploads = getattr(ws_channel, "_uploads", None)
-    if uploads is None:
-        return
-    original_handle = uploads.handle
-    uploads.handle = automations_post_handler(
-        secret, tokens, original_handle, cron=cron, sessions=sessions
-    )

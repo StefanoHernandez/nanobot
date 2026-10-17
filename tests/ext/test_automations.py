@@ -320,35 +320,3 @@ async def test_cron_unavailable(tmp_path):
     assert resp.status == 503
     data = json.loads(resp.text)
     assert data["error"] == "unavailable"
-
-
-@pytest.mark.asyncio
-async def test_register_automations_routes(tmp_path):
-    workspace, sessions = _sessions(tmp_path)
-    _say(sessions, "websocket:chat1", "user", "hello", "2026-10-17T10:00:00")
-    cron = CronService(tmp_path / "cron" / "jobs.json")
-
-    async def mock_upload_handle(request):
-        return SimpleNamespace(status=404, headers={}, force_close=lambda: None, text='{"error":"not_found"}')
-
-    uploads = SimpleNamespace(handle=mock_upload_handle)
-    ws_channel = SimpleNamespace(
-        config=SimpleNamespace(token_issue_secret="", token=MASTER),
-        gateway=SimpleNamespace(tokens=_Tokens()),
-        _uploads=uploads,
-    )
-    channels = SimpleNamespace(channels={"websocket": ws_channel})
-
-    automations.register_automations_routes(channels, cron=cron, sessions=sessions)
-    assert uploads.handle != mock_upload_handle
-
-    body = {
-        "message": "Via registered route",
-        "schedule": {"kind": "every", "every_ms": 60_000},
-        "session_key": "websocket:chat1",
-    }
-    resp = await uploads.handle(_post("/api/ext/automations/create", body))
-    assert resp.status == 200
-    data = json.loads(resp.text)
-    assert data["name"] == "Via registered route"[:40]
-

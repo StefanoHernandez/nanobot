@@ -6,41 +6,16 @@ import { useT } from "../../i18n";
 import { chatIdOf, isWritable } from "../../state/chatsStore";
 import { useSession } from "../../state/sessionStore";
 import type { NanobotSession } from "../../core/session";
-import { activePresetNames } from "../../settings/models";
+import { activePresetNames, pickableNames } from "../../settings/models";
 import { ListItem, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 
-/** Presets the user picks from: base presets in call order (disabled ones hidden, unless currently selected by the chat). */
-export function pickablePresets(
-  presets: Preset[],
-  settings?: { model_call_order?: string[]; model_presets?: Preset[] } | string[] | null,
-  currentPreset?: string | null,
-): Preset[] {
-  const baseOnly = presets.filter((p) => basePresetName(p.name) === p.name);
-  if (settings === undefined) return baseOnly;
-  const active = activePresetNames(settings);
-  const curBase = currentPreset ? basePresetName(currentPreset) : null;
-  const order = Array.isArray(settings)
-    ? settings
-    : settings?.model_call_order ?? baseOnly.map((p) => p.name);
-  const byName = new Map(baseOnly.map((p) => [p.name, p]));
-  const seen = new Set<string>();
-  const result: Preset[] = [];
-  for (const name of order) {
-    const p = byName.get(name);
-    if (p && active.has(name) && !seen.has(name)) {
-      seen.add(name);
-      result.push(p);
-    }
-  }
-  if (curBase && !active.has(curBase) && !seen.has(curBase)) {
-    const curPreset = byName.get(curBase);
-    if (curPreset) {
-      seen.add(curBase);
-      result.push(curPreset);
-    }
-  }
-  return result;
+/** Presets the user picks from: base presets only (effort-derived "name·level" ones belong to the effort pill);
+ * with the settings, only the active ones in call order, plus the chat's current one if it was switched off. */
+export function pickablePresets(presets: Preset[], settings?: { model_call_order?: string[] }, current?: string | null): Preset[] {
+  if (!settings) return presets.filter((p) => basePresetName(p.name) === p.name);
+  const byName = new Map(presets.map((p) => [p.name, p]));
+  return pickableNames({ ...settings, model_presets: presets }, current).map((n) => byName.get(n)!);
 }
 
 /** Resolve the chat's model preset from session's model_preset, active preset, or default preset. */
@@ -102,7 +77,7 @@ export function ModelBadge({ chatKey, preset, model }: { chatKey: string; preset
       const s = await session.get<{ model_presets?: Preset[]; model_call_order?: string[] }>("/api/settings");
       const active = activePresetNames(s);
       setActiveNames(active);
-      const cur = preset ?? model ?? resolved;
+      const cur = preset ?? resolved;
       setPresets(pickablePresets(s.model_presets ?? [], s, cur));
     } catch (e) {
       setOpen(false);
@@ -112,12 +87,12 @@ export function ModelBadge({ chatKey, preset, model }: { chatKey: string; preset
 
   const pick = (p: Preset) => {
     setOpen(false);
-    if (!session || basePresetName(preset ?? model ?? resolved ?? "") === p.name) return;
+    if (!session || basePresetName(preset ?? resolved ?? "") === p.name) return;
     session.client.sendMessage(chatIdOf(chatKey), `/model ${p.name}`);
   };
 
   if (!name && !canPick) return null;
-  const current = basePresetName(preset ?? model ?? resolved ?? "");
+  const current = basePresetName(preset ?? resolved ?? "");
   return (
     <>
       <Pressable

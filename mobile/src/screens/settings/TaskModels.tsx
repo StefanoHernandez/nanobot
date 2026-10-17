@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchJournal, saveJournalSettings, type JournalIndex } from "../../ecosystem/journal";
 import { useT } from "../../i18n";
-import { activePresetNames } from "../../settings/models";
+import { activePresetNames, pickableNames } from "../../settings/models";
 import { useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
 import { ListItem, Sheet, toast } from "../../ui/components";
@@ -84,21 +84,8 @@ export function TaskModels() {
   ];
 
   const active = activePresetNames(data);
-  const cur = picking ? current(picking) : null;
   const byName = new Map(data.model_presets.map((p) => [p.name, p]));
-  const order = data.model_call_order ?? data.model_presets.map((p) => p.name);
-  const seen = new Set<string>();
-  const activeList: string[] = [];
-  for (const name of order) {
-    if (byName.has(name) && active.has(name) && !seen.has(name)) {
-      seen.add(name);
-      activeList.push(name);
-    }
-  }
-  const taskOptions: (string | null)[] = [null, ...activeList];
-  if (cur && !active.has(cur) && byName.has(cur) && !seen.has(cur)) {
-    taskOptions.push(cur);
-  }
+  const taskOptions: (string | null)[] = [null, ...pickableNames(data, picking ? current(picking) : null)];
 
   return (
     <>

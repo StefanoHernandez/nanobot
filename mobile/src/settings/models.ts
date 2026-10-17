@@ -106,15 +106,17 @@ export const canSaveOrder = (prev: string[], next: string[]) =>
 
 export const canDelete = (name: string, order: string[]) => order[0] !== name;
 
-/** Presets in the call order are active; disabled models are hidden from pickers. */
-export function activePresetNames(
-  settings?: { model_call_order?: string[]; model_presets?: Preset[] } | string[] | null,
-): Set<string> {
-  if (Array.isArray(settings)) return new Set(settings);
-  if (!settings) return new Set();
-  if (settings.model_call_order != null) return new Set(settings.model_call_order);
-  if (settings.model_presets != null) return new Set(settings.model_presets.map((p) => p.name));
-  return new Set();
+type OrderedPresets = { model_presets?: { name: string }[]; model_call_order?: string[] };
+
+/** Presets in the call order (primary + fallbacks) are active; the others are switched off. Without an order, all are. */
+export const activePresetNames = (s: OrderedPresets) => new Set(s.model_call_order ?? (s.model_presets ?? []).map((p) => p.name));
+
+/** Names offered in model pickers: active base presets in call order, plus `current` when it was switched off. */
+export function pickableNames(s: OrderedPresets, current?: string | null): string[] {
+  const known = new Set((s.model_presets ?? []).map((p) => p.name));
+  const names = [...activePresetNames(s)].filter((n) => known.has(n) && basePresetName(n) === n);
+  const cur = current ? basePresetName(current) : null;
+  return cur && known.has(cur) && !names.includes(cur) ? [...names, cur] : names;
 }
 
 /** Wire payload for create (extras sent only when the host supports overrides). */
