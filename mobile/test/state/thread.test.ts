@@ -95,9 +95,11 @@ test("send: optimistic user row, /stop frame, guidance while running, drafts", a
   s.send(f.session, KEY, "hello");
   expect(f.sent[0]).toMatchObject({ chatId: "c1", content: "hello" });
   expect(slice(store).messages[0]).toMatchObject({ role: "user", content: "hello", deliveryStatus: "sending" });
-  expect(slice(store).running).toBe(true);
-  s.send(f.session, KEY, "also this"); // guidance while running
+  s.send(f.session, KEY, "also this"); // queues while running
+  expect(slice(store).queuedMessages).toHaveLength(1);
+  s.sendQueuedNow(f.session, KEY, slice(store).queuedMessages![0].id); // send now steers
   expect(f.sent[1].options).toMatchObject({ startsNewRun: false });
+  expect(slice(store).queuedMessages).toHaveLength(0);
   s.stop(f.session, KEY);
   expect(f.sent[2].content).toBe("/stop");
   expect(f.client.finishRunLocally).toHaveBeenCalledWith("c1");
@@ -123,7 +125,7 @@ test("notices: retry, compaction, fallback model", async () => {
   expect(slice(store).notices.map((n) => n.kind)).toEqual(["retry"]);
   f.emit("c1", { event: "delta", text: "ok", ...turn });
   expect(slice(store).notices).toEqual([]);
-  f.emit("c1", { event: "context_compaction", compaction_id: "k1", phase: "succeeded", ...turn });
+  f.emit("c1", { event: "context_compaction", compaction_id: "k1", phase: "started", ...turn });
   f.emit("c1", { event: "turn_model_updated", model_name: "m2", model_preset: "fast", fallback: true });
   expect(slice(store).notices.map((n) => n.kind)).toEqual(["compaction", "fallback"]);
   expect(slice(store)).toMatchObject({ model: "m2", preset: "fast" });

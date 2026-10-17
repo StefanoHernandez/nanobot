@@ -59,6 +59,25 @@
       "stream_error": "This turn failed",
       "retry": "Retrying"
     },
+    "compaction": {
+      "started": "Compacting context…",
+      "succeeded": "Context compacted",
+      "failed": "Context compaction failed",
+      "cancelled": "Context compaction cancelled",
+      "freed": "Context compacted · freed ~{{freed}} tokens (from {{before}} to {{after}})",
+      "afterOnly": "Context compacted · after: {{after}} tokens",
+      "nothingToCompact": "Nothing to compact"
+    },
+    "queue": {
+      "sendNow": "Send now",
+      "modify": "Edit",
+      "remove": "Delete"
+    },
+    "reply": {
+      "you": "You",
+      "assistant": "Nanobot",
+      "dismiss": "Cancel reply"
+    },
     "changeModel": "Change model",
     "chooseModel": "Choose model",
     "historyError": "Couldn't load this chat's history.",
@@ -282,10 +301,12 @@
   "attach": {
     "button": "Attach",
     "title": "Attach",
+    "camera": "Camera",
     "photos": "Photos",
     "files": "Files",
     "remove": "Remove",
     "error": {
+      "cameraPermission": "Camera permission denied",
       "count": "Too many attachments",
       "file_size": "File too large",
       "total_size": "Total size too large",

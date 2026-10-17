@@ -14,13 +14,15 @@ export type IconButtonProps = {
   color?: string;
   /** Draws a round filled button (e.g. the brand-coloured send); `color` is the icon colour on it. */
   fill?: string;
+  testID?: string;
 };
 
-export function IconButton({ icon, onPress, accessibilityLabel, accessibilityHint, size = 24, disabled, loading, color, fill }: IconButtonProps) {
+export function IconButton({ icon, onPress, accessibilityLabel, accessibilityHint, size = 24, disabled, loading, color, fill, testID }: IconButtonProps) {
   const th = useTheme();
   const isDisabled = !!disabled || !!loading;
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}

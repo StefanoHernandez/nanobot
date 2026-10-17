@@ -12,10 +12,20 @@ import type {
 import { useSession } from "../state/sessionStore";
 import { useSettings } from "../settings/store";
 import { installGate, longMutation } from "./common";
+import type { NanobotSession } from "../core/session";
 import { usePrivileged } from "./privilege";
 
 const policyError = () =>
   Object.assign(new Error("Remote package installation is disabled on the host"), { policy: true, status: 403 });
+
+export async function loadSkills(session: NanobotSession): Promise<SkillSummary[]> {
+  try {
+    const p = await session.get<SkillsPayload>("/api/webui/skills");
+    return p?.skills ?? [];
+  } catch {
+    return [];
+  }
+}
 
 export function useSkills() {
   const { session } = useSession();
@@ -31,9 +41,9 @@ export function useSkills() {
     const my = ++gen.current;
     setLoading(true);
     try {
-      const p = await session.get<SkillsPayload>("/api/webui/skills");
+      const list = await loadSkills(session);
       if (gen.current !== my) return;
-      setSkills(p.skills ?? []);
+      setSkills(list);
       setError(null);
     } catch (e) {
       if (gen.current !== my) return;

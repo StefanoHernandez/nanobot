@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { EffortPill } from "../../extras/EffortPill";
 import { PromptPickerSheet } from "../../extras/PromptPickerSheet";
 import { loadCommands, type Cmd } from "../../extras/logic";
+import { loadSkills } from "../../ecosystem/skills";
 import { useT } from "../../i18n";
 import { useSession } from "../../state/sessionStore";
 import { useThreadSlice } from "../../state/threadStore";
@@ -27,6 +28,8 @@ import { isVoiceAvailable } from "../../extras/sttEngine";
 import { DEFAULT_LIMITS } from "../../core/session";
 import { prepareImage, validateFiles, type LocalFile } from "../../core/upload";
 import { AttachmentBar } from "./AttachmentBar";
+import { QueuedMessages } from "./QueuedMessages";
+import { ReplyBar } from "./ReplyBar";
 import { toLocalFile, type RawPickerAsset } from "./attachments";
 import { MentionMenu } from "./MentionMenu";
 import {
@@ -47,6 +50,7 @@ import type {
   OutboundMcpPresetMention,
   SessionMention,
   SettingsPayload,
+  SkillSummary,
 } from "@/lib/types";
 
 export function Composer({ chatKey }: { chatKey: string }) {
@@ -58,6 +62,9 @@ export function Composer({ chatKey }: { chatKey: string }) {
     draft,
     setDraft,
     send,
+    modifyQueued = () => {},
+    replyingTo = null,
+    setReplyingTo = () => {},
     running,
     stop,
     pendingFiles = [],
@@ -73,6 +80,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [commands, setCommands] = useState<Cmd[]>([]);
+  const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [cliApps, setCliApps] = useState<CliAppInfo[]>([]);
   const [mcpPresets, setMcpPresets] = useState<McpPresetInfo[]>([]);
   const [pickedSessions, setPickedSessions] = useState<SessionMention[]>([]);
@@ -87,6 +95,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
     let active = true;
     if (!session) {
       setCommands([]);
+      setSkills([]);
       setCliApps([]);
       setMcpPresets([]);
       return;
@@ -103,6 +112,14 @@ export function Composer({ chatKey }: { chatKey: string }) {
       })
       .catch(() => {
         if (active) setCommands([]);
+      });
+
+    loadSkills(session)
+      .then((s) => {
+        if (active) setSkills(s);
+      })
+      .catch(() => {
+        if (active) setSkills([]);
       });
 
     if (typeof session.get === "function") {
@@ -190,11 +207,17 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
   const trimmed = draft.trim();
   const isSlash = draft.startsWith("/") && !/[\s\n]/.test(draft);
+  const isDollar = draft.startsWith("$") && !/[\s\n]/.test(draft);
   const activeMention = getActiveMention(draft, cursor);
   const isMention = !!activeMention;
 
   const handleSelectCommand = (c: Cmd) => {
     handleDraftChange(`${c.command} `);
+    inputRef.current?.focus();
+  };
+
+  const handleSelectSkill = (s: SkillSummary) => {
+    handleDraftChange(`$${s.name} `);
     inputRef.current?.focus();
   };
 
@@ -252,6 +275,25 @@ export function Composer({ chatKey }: { chatKey: string }) {
       return;
     }
     setPendingFiles([...pendingFiles, ...preparedList]);
+  };
+
+  const handlePickCamera = async () => {
+    setSheetOpen(false);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        toast.show(t("attach.error.cameraPermission", { defaultValue: "Permesso fotocamera negato" }));
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+      });
+      if (!res.canceled && res.assets) {
+        await handleAddAssets(res.assets);
+      }
+    } catch {
+      toast.show(t("attach.error.generic"));
+    }
   };
 
   const handlePickPhotos = async () => {
@@ -355,10 +397,32 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
     return (
       <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
-      <View style={[styles.container, th.bezel]}>
+        <QueuedMessages
+          chatKey={chatKey}
+          onModify={(item) => {
+            modifyQueued(item.id);
+            if (item.opts?.files) {
+              setPendingFiles(item.opts.files);
+            }
+            inputRef.current?.focus();
+          }}
+        />
+        {replyingTo ? (
+          <ReplyBar
+            message={replyingTo}
+            onDismiss={() => setReplyingTo(null)}
+          />
+        ) : null}
+        <View style={[styles.container, th.bezel]}>
       <View style={[th.surface, { borderRadius: th.radius.lg, padding: 4 }]}>
-        {isSlash ? (
-          <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
+        {isSlash || isDollar ? (
+          <SlashMenu
+            query={draft}
+            commands={commands}
+            skills={skills}
+            onSelect={handleSelectCommand}
+            onSelectSkill={handleSelectSkill}
+          />
         ) : isMention && activeMention ? (
           <MentionMenu
             chats={chats}
@@ -480,6 +544,11 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
         {sheetOpen ? (
           <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t("attach.title")}>
+            <ListItem
+              left={<MaterialCommunityIcons name="camera-outline" size={24} color={th.colors.foreground} />}
+              title={t("attach.camera", { defaultValue: "Fotocamera" })}
+              onPress={handlePickCamera}
+            />
             <ListItem
               left={<MaterialCommunityIcons name="image-multiple-outline" size={24} color={th.colors.foreground} />}
               title={t("attach.photos")}

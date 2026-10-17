@@ -1,12 +1,13 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { normalizeActivityTimeline, type TurnUnit } from "@/lib/activity-timeline";
 import type { UIMessage } from "@/lib/types";
+import { useStore } from "zustand";
 import { useT } from "../../i18n";
 import { chatsStore } from "../../state/chatsStore";
-import type { Notice } from "../../state/threadStore";
+import { threadStore, type Notice } from "../../state/threadStore";
 import { ListItem, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { MessageRow } from "./MessageRow";
@@ -21,6 +22,8 @@ const keyOf = (u: Item) => (u.type === "fork" ? "fork-boundary" : u.type === "me
 export function MessageList({ chatKey, messages, running, notices, forkBoundary }: { chatKey?: string; messages: UIMessage[]; running: boolean; notices: Notice[]; forkBoundary?: number | null }) {
   const t = useT();
   const th = useTheme();
+  const loadingOlder = useStore(threadStore, (s) => !!(chatKey && s.threads[chatKey]?.loadingOlder));
+  const hasMoreBefore = useStore(threadStore, (s) => !!(chatKey && s.threads[chatKey]?.hasMoreBefore));
   const [menu, setMenu] = useState<UIMessage | null>(null);
   const msgsRef = useRef(messages);
   msgsRef.current = messages;
@@ -59,9 +62,16 @@ export function MessageList({ chatKey, messages, running, notices, forkBoundary 
     }
   };
 
+  const onEndReached = useCallback(() => {
+    if (chatKey && hasMoreBefore && !loadingOlder) {
+      void threadStore.getState().loadOlder(chatKey);
+    }
+  }, [chatKey, hasMoreBefore, loadingOlder]);
+
   return (
     <>
       <FlatList
+        testID="message-flatlist"
         inverted
         data={data}
         keyExtractor={keyOf}
@@ -77,6 +87,13 @@ export function MessageList({ chatKey, messages, running, notices, forkBoundary 
           )
         }
         ListHeaderComponent={<>{notices.map((n, i) => <NoticeRow key={`${n.kind}:${i}`} notice={n} />)}</>}
+        ListFooterComponent={loadingOlder ? (
+          <View testID="loading-older" style={{ paddingVertical: 12, alignItems: "center" }}>
+            <ActivityIndicator size="small" color={th.colors.mutedForeground} />
+          </View>
+        ) : null}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.2}
         contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={12}
