@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ModelRequestAPI } from "@/lib/types";
 import { useT } from "../../i18n";
 import {
@@ -100,7 +101,80 @@ export function ModelsSection() {
 
 type Errors = Partial<Record<keyof PresetForm, string>>;
 
-const MATCH_CAP = 30;
+const INLINE_CAP = 8;
+
+const fmtContextWindow = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(n));
+
+type CatalogState = ReturnType<typeof useProviderModels>;
+
+function modelPickerSubtitle(m: CatalogState["models"][number]) {
+  const parts: string[] = [];
+  if (m.label && m.label !== m.id) parts.push(m.label);
+  if (m.context_window) parts.push(fmtContextWindow(m.context_window));
+  return parts.length ? parts.join(" · ") : undefined;
+}
+
+function ModelPicker({ open, onClose, model, cat, onPick }: { open: boolean; onClose: () => void; model: string; cat: CatalogState; onPick: (id: string) => void }) {
+  const t = useT();
+  const th = useTheme();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  // Sheet already takes padding, the grabber and the title, and caps near 90%.
+  // Keep the picker body near 80% of the window so the list scrolls inside it.
+  const bodyHeight = Math.max(240, Math.round(height * 0.8) - (insets.bottom + 96));
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    if (open) setSearch("");
+  }, [open]);
+  const sq = search.trim().toLowerCase();
+  const total = cat.models.length;
+  const filtered = useMemo(
+    () => cat.models.filter((m) => !sq || m.id.toLowerCase().includes(sq) || (m.label ?? "").toLowerCase().includes(sq)),
+    [cat.models, sq],
+  );
+  const failed = !cat.loading && (!!cat.error || total === 0);
+  const pending = cat.loading && total === 0;
+
+  return (
+    <Sheet open={open} onClose={onClose} title={t("models.choose")} scroll={false}>
+      <View style={{ height: bodyHeight }}>
+      <TextField label={t("models.search")} value={search} onChangeText={setSearch} autoCapitalize="none" autoCorrect={false} />
+      <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginBottom: 8 }}>
+        {sq ? t("models.countOf", { n: filtered.length, m: total }) : t("models.count", { n: total })}
+      </Text>
+      {pending ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={th.colors.foreground} />
+        </View>
+      ) : null}
+      {failed ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 16 }}>
+          <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15, textAlign: "center" }}>{t("models.catalogFailed")}</Text>
+          <Button title={t("models.retry")} variant="secondary" onPress={() => void cat.refresh()} />
+        </View>
+      ) : null}
+      {!pending && !failed ? (
+        <FlatList
+          data={filtered}
+          keyExtractor={(m) => m.id}
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item: m }) => (
+            <ListItem
+              title={m.id}
+              subtitle={modelPickerSubtitle(m)}
+              onPress={() => onPick(m.id)}
+              right={m.id === model ? (
+                <Text accessibilityLabel={t("models.tasks.selected")} style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 16 }}>✓</Text>
+              ) : undefined}
+            />
+          )}
+        />
+      ) : null}
+      </View>
+    </Sheet>
+  );
+}
 
 function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () => void }) {
   const t = useT();
@@ -126,6 +200,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [autoApi, setAutoApi] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const row = d.providers.find((p) => p.name === provider);
   const catalogued = !!row && row.model_catalog !== "unsupported" && row.configured;
@@ -134,9 +209,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const deferred = DEFERRED_PROVIDERS.includes(provider);
   const q = model.trim().toLowerCase();
   const allMatches = catalogued && (!deferred || q.length >= 2) ? cat.models.filter((m) => !q || m.id.toLowerCase().includes(q) || (m.label ?? "").toLowerCase().includes(q)).filter((m) => m.id !== model) : [];
-  // The Sheet scrolls, so show a real list; past the cap, say how many more there are so it is clear typing filters them.
-  const matches = allMatches.slice(0, MATCH_CAP);
-  const hidden = allMatches.length - matches.length;
+  const matches = allMatches.slice(0, INLINE_CAP);
   const efforts = info?.reasoning_efforts?.length ? info.reasoning_efforts : preset?.reasoning_effort_values ?? [];
   const supported = (info?.api ?? preset?.api)?.supported_apis ?? ((row?.request_apis ?? []).filter((a) => ["chat_completions", "responses", "anthropic_messages"].includes(a)) as ModelRequestAPI[]);
 
@@ -200,6 +273,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const apiOptions = [{ value: "", label: autoApi ? t("models.apiAuto", { api: autoApi }) : t("models.apiAutoPlain") }, ...supported.map((a) => ({ value: a as string, label: a }))];
 
   return (
+    <>
     <Sheet open onClose={onClose} title={t(preset ? "models.editPreset" : "models.newPreset")}>
       <KeyboardAvoidingView behavior="padding">
         <ScrollView style={{ maxHeight: 520 }} keyboardShouldPersistTaps="handled">
@@ -217,12 +291,12 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
             helper={deferred && q.length < 2 ? t("models.searchHint") : undefined}
             right={catalogued ? <IconButton icon="refresh" accessibilityLabel={t("models.refresh")} disabled={cat.loading} onPress={() => void cat.refresh()} /> : undefined}
           />
+          {catalogued ? (
+            <Button title={t("models.choose")} variant="secondary" onPress={() => setPickerOpen(true)} />
+          ) : null}
           {matches.map((m) => (
             <ListItem key={m.id} title={m.id} subtitle={m.label && m.label !== m.id ? m.label : undefined} onPress={() => pickModel(m.id)} />
           ))}
-          {hidden > 0 ? (
-            <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, paddingHorizontal: 16, paddingVertical: 8 }}>{t("models.moreMatches", { n: hidden })}</Text>
-          ) : null}
           {efforts.length ? (
             <>
               <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginTop: 8, marginBottom: 4 }}>{t("models.effort")}</Text>
@@ -259,6 +333,19 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
         confirmLabel={t("models.delete")} cancelLabel={t("models.cancel")} onConfirm={() => void remove()} onCancel={() => setConfirmDelete(false)}
       />
     </Sheet>
+    {catalogued ? (
+      <ModelPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        model={model}
+        cat={cat}
+        onPick={(id) => {
+          pickModel(id);
+          setPickerOpen(false);
+        }}
+      />
+    ) : null}
+    </>
   );
 
   function pickTyped(set: (v: string) => void) {

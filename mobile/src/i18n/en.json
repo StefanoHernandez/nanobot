@@ -525,7 +525,12 @@
       "selected": "Selected",
       "saveFailed": "Couldn't save the model choice"
     },
-    "moreMatches": "{{n}} more models: type to search"
+    "choose": "Choose from list",
+    "search": "Search",
+    "count": "{{n}} models",
+    "countOf": "{{n}} of {{m}}",
+    "retry": "Retry",
+    "catalogFailed": "Could not load the models."
   },
   "providers": {
     "title": "Providers",
