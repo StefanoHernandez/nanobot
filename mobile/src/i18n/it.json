@@ -270,10 +270,12 @@
   "attach": {
     "button": "Allega",
     "title": "Allega",
+    "camera": "Fotocamera",
     "photos": "Foto",
     "files": "File",
     "remove": "Rimuovi",
     "error": {
+      "cameraPermission": "Permesso fotocamera negato",
       "count": "Troppi allegati",
       "file_size": "File troppo grande",
       "total_size": "Dimensione totale eccessiva",

@@ -277,6 +277,25 @@ export function Composer({ chatKey }: { chatKey: string }) {
     setPendingFiles([...pendingFiles, ...preparedList]);
   };
 
+  const handlePickCamera = async () => {
+    setSheetOpen(false);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        toast.show(t("attach.error.cameraPermission", { defaultValue: "Permesso fotocamera negato" }));
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+      });
+      if (!res.canceled && res.assets) {
+        await handleAddAssets(res.assets);
+      }
+    } catch {
+      toast.show(t("attach.error.generic"));
+    }
+  };
+
   const handlePickPhotos = async () => {
     setSheetOpen(false);
     try {
@@ -525,6 +544,11 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
         {sheetOpen ? (
           <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t("attach.title")}>
+            <ListItem
+              left={<MaterialCommunityIcons name="camera-outline" size={24} color={th.colors.foreground} />}
+              title={t("attach.camera", { defaultValue: "Fotocamera" })}
+              onPress={handlePickCamera}
+            />
             <ListItem
               left={<MaterialCommunityIcons name="image-multiple-outline" size={24} color={th.colors.foreground} />}
               title={t("attach.photos")}
