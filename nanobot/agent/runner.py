@@ -68,7 +68,7 @@ def _raise_if_cancelling() -> None:
         raise asyncio.CancelledError
 
 
-ContinuationCallback = Callable[[], str | None]
+ContinuationCallback = Callable[[], Awaitable[str | None]]
 CheckpointCallback = Callable[[dict[str, Any]], Awaitable[None]]
 InjectionCallback = Callable[[], Awaitable[Iterable[Any] | None]]
 
@@ -158,29 +158,15 @@ class AgentRunner:
         self, operation: Callable[_PromptArgs, _PromptResult],
         *args: _PromptArgs.args, **kwargs: _PromptArgs.kwargs,
     ) -> _PromptResult:
-        """Share the bounded worker for read-only prompt preparation."""
+        """Share the bounded context worker for prompt filesystem preparation."""
         return await self.context_governor.prepare_in_background(operation, *args, **kwargs)
 
-    @staticmethod
-    async def copy_messages_on_loop(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Detach loop-owned records while yielding between bounded batches."""
-        copied: list[dict[str, Any]] = []
-        memo: dict[int, Any] = {id(messages): copied}
-        for start in range(0, len(messages), 64):
-            copied.extend(deepcopy(message, memo) for message in messages[start:start + 64])
-            await asyncio.sleep(0)
-        return copied
-
     async def _run_context_snapshot(
-        self, messages: list[dict[str, Any]],
+        self, hook: AgentHook, messages: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        if not messages:
+        if not messages or not hook.has_run_hooks():
             return []
-        task = asyncio.current_task()
-        if task is not None and task.cancelling():
-            # Cancellation cleanup must not queue behind its own unfinished worker.
-            return await self.copy_messages_on_loop(messages)
-        return await self.prepare_prompt(deepcopy, messages)
+        return await asyncio.to_thread(deepcopy, messages)
 
     @staticmethod
     def _append_injected_messages(
@@ -208,7 +194,7 @@ class AgentRunner:
         injections = await self._drain_injections(spec) if drain_callback else []
         real_injection = bool(injections)
         if not injections and allow_continuation and assistant_message is not None:
-            continuation = self._build_continuation_message(spec)
+            continuation = await self._build_continuation_message(spec)
             if continuation is not None:
                 injections = [continuation]
         if (
@@ -260,12 +246,12 @@ class AgentRunner:
         return True, injection_cycles
 
     @staticmethod
-    def _build_continuation_message(spec: AgentRunSpec) -> dict[str, str] | None:
+    async def _build_continuation_message(spec: AgentRunSpec) -> dict[str, str] | None:
         callback = spec.continuation_callback
         if callback is None:
             return None
         try:
-            content = callback()
+            content = await callback()
         except Exception:
             logger.opt(exception=tool_log_content_allowed()).error("continuation_callback failed")
             return None
@@ -332,18 +318,18 @@ class AgentRunner:
             try:
                 try:
                     messages, compaction = await self.prepare_prompt(self._initial_transcript_and_compaction, spec)
-                    context.messages = await self._run_context_snapshot(messages) if has_run_hooks else []
+                    context.messages = await self._run_context_snapshot(hook, messages) if has_run_hooks else []
                     await hook.before_run(context)
                     result = await self._run_core(spec, hook, messages, compaction)
                 except Exception as exc:
-                    context.messages = await self._run_context_snapshot(messages) if has_run_hooks else []
+                    context.messages = await self._run_context_snapshot(hook, messages) if has_run_hooks else []
                     context.stop_reason = "error"
                     context.error = f"Error: {type(exc).__name__}: {exc}"
                     context.exception = exc
                     await hook.on_error(context)
                     raise
                 else:
-                    context.messages = await self._run_context_snapshot(result.messages) if has_run_hooks else []
+                    context.messages = await self._run_context_snapshot(hook, result.messages) if has_run_hooks else []
                     context.final_content = result.final_content
                     context.tools_used = list(result.tools_used)
                     context.usage = result.usage
@@ -365,14 +351,14 @@ class AgentRunner:
                 if has_run_hooks:
                     try:
                         if isinstance(context.exception, asyncio.CancelledError):
-                            context.messages = await self.copy_messages_on_loop(messages)
+                            context.messages = await self._run_context_snapshot(hook, messages)
                         else:
-                            context.messages = await self._run_context_snapshot(messages)
+                            context.messages = await self._run_context_snapshot(hook, messages)
                     except asyncio.CancelledError as exc:
                         context.stop_reason = "cancelled"
                         context.error = None
                         context.exception = exc
-                        context.messages = await self.copy_messages_on_loop(messages)
+                        context.messages = await self._run_context_snapshot(hook, messages)
                         raise
         finally:
             try:
@@ -1365,8 +1351,9 @@ class AgentRunner:
             usage = self._usage_or_estimate(
                 spec, state.messages, response, tool_definitions=state.tool_definitions,
             )
-        state.usage = usage
-        return state.usage
+        # A rewritten input or another model's count cannot bound the next request.
+        state.usage = None if response.provider_compaction_applied or response.is_fallback else usage
+        return usage
 
     def _estimate_response_usage(
         self,

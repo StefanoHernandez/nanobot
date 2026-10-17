@@ -9,6 +9,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
+from nanobot.bus.delivery import DeliveryRequest
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.notification_delivery import notification_is_deliverable
 from nanobot.bus.outbound_events import (
@@ -231,6 +232,11 @@ class TurnDelivery:
     def streaming(self) -> bool:
         return self._stream_base_id is not None
 
+    def bind_session_generation(self, generation: str) -> None:
+        """Attach the admitted session identity to all later lifecycle events."""
+        self.delivery_message.session_generation = generation
+        self.lifecycle_message.session_generation = generation
+
     def remember_session_route(self, session_metadata: dict[str, Any]) -> None:
         """Keep only routing fields needed to deliver a later idle notification."""
         if is_internal_session(self.session_key):
@@ -336,6 +342,12 @@ class TurnDelivery:
                     "response_sources": [dataclasses.asdict(self._response_source)],
                 })
             if response.channel != "websocket" or stop_reason != "error":
+                delivery = DeliveryRequest.from_context(
+                    self.input_message.metadata, self.session_key,
+                    self.delivery_message.session_generation,
+                )
+                if delivery is not None:
+                    response = dataclasses.replace(response, delivery=delivery)
                 await self.bus.publish_outbound(response)
         elif self.lifecycle_message.channel == "cli":
             await self.bus.publish_outbound(

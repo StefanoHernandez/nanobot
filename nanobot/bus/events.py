@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+from nanobot.bus.delivery import DeliveryRequest
+
 if TYPE_CHECKING:
     from nanobot.events import AgentEvent
 
@@ -36,6 +38,7 @@ class InboundMessage:
     session_key_override: str | None = None  # Optional override for thread-scoped sessions
     require_existing_session: bool = False
     input_role: Literal["user", "system"] | None = None
+    session_generation: str | None = None  # Trusted identity assigned at session admission
 
     @property
     def session_key(self) -> str:
@@ -67,3 +70,5 @@ class OutboundMessage:
     metadata: dict[str, Any] = field(default_factory=dict)
     buttons: list[list[str]] = field(default_factory=list)
     event: "AgentEvent | None" = None
+    delivery: DeliveryRequest | None = None
+    delivery_id: str | None = None
