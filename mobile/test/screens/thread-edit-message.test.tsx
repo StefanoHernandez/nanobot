@@ -101,7 +101,7 @@ describe("ED-A: edit a message you already sent", () => {
     const msgs = [usr("u1", "Primo messaggio utente"), asst("a1", "Risposta bot")];
     await longPress(msgs, "Primo messaggio utente");
 
-    expect(await screen.findByText("Modifica")).toBeTruthy();
+    expect(await screen.findByText("Edit")).toBeTruthy();
     expect(screen.getByText("Copy")).toBeTruthy();
     expect(screen.queryByText("Fork from here")).toBeNull();
   });
@@ -112,14 +112,14 @@ describe("ED-A: edit a message you already sent", () => {
 
     expect(await screen.findByText("Fork from here")).toBeTruthy();
     expect(screen.getByText("Copy")).toBeTruthy();
-    expect(screen.queryByText("Modifica")).toBeNull();
+    expect(screen.queryByText("Edit")).toBeNull();
   });
 
   test("Modifica is disabled when the bot is running", async () => {
     const msgs = [usr("u1", "Messaggio mentre gira"), asst("a1", "In corso...")];
     await longPress(msgs, "Messaggio mentre gira", true);
 
-    const editItem = await screen.findByText("Modifica");
+    const editItem = await screen.findByText("Edit");
     expect(editItem).toBeTruthy();
     expect(screen.getByText("Unavailable while responding")).toBeTruthy();
 
@@ -135,7 +135,7 @@ describe("ED-A: edit a message you already sent", () => {
     fireEvent(await screen.findByText("Messaggio temporaneo"), "longPress");
 
     expect(await screen.findByText("Copy")).toBeTruthy();
-    expect(screen.queryByText("Modifica")).toBeNull();
+    expect(screen.queryByText("Edit")).toBeNull();
   });
 
   test("Modifica calls forkChat with the right before_user_index, appends (modificata) to title, navigates, and prefills composer", async () => {
@@ -147,10 +147,10 @@ describe("ED-A: edit a message you already sent", () => {
     ];
     await longPress(msgs, "Secondo prompt da modificare");
 
-    fireEvent.press(await screen.findByText("Modifica"));
+    fireEvent.press(await screen.findByText("Edit"));
 
     await waitFor(() => {
-      expect(forkMock).toHaveBeenCalledWith(KEY, 1, "Chat Originale (modificata)");
+      expect(forkMock).toHaveBeenCalledWith(KEY, 1, "Chat Originale (edited)");
     });
 
     expect(router.push).toHaveBeenCalledWith("/chat/" + encodeURIComponent("websocket:forked-chat-1"));
@@ -170,10 +170,10 @@ describe("ED-A: edit a message you already sent", () => {
     ];
     await longPress(msgs, "Primo prompt da modificare");
 
-    fireEvent.press(await screen.findByText("Modifica"));
+    fireEvent.press(await screen.findByText("Edit"));
 
     await waitFor(() => {
-      expect(forkMock).toHaveBeenCalledWith(KEY, 0, "Chat Originale (modificata)");
+      expect(forkMock).toHaveBeenCalledWith(KEY, 0, "Chat Originale (edited)");
     });
   });
 
@@ -186,13 +186,13 @@ describe("ED-A: edit a message you already sent", () => {
     ];
     await longPress(msgs, "Messaggio con foto");
 
-    fireEvent.press(await screen.findByText("Modifica"));
+    fireEvent.press(await screen.findByText("Edit"));
 
     await waitFor(() => {
       expect(forkMock).toHaveBeenCalled();
     });
 
-    expect(toastSpy).toHaveBeenCalledWith("Gli allegati vanno riaggiunti");
+    expect(toastSpy).toHaveBeenCalledWith("Attachments need to be added again");
     toastSpy.mockRestore();
   });
 
@@ -203,7 +203,7 @@ describe("ED-A: edit a message you already sent", () => {
     const msgs = [usr("u1", "Messaggio che fallisce")];
     await longPress(msgs, "Messaggio che fallisce");
 
-    fireEvent.press(await screen.findByText("Modifica"));
+    fireEvent.press(await screen.findByText("Edit"));
 
     await waitFor(() => {
       expect(forkMock).toHaveBeenCalled();
@@ -256,11 +256,11 @@ describe("ED-A: edit a message you already sent", () => {
     }));
 
     await longPress(msgs, "Messaggio pagina 2");
-    fireEvent.press(await screen.findByText("Modifica"));
+    fireEvent.press(await screen.findByText("Edit"));
 
     await waitFor(() => {
       expect(loadOlderMock).toHaveBeenCalled();
-      expect(forkMock).toHaveBeenCalledWith(KEY, 2, "Chat Originale (modificata)");
+      expect(forkMock).toHaveBeenCalledWith(KEY, 2, "Chat Originale (edited)");
     });
   });
 });

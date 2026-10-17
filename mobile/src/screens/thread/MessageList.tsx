@@ -48,30 +48,30 @@ export function MessageList({ chatKey, messages, running, notices, forkBoundary 
 
   const onLongPress = useCallback((m: UIMessage) => setMenu(m), []);
 
-  const isTemp = !!chatKey && typeof chatsStore.getState().isTemporary === "function" && chatsStore.getState().isTemporary(chatKey);
+  const isTemp = !!chatKey && chatsStore.getState().isTemporary(chatKey);
+
+  /** Number of user messages before `id` (inclusive of `id` when `through`), counted over the full history:
+   * the server's before_user_index is absolute, so older pages are loaded first. */
+  const userIndexOf = async (id: string, through: boolean) => {
+    const st = () => threadStore.getState().threads[chatKey!];
+    while (st()?.hasMoreBefore) {
+      const prev = st()?.beforeCursor;
+      await threadStore.getState().loadOlder(chatKey!);
+      if (st()?.beforeCursor === prev) break;
+    }
+    const stored = st()?.messages ?? [];
+    const all = stored.some((x) => x.id === id) ? stored : msgsRef.current;
+    const at = all.findIndex((x) => x.id === id);
+    return all.slice(0, at + (through ? 1 : 0)).filter((x) => x.role === "user").length;
+  };
 
   const editMessage = async (m: UIMessage) => {
     setMenu(null);
     if (!chatKey) return;
-
-    while (threadStore.getState().threads[chatKey]?.hasMoreBefore) {
-      const prevCursor = threadStore.getState().threads[chatKey]?.beforeCursor;
-      await threadStore.getState().loadOlder(chatKey);
-      if (threadStore.getState().threads[chatKey]?.beforeCursor === prevCursor) break;
-    }
-
-    const fullMessages = threadStore.getState().threads[chatKey]?.messages ?? msgsRef.current;
-    const targetIdx = fullMessages.findIndex((x) => x.id === m.id);
-    const beforeUserIndex = (targetIdx >= 0 ? fullMessages.slice(0, targetIdx) : msgsRef.current.slice(0, msgsRef.current.findIndex((x) => x.id === m.id))).filter((x) => x.role === "user").length;
-
-    const origTitle = chatsStore.getState().chats?.find((c) => c.key === chatKey)?.title;
-    const title = `${origTitle || t("chats.untitled")} (modificata)`;
-
-    const hasAttachments = Boolean(
-      (m.media && m.media.length > 0) ||
-      (m.images && m.images.length > 0) ||
-      ((m as unknown as { attachments?: unknown[] }).attachments && (m as unknown as { attachments: unknown[] }).attachments.length > 0)
-    );
+    const beforeUserIndex = await userIndexOf(m.id, false);
+    const origTitle = chatsStore.getState().chats.find((c) => c.key === chatKey)?.title;
+    const title = t("fork.editedTitle", { title: origTitle || t("chats.untitled") });
+    const hasAttachments = !!(m.media?.length || m.images?.length);
 
     try {
       const nk = await chatsStore.getState().fork(chatKey, beforeUserIndex, title);
@@ -90,10 +90,8 @@ export function MessageList({ chatKey, messages, running, notices, forkBoundary 
     const m = menu;
     setMenu(null);
     if (!m || !chatKey) return;
-    const all = msgsRef.current;
-    const at = all.findIndex((x) => x.id === m.id);
     // ordinal (among user messages) of the first user message after this answer; none -> count of user messages
-    const before = all.slice(0, at + 1).filter((x) => x.role === "user").length;
+    const before = await userIndexOf(m.id, true);
     try {
       const nk = await chatsStore.getState().fork(chatKey, before);
       router.push(("/chat/" + encodeURIComponent(nk)) as never);
