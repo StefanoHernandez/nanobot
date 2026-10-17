@@ -33,7 +33,8 @@ export async function loadEffortState(session: NanobotSession, sessionKey: strin
     try {
       const cat = await loadProviderModels((path) => session.get(path), base.provider);
       const catModel = (cat.models ?? []).find((m) => m.id === base.model);
-      if (catModel?.reasoning_efforts !== undefined) {
+      // The catalog sends [] when it does not know the levels: fall back to the preset then.
+      if (catModel?.reasoning_efforts?.length) {
         rawLevels = catModel.reasoning_efforts;
       }
     } catch {
