@@ -429,7 +429,10 @@
     "fork": "Crea fork da qui",
     "here": "Fork da qui",
     "error": "Impossibile creare il fork",
-    "copied": "Copiato"
+    "copied": "Copiato",
+    "edit": "Modifica",
+    "editDisabledRunning": "Non disponibile durante la risposta",
+    "attachmentsNotCarried": "Gli allegati vanno riaggiunti"
   },
   "temporary": {
     "label": "Temporanea"
