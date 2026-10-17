@@ -871,6 +871,11 @@ def _run_gateway(
         sync_journal_job(cron, config.workspace_path, config.agents.defaults.timezone)
     bind_journal_turn(agent_turn(agent))
 
+    # Fork (nanobot/ext/automations.py): register POST /api/ext/automations/create.
+    from nanobot.ext.automations import register_automations_routes
+
+    register_automations_routes(channels, cron=cron, sessions=session_manager)
+
     # Register Heartbeat system job (idempotent on restart)
     if hb_cfg.enabled:
         cron.register_system_job(CronJob(
