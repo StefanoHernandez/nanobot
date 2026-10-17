@@ -228,7 +228,7 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     });
     settingsStore.getState().setData(withTasks({}) as never);
     await show();
-    expect(await screen.findByText("b · The model that writes the evening journal")).toBeTruthy();
+    expect(await screen.findByText("b · The model that writes the nightly journal")).toBeTruthy();
   });
 
   test("the journal row shows the chat model when none is chosen", async () => {
@@ -238,7 +238,7 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     });
     settingsStore.getState().setData(withTasks({}) as never);
     await show();
-    expect(await screen.findByText("Same as the chat · The model that writes the evening journal")).toBeTruthy();
+    expect(await screen.findByText("Same as the chat · The model that writes the nightly journal")).toBeTruthy();
   });
 
   test("picking a journal preset keeps enabled and hour", async () => {
