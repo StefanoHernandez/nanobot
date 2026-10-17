@@ -270,10 +270,12 @@
   "attach": {
     "button": "Attach",
     "title": "Attach",
+    "camera": "Camera",
     "photos": "Photos",
     "files": "Files",
     "remove": "Remove",
     "error": {
+      "cameraPermission": "Camera permission denied",
       "count": "Too many attachments",
       "file_size": "File too large",
       "total_size": "Total size too large",
