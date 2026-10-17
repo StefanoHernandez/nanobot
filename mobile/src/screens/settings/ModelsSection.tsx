@@ -8,6 +8,7 @@ import {
   useProviderModels, validatePreset, visiblePresets, type Preset, type PresetForm,
 } from "../../settings/models";
 import { parseJsonObject } from "../../settings/providers";
+import { prefs } from "../../settings/prefs";
 import { SettingsError, useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
 import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
@@ -26,6 +27,7 @@ export function ModelsSection() {
   const { data, mutate } = useSettings();
   const [editing, setEditing] = useState<Preset | "new" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [defaultTemp, setDefaultTemp] = useState(() => prefs.defaultTemperature());
   const groups = useMemo(() => (data ? visiblePresets(data) : []), [data]);
   if (!data) return null;
   const order = data.model_call_order;
@@ -97,6 +99,38 @@ export function ModelsSection() {
         </>
       ) : null}
       <TaskModels />
+      <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 16, overflow: "hidden" }}>
+        <ListItem
+          title={t("models.defaultTemperature")}
+          right={
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <IconButton
+                icon="minus"
+                accessibilityLabel={t("models.decreaseTemp")}
+                disabled={defaultTemp <= 0}
+                onPress={() => {
+                  const next = Math.max(0, Math.round((defaultTemp - 0.1) * 10) / 10);
+                  prefs.setDefaultTemperature(next);
+                  setDefaultTemp(next);
+                }}
+              />
+              <Text style={{ minWidth: 28, textAlign: "center", color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
+                {defaultTemp.toFixed(1)}
+              </Text>
+              <IconButton
+                icon="plus"
+                accessibilityLabel={t("models.increaseTemp")}
+                disabled={defaultTemp >= 2}
+                onPress={() => {
+                  const next = Math.min(2, Math.round((defaultTemp + 0.1) * 10) / 10);
+                  prefs.setDefaultTemperature(next);
+                  setDefaultTemp(next);
+                }}
+              />
+            </View>
+          }
+        />
+      </View>
       <View style={{ padding: 16, gap: 8 }}>
         <Button title={t("models.addPreset")} variant="secondary" onPress={() => setEditing("new")} />
         {data.model_configuration_migratable ? (
@@ -211,7 +245,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const [effort, setEffort] = useState(preset?.reasoning_effort ?? "");
   const [ctx, setCtx] = useState(String(preset?.context_window_tokens ?? 200000));
   const [maxTokens, setMaxTokens] = useState(String(preset?.max_tokens ?? 8192));
-  const [temp, setTemp] = useState(String(preset?.temperature ?? 0.1));
+  const [temp, setTemp] = useState(String(preset?.temperature ?? prefs.defaultTemperature()));
   const [apiPref, setApiPref] = useState<string>(preset?.api?.preferred_api ?? "");
   const [headers, setHeaders] = useState(jsonText(preset?.extra_headers));
   const [query, setQuery] = useState(jsonText(preset?.extra_query));

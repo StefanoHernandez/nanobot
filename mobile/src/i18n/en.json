@@ -509,6 +509,9 @@
     "searchHint": "Type at least 2 characters to search",
     "primaryNoDelete": "The primary model cannot be deleted",
     "setByModel": "Set by the model",
+    "defaultTemperature": "Default temperature",
+    "decreaseTemp": "Decrease temperature",
+    "increaseTemp": "Increase temperature",
     "err": {
       "required": "Required",
       "duplicate": "Already exists",

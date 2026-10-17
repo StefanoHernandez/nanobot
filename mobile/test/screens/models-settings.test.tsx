@@ -5,6 +5,7 @@ import { i18n } from "../../src/i18n";
 import { sessionStore } from "../../src/state/sessionStore";
 import { settingsStore } from "../../src/settings/store";
 import { clearCatalogCache } from "../../src/settings/models";
+import { prefs } from "../../src/settings/prefs";
 import { SettingsSection } from "../../src/screens/settings/SettingsSection";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() }, useNavigation: () => ({ addListener: jest.fn(() => () => {}), dispatch: jest.fn() }) }));
@@ -29,6 +30,7 @@ const base = (o = {}) => ({
 beforeEach(async () => {
   jest.clearAllMocks();
   clearCatalogCache();
+  prefs.setDefaultTemperature(0.1);
   mutate.mockImplementation(async () => ({}));
   get.mockImplementation(async (path: string) => {
     if (String(path).includes("/api/ext/journal")) throw new Error("missing");
@@ -390,4 +392,35 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
       global.fetch = previous;
     }
   });
+
+  describe("default temperature preference", () => {
+    test("stepper changes default temperature preference and updates UI", async () => {
+      await show();
+      expect(screen.getByText("Default temperature")).toBeTruthy();
+      expect(screen.getByText("0.1")).toBeTruthy();
+
+      await fireEvent.press(screen.getByLabelText("Increase temperature"));
+      expect(prefs.defaultTemperature()).toBe(0.2);
+      expect(screen.getByText("0.2")).toBeTruthy();
+
+      await fireEvent.press(screen.getByLabelText("Decrease temperature"));
+      expect(prefs.defaultTemperature()).toBe(0.1);
+      expect(screen.getByText("0.1")).toBeTruthy();
+    });
+
+    test("new preset initializes temperature from preference", async () => {
+      prefs.setDefaultTemperature(0.7);
+      await show();
+      await fireEvent.press(screen.getByText("Add model"));
+      expect(screen.getByLabelText("Temperature").props.value).toBe("0.7");
+    });
+
+    test("existing preset keeps its own temperature", async () => {
+      prefs.setDefaultTemperature(0.8);
+      await show();
+      await fireEvent.press(screen.getByText("a"));
+      expect(screen.getByLabelText("Temperature").props.value).toBe("0.5");
+    });
+  });
 });
+
