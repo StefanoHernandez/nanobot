@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useT } from "../../i18n";
 import { useRestart } from "../../settings/store";
-import { Button, Dialog, IconButton, ListItem } from "../../ui/components";
+import { Button, Dialog, IconButton, ListItem, TextField } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { useBackups, type BackupItem } from "../../extras/backup";
 import { formatByteSize } from "../../extras/exportChat";
@@ -28,15 +28,38 @@ function formatBackupDate(ms: number): string {
 export function BackupSection() {
   const t = useT();
   const th = useTheme();
-  const { data, loading, creating, acting, error, refresh, create, remove, restore } = useBackups();
+  const { data, loading, creating, acting, error, refresh, create, remove, restore, saveDir } = useBackups();
   const { run: runRestart } = useRestart();
 
   const [toDelete, setToDelete] = useState<string | null>(null);
   const [toRestore, setToRestore] = useState<BackupItem | null>(null);
+  const [dirInput, setDirInput] = useState("");
+  const [dirInitialized, setDirInitialized] = useState(false);
+  const [savingDir, setSavingDir] = useState(false);
+  const [dirSaved, setDirSaved] = useState(false);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (data?.dir && !dirInitialized) {
+      setDirInput(data.dir);
+      setDirInitialized(true);
+    }
+  }, [data?.dir, dirInitialized]);
+
+  const handleSaveDir = async () => {
+    if (!dirInput.trim()) return;
+    setSavingDir(true);
+    setDirSaved(false);
+    const ok = await saveDir(dirInput.trim());
+    setSavingDir(false);
+    if (ok) {
+      setDirSaved(true);
+      setTimeout(() => setDirSaved(false), 3000);
+    }
+  };
 
   const backups = data?.backups ?? [];
   const diskFreeText = data?.disk_free != null ? formatByteSize(data.disk_free) : null;
@@ -101,6 +124,28 @@ export function BackupSection() {
       ) : null}
 
       <View style={{ marginHorizontal: 16, marginTop: 16, marginBottom: 8 }}>
+        <TextField
+          label={t("backup.dirLabel")}
+          value={dirInput}
+          onChangeText={(text) => {
+            setDirInput(text);
+            setDirSaved(false);
+          }}
+          helper={dirSaved ? t("backup.dirSaved") : t("backup.dirHint")}
+          autoCapitalize="none"
+          autoCorrect={false}
+          mono
+        />
+        <Button
+          title={t("backup.saveDir")}
+          loading={savingDir}
+          disabled={savingDir || !dirInput.trim()}
+          variant="secondary"
+          onPress={() => void handleSaveDir()}
+        />
+      </View>
+
+      <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 8 }}>
         <Button
           title={creating ? t("backup.creating") : t("backup.createNow")}
           loading={creating}
