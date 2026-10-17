@@ -525,7 +525,12 @@
       "selected": "Selezionato",
       "saveFailed": "Impossibile salvare la scelta del modello"
     },
-    "moreMatches": "Altri {{n}} modelli: scrivi per cercare"
+    "choose": "Scegli dalla lista",
+    "search": "Cerca",
+    "count": "{{n}} modelli",
+    "countOf": "{{n}} di {{m}}",
+    "retry": "Riprova",
+    "catalogFailed": "Impossibile caricare i modelli."
   },
   "providers": {
     "title": "Provider",
