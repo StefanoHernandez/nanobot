@@ -52,6 +52,13 @@ export type ThreadSlice = {
   hasMoreBefore?: boolean;
   loadingOlder?: boolean;
   beforeCursor?: string | null;
+  queuedMessages?: QueuedMessage[];
+};
+
+export type QueuedMessage = {
+  id: string;
+  text: string;
+  opts?: SendOpts;
 };
 
 type SendFrameOpts = NonNullable<Parameters<NanobotSession["client"]["sendMessage"]>[3]>;
@@ -61,6 +68,7 @@ export type SendOpts = {
   mcpPresets?: SendFrameOpts["mcpPresets"];
   sessionMentions?: SessionMention[];
   workspaceScope?: SendFrameOpts["workspaceScope"];
+  steer?: boolean;
 };
 
 type S = {
@@ -76,6 +84,9 @@ type S = {
   reset(): void;
   /** Returns true when the send started. With opts.files the upload is async: failures set sendError and mark the row failed; the draft and pendingFiles are cleared only on success. */
   send(session: NanobotSession, key: string, text: string, opts?: SendOpts): boolean;
+  sendQueuedNow(session: NanobotSession, key: string, id: string): void;
+  modifyQueued(key: string, id: string): void;
+  removeQueued(key: string, id: string): void;
   setPendingFiles(key: string, files: LocalFile[]): void;
   stop(session: NanobotSession, key: string): void;
   setDraft(key: string, text: string): void;
@@ -83,7 +94,7 @@ type S = {
   cancelLeave(key: string): void;
 };
 
-const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false, hasMoreBefore: false, loadingOlder: false, beforeCursor: null };
+const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false, hasMoreBefore: false, loadingOlder: false, beforeCursor: null, queuedMessages: [] };
 const LEAVE_DELAY_MS = 300;
 const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end", "context_compaction"]);
 const threadPath = (key: string) => `/api/sessions/${encodeURIComponent(key)}/webui-thread`;
@@ -179,6 +190,16 @@ export function createThreadStore() {
             notices: notice(s.notices, failed ? { kind: "stream_error", text: ev.failure_message || "This turn failed and has ended." } : null, ["retry"]),
           }));
           rtOf(key).proj = resetThreadProjectionCursor(rtOf(key).proj, get().threads[key].messages);
+
+          const queue = get().threads[key]?.queuedMessages ?? [];
+          if (queue.length > 0) {
+            const [first, ...rest] = queue;
+            patch(key, () => ({ queuedMessages: rest }));
+            const s = rtOf(key).session ?? sessionStore.getState().session;
+            if (s) {
+              get().send(s, key, first.text, first.opts);
+            }
+          }
           return;
         }
         case "context_compaction": {
@@ -529,11 +550,38 @@ export function createThreadStore() {
         const files = opts.files ?? [];
         if (!isWritable(key) || (!text.trim() && !files.length)) return false;
         const rt = rtOf(key);
+        rt.session = session;
         if ((get().threads[key] ?? EMPTY).uploading) return false;
+
+        if (files.length > 0) {
+          const lim = session.limits;
+          const v0 = validateFiles(files, { ...lim, max_file_bytes: Infinity, max_total_bytes: Infinity });
+          if (!v0.ok) {
+            patch(key, () => ({ sendError: v0.reason }));
+            return false;
+          }
+          const v1 = validateFiles(files, lim);
+          const hasOnlyImages = files.every((f) => f.mime.startsWith("image/"));
+          if (!v1.ok && !hasOnlyImages) {
+            patch(key, () => ({ sendError: v1.reason }));
+            return false;
+          }
+        }
+
         const running = (get().threads[key] ?? EMPTY).running;
+
+        if (running && !opts.steer) {
+          const id = `${Date.now().toString(36)}-${++ids}`;
+          patch(key, (s) => ({
+            queuedMessages: [...(s.queuedMessages ?? []), { id, text, opts }],
+            draft: "",
+          }));
+          return true;
+        }
+
         const turnId = `${Date.now().toString(36)}-${++ids}`;
         const rowId = `local-${turnId}`;
-        const { files: _f, ...frameOpts } = opts;
+        const { files: _f, steer: _s, ...frameOpts } = opts;
         const options = { ...frameOpts, turnId, ...(running ? { startsNewRun: false } : {}) };
         patch(key, (s) => {
           // Guidance keeps the active answer cursor (useNanobotStream.ts:966); a fresh turn resets it.
@@ -589,6 +637,32 @@ export function createThreadStore() {
         return true;
       },
 
+      sendQueuedNow(session, key, id) {
+        const queue = get().threads[key]?.queuedMessages ?? [];
+        const item = queue.find((q) => q.id === id);
+        if (!item) return;
+        patch(key, (s) => ({
+          queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id),
+        }));
+        get().send(session, key, item.text, { ...item.opts, steer: true });
+      },
+
+      modifyQueued(key, id) {
+        const queue = get().threads[key]?.queuedMessages ?? [];
+        const item = queue.find((q) => q.id === id);
+        if (!item) return;
+        patch(key, (s) => ({
+          queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id),
+          draft: item.text,
+        }));
+      },
+
+      removeQueued(key, id) {
+        patch(key, (s) => ({
+          queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id),
+        }));
+      },
+
       setPendingFiles(key, pendingFiles) {
         patch(key, () => ({ pendingFiles }));
       },
@@ -625,6 +699,10 @@ export function useThreadSlice(key: string) {
   const slice = useStore(threadStore, (s) => s.threads[key] ?? EMPTY);
   return {
     ...slice,
+    queuedMessages: slice.queuedMessages ?? [],
+    sendQueuedNow: (id: string) => session && threadStore.getState().sendQueuedNow(session, key, id),
+    modifyQueued: (id: string) => threadStore.getState().modifyQueued(key, id),
+    removeQueued: (id: string) => threadStore.getState().removeQueued(key, id),
     loadOlder: () => (session ? threadStore.getState().loadOlder(key, session) : Promise.resolve()),
     send: (text: string, opts?: SendOpts) => !!session && threadStore.getState().send(session, key, text, opts),
     setPendingFiles: (files: LocalFile[]) => threadStore.getState().setPendingFiles(key, files),

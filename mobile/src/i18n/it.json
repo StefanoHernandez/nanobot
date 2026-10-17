@@ -68,6 +68,11 @@
       "afterOnly": "Contesto compattato · dopo: {{after}} token",
       "nothingToCompact": "Niente da compattare"
     },
+    "queue": {
+      "sendNow": "Invia ora",
+      "modify": "Modifica",
+      "remove": "Elimina"
+    },
     "changeModel": "Cambia modello",
     "chooseModel": "Scegli il modello",
     "historyError": "Impossibile caricare lo storico di questa chat.",

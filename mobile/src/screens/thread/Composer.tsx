@@ -27,6 +27,7 @@ import { isVoiceAvailable } from "../../extras/sttEngine";
 import { DEFAULT_LIMITS } from "../../core/session";
 import { prepareImage, validateFiles, type LocalFile } from "../../core/upload";
 import { AttachmentBar } from "./AttachmentBar";
+import { QueuedMessages } from "./QueuedMessages";
 import { toLocalFile, type RawPickerAsset } from "./attachments";
 import { MentionMenu } from "./MentionMenu";
 import {
@@ -58,6 +59,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
     draft,
     setDraft,
     send,
+    modifyQueued = () => {},
     running,
     stop,
     pendingFiles = [],
@@ -355,7 +357,17 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
     return (
       <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
-      <View style={[styles.container, th.bezel]}>
+        <QueuedMessages
+          chatKey={chatKey}
+          onModify={(item) => {
+            modifyQueued(item.id);
+            if (item.opts?.files) {
+              setPendingFiles(item.opts.files);
+            }
+            inputRef.current?.focus();
+          }}
+        />
+        <View style={[styles.container, th.bezel]}>
       <View style={[th.surface, { borderRadius: th.radius.lg, padding: 4 }]}>
         {isSlash ? (
           <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
