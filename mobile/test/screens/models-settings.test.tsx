@@ -343,10 +343,28 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     await show();
     expect(screen.getAllByText(/Same as the chat/).length).toBeGreaterThan(0);
     await fireEvent.press(screen.getByText("Subagents"));
-    await fireEvent.press(screen.getAllByText("c").at(-1)!); // the sheet renders last
+    await fireEvent.press(screen.getAllByText("b").at(-1)!); // the sheet renders last
     await waitFor(() =>
-      expect(mutate).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.subagent_model_preset": "c" } }, undefined),
+      expect(mutate).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.subagent_model_preset": "b" } }, undefined),
     );
+  });
+
+  test("task models picker hides disabled presets", async () => {
+    settingsStore.getState().setData(withTasks({}) as never);
+    await show();
+    await fireEvent.press(screen.getByText("Subagents"));
+    expect(screen.getAllByText("a").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("b").length).toBeGreaterThan(0);
+    // "c" is in the main list once, but NOT in the sheet
+    expect(screen.getAllByText("c")).toHaveLength(1);
+  });
+
+  test("task models picker keeps and marks currently selected disabled preset", async () => {
+    settingsStore.getState().setData(withTasks({ "agents.defaults.subagent_model_preset": "c" }) as never);
+    await show();
+    await fireEvent.press(screen.getByText("Subagents"));
+    expect(screen.getByText("c (disabled)")).toBeTruthy();
+    expect(screen.getByLabelText("Selected")).toBeTruthy();
   });
 
   test("Dream can go back to the chat model (null)", async () => {
@@ -398,7 +416,7 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     } as never);
     const fetchMock = jest.fn(async () => ({
       ok: true,
-      json: async () => ({ enabled: true, hour: 21, model: "c" }),
+      json: async () => ({ enabled: true, hour: 21, model: "b" }),
     }));
     const previous = global.fetch;
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -406,11 +424,11 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     try {
       await show();
       await fireEvent.press(await screen.findByText("Journal"));
-      await fireEvent.press(screen.getAllByText("c").at(-1)!);
+      await fireEvent.press(screen.getAllByText("b").at(-1)!);
       await waitFor(() => expect(fetchMock).toHaveBeenCalled());
       const call = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
       expect(String(call[0])).toContain("/api/ext/journal/settings");
-      expect(JSON.parse(String(call[1].body))).toEqual({ enabled: true, hour: 21, model: "c" });
+      expect(JSON.parse(String(call[1].body))).toEqual({ enabled: true, hour: 21, model: "b" });
     } finally {
       global.fetch = previous;
     }
