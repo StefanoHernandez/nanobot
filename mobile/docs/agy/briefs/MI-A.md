@@ -25,12 +25,16 @@ Branch `agy/MI-A`, from `origin/main`, **in your own worktree**. Follow `mobile/
   - on a network error, use the stale file if there is one, otherwise `{}`;
   - never raise.
 - `enrich_rows(provider_name: str, rows: list[dict], catalog: dict) -> list[dict]`:
-  - map the provider spec name to the models.dev id with a small dict: `{"opencode_go": "opencode-go", "opencode": "opencode", "opencode_zen": "opencode"}`. Add others only if their ids clearly match; say which in the report;
+  - map the provider spec name to the models.dev id with a small dict. Start with:
+    `{"opencode_go": "opencode-go", "opencode": "opencode", "opencode_zen": "opencode", "openai": "openai", "anthropic": "anthropic", "gemini": "google", "deepseek": "deepseek", "openrouter": "openrouter", "mistral": "mistral", "xai": "xai", "groq": "groq", "moonshot": "moonshotai", "zhipu": "zhipuai", "dashscope": "alibaba", "minimax": "minimax"}`.
+    Before keeping each pair, check that a few real model ids match between the provider and models.dev. Drop the pairs that do not match, and list them in the report.
+  - match model ids exactly first. For OpenRouter-style ids (`vendor/model`), match the full id; do not strip the prefix;
   - for each row whose `id` is in that provider's models:
     - set `context_window` from `limit.context` **when the row has none**;
     - set `max_output_tokens` from `limit.output` (informational);
     - set `reasoning_efforts` from the `effort` option's `values`, **when the row has none**;
   - rows without a match are left as they are.
+- **Anthropic has no list today.** `model_catalog_kind` returns `"unsupported"` for it (not `openai_compat`), so the user has to type the id by hand. In the `unsupported` branch of `provider_models_payload`, when the provider is in the map, return the models.dev models for it as an `available` list, with `source: "models.dev"`: id, label (`name`), `context_window`, `reasoning_efforts`. Use the same one-line commented hook. Also make the app's `catalogued` check accept that list: the app reads `row.model_catalog`, so check what the settings payload says for Anthropic and change only what is needed. Say in the report what you changed.
 - **Hook:** in `provider_models_payload`, at the OpenAI-compatible path (after `_extract_model_rows`), call the enrichment. The call is one line plus a `# Fork (nanobot/ext/model_info.py): …` comment, with the import inside the function, as in `nanobot/channels/websocket/runtime.py:702-727`. Reuse the `http_get` the function already receives.
 - **Tests** (`tests/ext/test_model_info.py`), with fake `http_get` and `tmp_path`:
   - context and efforts are filled for a matching id;
