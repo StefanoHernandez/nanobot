@@ -113,6 +113,7 @@ type Runtime = {
   loadedOnce: boolean;
   olderEvents: ThreadProjectionEvent[];
   newestEvents: ThreadProjectionEvent[];
+  compactionBeforeTokens?: number;
 };
 
 export function createThreadStore() {
@@ -211,14 +212,13 @@ export function createThreadStore() {
           const currentBeforeTokens = latestContextUsage(curMsgs)?.contextTokens;
           project(key, ev);
           if (ev.phase === "started") {
-            (rtOf(key) as unknown as { lastCompactionBeforeTokens?: number }).lastCompactionBeforeTokens = currentBeforeTokens;
+            rtOf(key).compactionBeforeTokens = currentBeforeTokens;
             patch(key, (s) => ({
               notices: notice(s.notices, { kind: "compaction", text: i18n.t("thread.compaction.started", { defaultValue: "Compattazione in corso…" }) }, ["compaction"]),
             }));
           } else {
-            const rtExt = rtOf(key) as unknown as { lastCompactionBeforeTokens?: number };
-            const beforeTokens = rtExt.lastCompactionBeforeTokens ?? currentBeforeTokens;
-            rtExt.lastCompactionBeforeTokens = undefined;
+            const beforeTokens = rtOf(key).compactionBeforeTokens ?? currentBeforeTokens;
+            rtOf(key).compactionBeforeTokens = undefined;
             patch(key, (s) => ({ notices: notice(s.notices, null, ["compaction"]) }));
             if (ev.phase === "succeeded") {
               const compId = `compaction-${ev.compaction_id}`;
