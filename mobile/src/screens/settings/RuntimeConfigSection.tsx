@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { KeyboardAvoidingView, StyleSheet, Switch, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, View } from "react-native";
 import type { NanobotFeaturesPayload, RuntimeConfigValue } from "@/lib/types";
 import { useT } from "../../i18n";
 import {
@@ -11,6 +11,10 @@ import { Button, Dialog, ListItem, TextField, toast } from "../../ui/components"
 import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 import { NetworkSafetyCard } from "./NetworkSafetyCard";
+
+/** The web app opened on the gateway host itself (e.g. over xrdp): the server accepts host-only settings from it. */
+const onGatewayHost = () =>
+  Platform.OS === "web" && ["localhost", "127.0.0.1", "[::1]"].includes(globalThis.location?.hostname ?? "");
 
 const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const asText = (v: RuntimeConfigValue | undefined) => (Array.isArray(v) ? v.join("\n") : v == null ? "" : String(v));
@@ -80,7 +84,7 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
     const cur = values[f.path];
     const err = errors[f.path];
     const errText = err ? <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, paddingHorizontal: 16, marginTop: 4 }}>{err}</Text> : null;
-    if (f.disabledOnRemote) {
+    if (f.disabledOnRemote && !onGatewayHost()) {
       return <ListItem key={f.path} title={label} subtitle={t("system.remoteOnly")} right={<Switch accessibilityLabel={label} value={cur === true} disabled />} />;
     }
     if (f.kind === "boolean") {

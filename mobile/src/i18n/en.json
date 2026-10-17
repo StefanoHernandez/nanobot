@@ -727,7 +727,7 @@
     "restartRow": "Restart nanobot",
     "restartHint": "Apply saved changes by restarting the server",
     "features": "Features",
-    "remoteOnly": "Not editable from mobile",
+    "remoteOnly": "Only on the server: open the app from http://localhost",
     "save": "Save {{group}}",
     "confirmTitle": "Confirm risky change",
     "confirmApply": "Apply change",

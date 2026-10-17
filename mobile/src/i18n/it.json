@@ -727,7 +727,7 @@
     "restartRow": "Riavvia nanobot",
     "restartHint": "Applica le modifiche salvate riavviando il server",
     "features": "Funzionalità",
-    "remoteOnly": "Non modificabile da mobile",
+    "remoteOnly": "Si cambia solo sul server: apri l'app da http://localhost",
     "save": "Salva {{group}}",
     "confirmTitle": "Conferma modifica rischiosa",
     "confirmApply": "Applica modifica",
