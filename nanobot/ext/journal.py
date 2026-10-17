@@ -367,16 +367,13 @@ def sync_journal_job(cron: CronService, workspace: Path, tz_name: str | None) ->
     )
 
 
-def prune_journal_sessions(sessions: SessionManager, *, keep: int = 10) -> None:
-    with sessions.locked_session_files() as sessions_dir:
-        files: list[tuple[Path, str]] = []
-        for path in sessions_dir.glob("*.jsonl"):
-            key = SessionManager.decode_storage_key(path.stem)
-            if key is not None and key.startswith("journal:"):
-                files.append((path, key))
-        files.sort(key=lambda item: item[0].stat().st_mtime)
-        for _path, key in files[: max(0, len(files) - keep)]:
-            sessions.delete_session(key)
+async def prune_journal_sessions(sessions: SessionManager, *, keep: int = 10) -> None:
+    """Keep the newest journal sessions, as ``SessionState.prune_dream_sessions`` does for Dream."""
+    state = sessions.state
+    rows = await state.list_sessions()  # newest first
+    keys = [str(row.get("key") or "") for row in rows]
+    for key in [k for k in keys if k.startswith("journal:")][keep:]:
+        await state.delete(key)
 
 
 def agent_turn(agent: Any) -> _Turn:
@@ -408,7 +405,7 @@ def agent_turn(agent: Any) -> _Turn:
         try:
             resp = await agent.process_direct(prompt, **direct_kwargs)
         finally:
-            prune_journal_sessions(agent.sessions)
+            await prune_journal_sessions(agent.sessions)
         content = getattr(resp, "content", "") if resp is not None else ""
         return content if isinstance(content, str) else ""
 
