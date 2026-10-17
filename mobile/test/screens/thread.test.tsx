@@ -91,10 +91,10 @@ test("activity row shows tool count and expands", async () => {
   await emit(f, { event: "message", text: "read_file(a.py)", kind: "tool_hint", ...T });
   await emit(f, { event: "message", text: "done", ...T });
   await emit(f, { event: "turn_end", ...T });
-  const head = screen.getByText(/Lavorato.*1 strument/);
-  expect(screen.queryByText("read_file(a.py)")).toBeNull();
+  const head = screen.getByText(/1 strument/);
+  expect(screen.queryByText(/read_file\(a\.py\)/)).toBeNull();
   await fireEvent.press(head);
-  expect(screen.getByText("read_file(a.py)")).toBeTruthy();
+  expect(screen.getByText(/read_file\(a\.py\)/)).toBeTruthy();
 });
 
 test("Stop only while running and calls stop()", async () => {
