@@ -33,6 +33,7 @@ export type BackupState = {
   create: () => Promise<boolean>;
   remove: (name: string) => Promise<boolean>;
   restore: (name: string) => Promise<RestoreBackupResponse | null>;
+  saveDir: (dir: string) => Promise<boolean>;
   reset: () => void;
 };
 
@@ -49,6 +50,9 @@ export function backupErrorKey(err: unknown): string {
   }
   if (code === "unsafe_archive") {
     return "backup.unsafe";
+  }
+  if (code === "invalid_dir" || status === 400) {
+    return "backup.invalidDir";
   }
   return "common.operationFailed";
 }
@@ -154,6 +158,27 @@ export async function restoreBackupRequest(
   return (await res.json()) as RestoreBackupResponse;
 }
 
+export async function saveBackupSettingsRequest(
+  session: NanobotSession,
+  dir: string,
+): Promise<{ ok: boolean; dir?: string }> {
+  const root = session.baseUrl.replace(/\/+$/, "");
+  const res = await fetch(`${root}/api/ext/backup/settings`, {
+    method: "POST",
+    redirect: "error",
+    credentials: "omit",
+    headers: {
+      Authorization: `Bearer ${session.apiToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ dir }),
+  });
+  if (!res.ok) {
+    throw await parseError(res);
+  }
+  return (await res.json()) as { ok: boolean; dir?: string };
+}
+
 let generation = 0;
 
 export const backupStore = createStore<BackupState>((set, get) => ({
@@ -248,6 +273,24 @@ export const backupStore = createStore<BackupState>((set, get) => ({
       if (sessionStore.getState().profile?.id === profileId) {
         set({ acting: null });
       }
+    }
+  },
+
+  saveDir: async (dir: string) => {
+    const session = sessionStore.getState().session;
+    const profileId = sessionStore.getState().profile?.id;
+    if (!session) return false;
+
+    set({ error: null });
+    try {
+      await saveBackupSettingsRequest(session, dir);
+      if (sessionStore.getState().profile?.id !== profileId) return false;
+      await get().refresh();
+      return true;
+    } catch (err) {
+      if (sessionStore.getState().profile?.id !== profileId) return false;
+      set({ error: backupErrorKey(err) });
+      return false;
     }
   },
 

@@ -1201,7 +1201,12 @@
     "restoreConfirm": "Restore",
     "inProgress": "Backup already in progress",
     "notNanobot": "The file is not a nanobot backup",
-    "unsafe": "Unsafe archive"
+    "unsafe": "Unsafe archive",
+    "dirLabel": "Backup directory",
+    "dirHint": "Recommended: a folder on the SD card, e.g. /media/arduino/agentsd/nanobot-backups",
+    "saveDir": "Save",
+    "dirSaved": "Directory saved",
+    "invalidDir": "Invalid or unwritable directory"
   },
   "prompts": {
     "title": "Prompts",

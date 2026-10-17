@@ -985,5 +985,56 @@ describe("BK-A: Backup and Export", () => {
 
       expect(backupStore.getState().data).toBeNull();
     });
+
+    test("Backup directory field displays current dir, hint, and saves new dir via POST /api/ext/backup/settings", async () => {
+      const f = fakeSession();
+      sessionStore.setState({ session: f.session });
+
+      const fetchMock = jest.fn(async (url: string, opts?: any) => {
+        if (url.endsWith("/api/ext/backup/settings")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, dir: "/media/arduino/agentsd/nanobot-backups" }),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => sampleBackupPayload,
+        };
+      });
+      global.fetch = fetchMock as never;
+
+      await wrap(<BackupSection />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Cartella dei backup")).toBeTruthy();
+        expect(screen.getByText("Consigliato: una cartella sulla SD, es. /media/arduino/agentsd/nanobot-backups")).toBeTruthy();
+      });
+
+      // Initially input has current dir
+      const dirInput = screen.getByDisplayValue("/home/user/.nanobot/backups");
+      expect(dirInput).toBeTruthy();
+
+      // Change input
+      await fireEvent.changeText(dirInput, "/media/arduino/agentsd/nanobot-backups");
+
+      // Press save
+      const saveBtn = screen.getByRole("button", { name: "Salva" });
+      await act(async () => {
+        fireEvent.press(saveBtn);
+      });
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          "http://h/api/ext/backup/settings",
+          expect.objectContaining({
+            method: "POST",
+            body: JSON.stringify({ dir: "/media/arduino/agentsd/nanobot-backups" }),
+          }),
+        );
+      });
+    });
   });
 });

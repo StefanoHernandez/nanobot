@@ -137,3 +137,77 @@ async def test_http_create_and_restore_needs_confirm(home):
     name = json.loads(created.text)["backup"]["name"]
     assert (await handler(_post("/restore", {"name": name}, "api"))).status == 400
     assert (await handler(_post("/restore", {"name": name, "confirm": True}, "api"))).status == 200
+
+
+@pytest.mark.asyncio
+async def test_backup_settings_route_validation(home, tmp_path, monkeypatch):
+    handler = bk.backup_post_handler("master", _Tokens(), _fallback)
+    # relative
+    res = await handler(_post("/settings", {"dir": "relative/path"}, "api"))
+    assert res.status == 400
+    assert json.loads(res.text)["error"] == "invalid_dir"
+
+    # inside home
+    res = await handler(_post("/settings", {"dir": str(home / "sub")}, "api"))
+    assert res.status == 400
+    assert json.loads(res.text)["error"] == "invalid_dir"
+
+    # inside workspace
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    monkeypatch.setattr(bk, "_workspace_dir", lambda: ws)
+    res = await handler(_post("/settings", {"dir": str(ws / "sub")}, "api"))
+    assert res.status == 400
+    assert json.loads(res.text)["error"] == "invalid_dir"
+
+    # not writable (file path or unwritable parent)
+    unwritable = tmp_path / "read_only"
+    unwritable.mkdir()
+    unwritable.chmod(0o500)
+    try:
+        res = await handler(_post("/settings", {"dir": str(unwritable / "deep" / "backup")}, "api"))
+        assert res.status == 400
+        assert json.loads(res.text)["error"] == "invalid_dir"
+    finally:
+        unwritable.chmod(0o700)
+
+    # valid
+    sd = tmp_path / "sd" / "backups"
+    res = await handler(_post("/settings", {"dir": str(sd)}, "api"))
+    assert res.status == 200
+    assert bk.backup_dir().resolve() == sd.resolve()
+    assert json.loads((home / "backup.json").read_text()) == {"dir": str(sd)}
+
+
+def test_backup_with_external_workspace_contains_memory_git(home, tmp_path, monkeypatch):
+    ws = tmp_path / "external_workspace"
+    (ws / "memory" / ".git").mkdir(parents=True)
+    (ws / "memory" / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    (ws / "docs").mkdir()
+    (ws / "docs" / "plan.md").write_text("my external plan")
+    monkeypatch.setattr(bk, "_workspace_dir", lambda: ws)
+
+    entry = bk.create_backup()
+    archive = bk.backup_dir() / entry["name"]
+    names = _names(archive)
+    assert "workspace-external/docs/plan.md" in names
+    assert "workspace-external/memory/.git/HEAD" in names
+
+
+def test_max_backups_still_prunes_in_new_dir(home, tmp_path, monkeypatch):
+    new_dir = tmp_path / "new_backup_dir"
+    bk.validate_and_save_backup_dir(str(new_dir))
+    assert bk.backup_dir().resolve() == new_dir.resolve()
+
+    monkeypatch.setattr(bk, "MAX_BACKUPS", 2)
+    stamps = iter(["nanobot-20260101-000001.tar.gz", "nanobot-20260101-000002.tar.gz",
+                   "nanobot-20260101-000003.tar.gz"])
+    monkeypatch.setattr(bk.time, "strftime", lambda _fmt: next(stamps))
+    for _ in range(3):
+        bk.create_backup()
+
+    items = bk.list_backups()
+    assert [b["name"] for b in items] == [
+        "nanobot-20260101-000003.tar.gz", "nanobot-20260101-000002.tar.gz"]
+    assert len(list(new_dir.glob("nanobot-*.tar.gz"))) == 2
+
