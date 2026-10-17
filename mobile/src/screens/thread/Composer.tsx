@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { EffortPill } from "../../extras/EffortPill";
 import { PromptPickerSheet } from "../../extras/PromptPickerSheet";
 import { loadCommands, type Cmd } from "../../extras/logic";
+import { loadSkills } from "../../ecosystem/skills";
 import { useT } from "../../i18n";
 import { useSession } from "../../state/sessionStore";
 import { useThreadSlice } from "../../state/threadStore";
@@ -49,6 +50,7 @@ import type {
   OutboundMcpPresetMention,
   SessionMention,
   SettingsPayload,
+  SkillSummary,
 } from "@/lib/types";
 
 export function Composer({ chatKey }: { chatKey: string }) {
@@ -78,6 +80,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [commands, setCommands] = useState<Cmd[]>([]);
+  const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [cliApps, setCliApps] = useState<CliAppInfo[]>([]);
   const [mcpPresets, setMcpPresets] = useState<McpPresetInfo[]>([]);
   const [pickedSessions, setPickedSessions] = useState<SessionMention[]>([]);
@@ -92,6 +95,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
     let active = true;
     if (!session) {
       setCommands([]);
+      setSkills([]);
       setCliApps([]);
       setMcpPresets([]);
       return;
@@ -108,6 +112,14 @@ export function Composer({ chatKey }: { chatKey: string }) {
       })
       .catch(() => {
         if (active) setCommands([]);
+      });
+
+    loadSkills(session)
+      .then((s) => {
+        if (active) setSkills(s);
+      })
+      .catch(() => {
+        if (active) setSkills([]);
       });
 
     if (typeof session.get === "function") {
@@ -195,11 +207,17 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
   const trimmed = draft.trim();
   const isSlash = draft.startsWith("/") && !/[\s\n]/.test(draft);
+  const isDollar = draft.startsWith("$") && !/[\s\n]/.test(draft);
   const activeMention = getActiveMention(draft, cursor);
   const isMention = !!activeMention;
 
   const handleSelectCommand = (c: Cmd) => {
     handleDraftChange(`${c.command} `);
+    inputRef.current?.focus();
+  };
+
+  const handleSelectSkill = (s: SkillSummary) => {
+    handleDraftChange(`$${s.name} `);
     inputRef.current?.focus();
   };
 
@@ -378,8 +396,14 @@ export function Composer({ chatKey }: { chatKey: string }) {
         ) : null}
         <View style={[styles.container, th.bezel]}>
       <View style={[th.surface, { borderRadius: th.radius.lg, padding: 4 }]}>
-        {isSlash ? (
-          <SlashMenu query={draft} commands={commands} onSelect={handleSelectCommand} />
+        {isSlash || isDollar ? (
+          <SlashMenu
+            query={draft}
+            commands={commands}
+            skills={skills}
+            onSelect={handleSelectCommand}
+            onSelectSkill={handleSelectSkill}
+          />
         ) : isMention && activeMention ? (
           <MentionMenu
             chats={chats}
