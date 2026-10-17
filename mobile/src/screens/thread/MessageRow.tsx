@@ -31,6 +31,43 @@ function MessageRowImpl({ unit, live, chatKey, onLongPress }: Props) {
   if (unit.type === "activity") return <ActivityRow messages={unit.messages} live={live} startedAtMs={unit.startedAtMs} />;
   if (!m) return null;
 
+  if (m.kind === "compaction") {
+    const comp = m.compaction as { phase?: string; tokensBefore?: number; tokensAfter?: number } | undefined;
+    const phase = comp?.phase;
+    let label = t("thread.compaction.succeeded", { defaultValue: "Contesto compattato" });
+    if (phase === "failed") {
+      label = t("thread.compaction.failed", { defaultValue: "Compattazione non riuscita" });
+    } else if (phase === "cancelled") {
+      label = t("thread.compaction.cancelled", { defaultValue: "Compattazione annullata" });
+    } else if (phase === "succeeded") {
+      const before = comp?.tokensBefore;
+      const after = comp?.tokensAfter;
+      if (typeof before === "number" && typeof after === "number") {
+        const freed = Math.max(0, before - after);
+        label = t("thread.compaction.freed", {
+          defaultValue: `Contesto compattato · liberati ~${freed} token (da ${before} a ${after})`,
+          freed,
+          before,
+          after,
+        });
+      } else if (typeof after === "number") {
+        label = t("thread.compaction.afterOnly", {
+          defaultValue: `Contesto compattato · dopo: ${after} token`,
+          after,
+        });
+      } else {
+        label = t("thread.compaction.succeeded", { defaultValue: "Contesto compattato" });
+      }
+    }
+    return (
+      <View testID="compaction-divider" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12, paddingHorizontal: 16 }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: th.colors.border }} />
+        <Text style={{ color: phase === "failed" ? th.colors.destructive : th.colors.mutedForeground, fontSize: 12 }}>{label}</Text>
+        <View style={{ flex: 1, height: 1, backgroundColor: th.colors.border }} />
+      </View>
+    );
+  }
+
   if (m.role === "user")
     return (
       <View style={{ alignSelf: "flex-end", maxWidth: "85%", marginTop: 22, marginBottom: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: th.radius.md, borderBottomRightRadius: 6, backgroundColor: th.colors.userBubble, opacity: m.deliveryStatus === "sending" ? 0.6 : 1 }}>

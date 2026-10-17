@@ -4,12 +4,27 @@ const num = (v: unknown): v is number => typeof v === "number" && Number.isFinit
 
 /** Port of upstream ThreadShell latestComposerContextUsage: last finished assistant context_tokens, reset by a successful compaction. */
 export function latestContextUsage(messages: UIMessage[]): { contextTokens: number; contextWindowTokens: number | null } | null {
+  let fallbackWindow: number | null = null;
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (m.kind === "compaction" && m.compaction?.phase === "succeeded") return null;
+    if (m.role === "assistant" && num(m.contextWindowTokens)) {
+      fallbackWindow = m.contextWindowTokens;
+      break;
+    }
+  }
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.kind === "compaction" && m.compaction?.phase === "succeeded") {
+      const comp = m.compaction as { tokensAfter?: number };
+      if (num(comp.tokensAfter) && comp.tokensAfter >= 0) {
+        return { contextTokens: comp.tokensAfter, contextWindowTokens: fallbackWindow };
+      }
+      return null;
+    }
     const ct = m.usage?.context_tokens;
     if (m.role !== "assistant" || m.kind === "trace" || m.isStreaming || !num(ct) || ct < 0) continue;
-    return { contextTokens: ct, contextWindowTokens: num(m.contextWindowTokens) ? m.contextWindowTokens : null };
+    return { contextTokens: ct, contextWindowTokens: num(m.contextWindowTokens) ? m.contextWindowTokens : fallbackWindow };
   }
   return null;
 }
