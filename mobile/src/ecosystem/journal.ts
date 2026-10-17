@@ -38,7 +38,7 @@ export function normalizeJournal(raw: unknown): JournalIndex {
   }
   return {
     enabled: rec.enabled === true,
-    hour: typeof hour === "number" && Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 22,
+    hour: typeof hour === "number" && Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 3,
     model,
     days,
   };
