@@ -9,11 +9,11 @@ export function Head({ children }: { children: string }) {
 }
 
 /** Single-choice chips (>= 48 dp via Button). */
-export function Chips<T extends string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+export function Chips<T extends string>({ options, value, onChange }: { options: { value: T; label: string; icon?: React.ReactNode }[]; value: T; onChange: (v: T) => void }) {
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
       {options.map((o) => (
-        <Button key={o.value} title={o.label} variant={o.value === value ? "primary" : "secondary"} onPress={() => onChange(o.value)} />
+        <Button key={o.value} title={o.label} icon={o.icon} variant={o.value === value ? "primary" : "secondary"} onPress={() => onChange(o.value)} />
       ))}
     </View>
   );

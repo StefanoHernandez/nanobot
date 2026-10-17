@@ -11,6 +11,7 @@ import {
 import { SettingsError, useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
 import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
+import { ProviderIcon } from "../../ui/ProviderIcon";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head, HintSecretField, SecretField } from "./common";
 
@@ -34,7 +35,12 @@ export function ProvidersPanel() {
         <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
           {configured.map((p, idx) => (
             <View key={p.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
-              <ListItem title={p.label} subtitle={p.oauth_account ?? p.api_key_hint ?? t("providers.configured")} onPress={() => setSel(p.name)} />
+              <ListItem
+                left={<ProviderIcon provider={p.name} label={p.label} size={24} />}
+                title={p.label}
+                subtitle={p.oauth_account ?? p.api_key_hint ?? t("providers.configured")}
+                onPress={() => setSel(p.name)}
+              />
             </View>
           ))}
         </View>
@@ -46,11 +52,20 @@ export function ProvidersPanel() {
         <ScrollView style={{ maxHeight: 480 }}>
           {available.map((p, idx) => (
             <View key={p.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
-              <ListItem title={p.label} subtitle={t("providers.notConfigured")} onPress={() => setSel(p.name)} />
+              <ListItem
+                left={<ProviderIcon provider={p.name} label={p.label} size={24} />}
+                title={p.label}
+                subtitle={t("providers.notConfigured")}
+                onPress={() => setSel(p.name)}
+              />
             </View>
           ))}
           <View style={available.length > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
-            <ListItem title={t("providers.addCustom")} onPress={() => setSel(ADD_CUSTOM)} />
+            <ListItem
+              left={<ProviderIcon provider="custom" label={t("providers.addCustom")} size={24} />}
+              title={t("providers.addCustom")}
+              onPress={() => setSel(ADD_CUSTOM)}
+            />
           </View>
         </ScrollView>
       </Sheet>

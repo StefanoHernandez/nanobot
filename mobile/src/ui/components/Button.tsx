@@ -1,4 +1,5 @@
-import { AccessibilityRole, AccessibilityState, ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+import React from "react";
+import { AccessibilityRole, AccessibilityState, ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../ThemeProvider";
 
 export type ButtonProps = {
@@ -8,11 +9,12 @@ export type ButtonProps = {
   color?: string;
   disabled?: boolean;
   loading?: boolean;
+  icon?: React.ReactNode;
   accessibilityRole?: AccessibilityRole;
   accessibilityState?: AccessibilityState;
 };
 
-export function Button({ title, onPress, variant = "primary", color, disabled, loading, accessibilityRole, accessibilityState }: ButtonProps) {
+export function Button({ title, onPress, variant = "primary", color, disabled, loading, icon, accessibilityRole, accessibilityState }: ButtonProps) {
   const th = useTheme();
   const c = th.colors;
   let [bg, fg] = {
@@ -43,7 +45,16 @@ export function Button({ title, onPress, variant = "primary", color, disabled, l
         },
       ]}
     >
-      {loading ? <ActivityIndicator color={fg} /> : <Text style={{ color: fg, fontFamily: th.font.medium, fontSize: 15, letterSpacing: 0.2 }}>{title}</Text>}
+      {loading ? (
+        <ActivityIndicator color={fg} />
+      ) : icon ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {icon}
+          <Text style={{ color: fg, fontFamily: th.font.medium, fontSize: 15, letterSpacing: 0.2 }}>{title}</Text>
+        </View>
+      ) : (
+        <Text style={{ color: fg, fontFamily: th.font.medium, fontSize: 15, letterSpacing: 0.2 }}>{title}</Text>
+      )}
     </Pressable>
   );
 }
