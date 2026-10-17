@@ -253,6 +253,57 @@ test("provider request API selector saves api", async () => {
   await waitFor(() => expect(mutate.mock.calls[0][1]).toMatchObject({ api: { supported_apis: ["chat_completions", "responses"], preferred_api: "responses" } }));
 });
 
+test("editing an existing preset and picking another model updates the context window and shows hint", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
+  get.mockResolvedValue({
+    status: "available",
+    models: [{ id: "m-b", context_window: 200000 }, { id: "model-custom", context_window: 128000, max_tokens: 16384 }],
+  });
+  await show();
+  await fireEvent.press(screen.getByText("b"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.press(screen.getByText("Choose from list"));
+  await fireEvent.press(screen.getAllByText("model-custom").at(-1)!);
+  expect(screen.getByLabelText("Model").props.value).toBe("model-custom");
+  expect(screen.getByLabelText("Context window").props.value).toBe("128000");
+  expect(screen.getByLabelText("Max tokens").props.value).toBe("16384");
+  expect(screen.getAllByText("Set by the model").length).toBeGreaterThan(0);
+  await fireEvent.changeText(screen.getByLabelText("Context window"), "130000");
+  expect(screen.queryAllByText("Set by the model").length).toBe(1);
+});
+
+test("typing an exact id fills context window and max tokens", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
+  get.mockResolvedValue({
+    status: "available",
+    models: [{ id: "exact-model", context_window: 64000, max_tokens: 4096 }],
+  });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.changeText(screen.getByLabelText("Model"), "exact-model");
+  expect(screen.getByLabelText("Context window").props.value).toBe("64000");
+  expect(screen.getByLabelText("Max tokens").props.value).toBe("4096");
+  expect(screen.getAllByText("Set by the model").length).toBeGreaterThan(0);
+});
+
+test("an effort the new model does not have is reset", async () => {
+  settingsStore.getState().setData(base({
+    model_presets: [preset("b", { reasoning_effort: "high" })],
+    providers: [provider({ model_catalog: "remote" })],
+  }) as never);
+  get.mockResolvedValue({
+    status: "available",
+    models: [{ id: "low-only-model", context_window: 32000, reasoning_efforts: ["low", "minimal"] }],
+  });
+  await show();
+  await fireEvent.press(screen.getByText("b"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.changeText(screen.getByLabelText("Model"), "low-only-model");
+  expect(screen.getByLabelText("Model").props.value).toBe("low-only-model");
+  expect(screen.getByText("Default")).toBeTruthy();
+});
+
 describe("models for tasks (fork: subagent and Dream presets)", () => {
   const withTasks = (rc: Record<string, unknown>) =>
     base({ runtime_config: { "agents.defaults.subagent_model_preset": null, "agents.defaults.dream.model_override": null, ...rc } });

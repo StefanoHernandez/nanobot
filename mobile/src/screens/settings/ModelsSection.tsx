@@ -222,6 +222,9 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const [autoApi, setAutoApi] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const [ctxHint, setCtxHint] = useState(false);
+  const [maxTokensHint, setMaxTokensHint] = useState(false);
+
   const row = d.providers.find((p) => p.name === provider);
   const catalogued = !!row && row.model_catalog !== "unsupported" && row.configured;
   const cat = useProviderModels(catalogued ? provider : null);
@@ -232,6 +235,28 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const matches = allMatches.slice(0, INLINE_CAP);
   const efforts = info?.reasoning_efforts?.length ? info.reasoning_efforts : preset?.reasoning_effort_values ?? [];
   const supported = (info?.api ?? preset?.api)?.supported_apis ?? ((row?.request_apis ?? []).filter((a) => ["chat_completions", "responses", "anthropic_messages"].includes(a)) as ModelRequestAPI[]);
+
+  const applyModelDefaults = (id: string, catalogModels: typeof cat.models) => {
+    const m = catalogModels.find((x) => x.id === id);
+    if (!m) return;
+    if (m.context_window) {
+      setCtx(String(m.context_window));
+      setCtxHint(true);
+    }
+    const maxTok = (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_tokens
+      ?? (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_output_tokens
+      ?? (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_completion_tokens;
+    if (maxTok) {
+      setMaxTokens(String(maxTok));
+      setMaxTokensHint(true);
+    }
+    if (effort) {
+      const allowed = m.reasoning_efforts ?? [];
+      if (!allowed.includes(effort)) {
+        setEffort("");
+      }
+    }
+  };
 
   useEffect(() => {
     if (!d.model_api_resolution_supported || !session || !provider || !model) return setAutoApi(null);
@@ -244,8 +269,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const pickModel = (id: string) => {
     setModel(id);
     if (!nameTouched) setName(suggestPresetName(id));
-    const m = cat.models.find((x) => x.id === id);
-    if (m?.context_window && !preset) setCtx(String(m.context_window));
+    applyModelDefaults(id, cat.models);
   };
 
   const save = async () => {
@@ -331,8 +355,28 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
               <Chips options={[{ value: "", label: t("models.effortDefault") }, ...efforts.map((x) => ({ value: x, label: x }))]} value={effort} onChange={setEffort} />
             </>
           ) : null}
-          <TextField label={t("models.context")} value={ctx} onChangeText={setCtx} error={errors.contextWindowTokens} autoCapitalize="none" />
-          <TextField label={t("models.maxTokens")} value={maxTokens} onChangeText={setMaxTokens} error={errors.maxTokens} keyboardType="number-pad" />
+          <TextField
+            label={t("models.context")}
+            value={ctx}
+            onChangeText={(v) => {
+              setCtxHint(false);
+              setCtx(v);
+            }}
+            helper={ctxHint ? t("models.setByModel") : undefined}
+            error={errors.contextWindowTokens}
+            autoCapitalize="none"
+          />
+          <TextField
+            label={t("models.maxTokens")}
+            value={maxTokens}
+            onChangeText={(v) => {
+              setMaxTokensHint(false);
+              setMaxTokens(v);
+            }}
+            helper={maxTokensHint ? t("models.setByModel") : undefined}
+            error={errors.maxTokens}
+            keyboardType="number-pad"
+          />
           <TextField label={t("models.temperature")} value={temp} onChangeText={setTemp} error={errors.temperature} keyboardType="decimal-pad" />
           {supported.length > 1 ? (
             <>
@@ -381,6 +425,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
     return (v: string) => {
       set(v);
       if (!nameTouched) setName(suggestPresetName(v));
+      applyModelDefaults(v, cat.models);
     };
   }
 }

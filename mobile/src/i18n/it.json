@@ -508,6 +508,7 @@
     "noProviders": "Configura prima un provider",
     "searchHint": "Scrivi almeno 2 caratteri per cercare",
     "primaryNoDelete": "Il modello primario non puo essere eliminato",
+    "setByModel": "Impostato dal modello",
     "err": {
       "required": "Obbligatorio",
       "duplicate": "Esiste gia",
