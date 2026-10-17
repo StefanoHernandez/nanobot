@@ -33,7 +33,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const loadError = useStore(threadStore, (s) => !!s.threads[chatKey]?.loadError);
   const { session } = useSession();
   const conn = useStore(sessionStore, (s) => s.state);
-  const botName = useStore(sessionStore, (s) => s.profile?.name) || "nanobot";
+  const chatTitle = useStore(chatsStore, (s) => s.chats.find((c) => c.key === chatKey)?.title) || "Nuova chat";
   const last = messages[messages.length - 1];
   const face = faceStateOf(conn, running, !!last && last.kind === "trace", !!notices.some((n) => n.kind === "stream_error"));
 
@@ -76,7 +76,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
         <IconButton icon="arrow-left" accessibilityLabel={t("thread.back")} onPress={onBack} />
         <BotFace state={face} />
         <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
-          <Text numberOfLines={1} accessibilityRole="header" style={{ color: th.colors.foreground, fontFamily: th.font.display, fontSize: 18, lineHeight: 22 }}>{botName}</Text>
+          <Text numberOfLines={1} accessibilityRole="header" style={{ color: th.colors.foreground, fontFamily: th.font.display, fontSize: 18, lineHeight: 22 }}>{chatTitle}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <ModelBadge chatKey={chatKey} preset={preset} model={model} />
             {face !== "idle" ? (

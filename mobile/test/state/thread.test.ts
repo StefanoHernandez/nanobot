@@ -123,7 +123,7 @@ test("notices: retry, compaction, fallback model", async () => {
   expect(slice(store).notices.map((n) => n.kind)).toEqual(["retry"]);
   f.emit("c1", { event: "delta", text: "ok", ...turn });
   expect(slice(store).notices).toEqual([]);
-  f.emit("c1", { event: "context_compaction", compaction_id: "k1", phase: "succeeded", ...turn });
+  f.emit("c1", { event: "context_compaction", compaction_id: "k1", phase: "started", ...turn });
   f.emit("c1", { event: "turn_model_updated", model_name: "m2", model_preset: "fast", fallback: true });
   expect(slice(store).notices.map((n) => n.kind)).toEqual(["compaction", "fallback"]);
   expect(slice(store)).toMatchObject({ model: "m2", preset: "fast" });
