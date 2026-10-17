@@ -71,7 +71,6 @@ BACKFILL_CONTENT = "[Tool result unavailable — call was interrupted or lost]"
 PLACEHOLDER_TEXTS = frozenset({
     "[Previous assistant message omitted.]",
 })
-
 _PreparationArgs = ParamSpec("_PreparationArgs")
 _PreparationResult = TypeVar("_PreparationResult")
 
@@ -95,6 +94,16 @@ class ContextWindowExceededError(RuntimeError):
             "Model input exceeds the local context budget "
             f"for {session_key or 'default'}: {estimated_tokens}/{input_budget} via {source}"
         )
+
+
+def _request_extends_measured(
+    measured: list[dict[str, Any]],
+    current: list[dict[str, Any]],
+) -> bool:
+    """Return whether measured messages are an unchanged prefix of the request."""
+    return len(current) >= len(measured) and all(
+        current[index] == measured[index] for index in range(len(measured))
+    )
 
 
 def _tool_call_name_is_valid(tool_call: Any) -> bool:
@@ -233,17 +242,6 @@ class ContextCompactionState:
         request_messages: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         return deepcopy(request_messages[len(self.accepted_messages):])
-
-    def accept_request(
-        self,
-        model_messages: list[dict[str, Any]],
-        *,
-        raw_boundary: int,
-    ) -> None:
-        """Advance H after the provider has received one request."""
-        self.accepted_messages = deepcopy(model_messages)
-        self.raw_accepted_boundary = raw_boundary
-
 
 @dataclass(slots=True)
 class ModelRequestState:
@@ -463,6 +461,7 @@ class ContextGovernor:
         usage: LLMUsage | None,
         *,
         usage_matches_messages: bool,
+        usage_prefixes_messages: bool,
         tool_definitions: list[dict[str, Any]] | None,
         request_context_tokens: int | None = None,
     ) -> tuple[int, str] | None:
@@ -487,6 +486,15 @@ class ContextGovernor:
                 messages,
                 tool_definitions,
             )
+            if (
+                usage_prefixes_messages
+                and usage is not None
+                and usage.reported_tokens > 0
+                and usage.context_tokens is not None
+                and usage.context_tokens > measured
+            ):
+                measured = usage.context_tokens
+                source = "prior provider usage plus pending messages"
         if budget > 0 and measured < budget:
             return None
         return measured, source
@@ -694,11 +702,17 @@ class ContextGovernor:
             and prepared == state.messages
             and tool_definitions == state.tool_definitions
         )
+        usage_prefixes_messages = (
+            state.messages is not None
+            and tool_definitions == state.tool_definitions
+            and _request_extends_measured(state.messages, prepared)
+        )
         pressure = await self.prepare_in_background(
             self.request_pressure, state.config,
             prepared,
             state.usage,
             usage_matches_messages=usage_matches_messages,
+            usage_prefixes_messages=usage_prefixes_messages,
             tool_definitions=tool_definitions,
             request_context_tokens=request_context_tokens,
         )
