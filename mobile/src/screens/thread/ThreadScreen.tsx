@@ -35,7 +35,8 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const conn = useStore(sessionStore, (s) => s.state);
   const botName = useStore(sessionStore, (s) => s.profile?.name) || "nanobot";
   const last = messages[messages.length - 1];
-  const face = faceStateOf(conn, running, !!last && last.kind === "trace", !!notices.some((n) => n.kind === "stream_error"));
+  const isStreaming = running && messages.some((m) => m.role === "assistant" && !!m.isStreaming && m.kind !== "trace");
+  const face = faceStateOf(conn, running, !!last && last.kind === "trace", notices.some((n) => n.kind === "stream_error"), isStreaming);
 
   const fileCount = React.useMemo(() => collectThreadFiles(messages, "").length, [messages]);
   const { scope, info } = useWorkspace(chatKey);
