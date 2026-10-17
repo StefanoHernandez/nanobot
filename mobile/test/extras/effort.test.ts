@@ -54,7 +54,7 @@ describe("loadEffortState", () => {
     const s = await loadEffortState(session, "websocket:abc");
     expect(s!.levels).toEqual(["low", "high"]);
   });
-  it("an empty list hides the pill", async () => {
+  it("an empty catalog list (levels unknown) falls back to the preset", async () => {
     const f = fakeSession({
       "/api/settings": { model_presets: [P("gpt", { provider: "p", model: "m", reasoning_effort_values: ["low", "high"] })] },
       "/api/sessions": { sessions: [{ key: "websocket:abc", model_preset: "gpt" }] },
@@ -64,7 +64,7 @@ describe("loadEffortState", () => {
       },
     });
     const s = await loadEffortState(f.session, "websocket:abc");
-    expect(s).toBeNull();
+    expect(s!.levels).toEqual(["low", "high"]);
   });
 });
 

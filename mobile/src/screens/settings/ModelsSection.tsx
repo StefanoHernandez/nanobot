@@ -257,7 +257,6 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [ctxHint, setCtxHint] = useState(false);
-  const [maxTokensHint, setMaxTokensHint] = useState(false);
 
   const row = d.providers.find((p) => p.name === provider);
   const catalogued = !!row && row.model_catalog !== "unsupported" && row.configured;
@@ -277,19 +276,8 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
       setCtx(String(m.context_window));
       setCtxHint(true);
     }
-    const maxTok = (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_tokens
-      ?? (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_output_tokens
-      ?? (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_completion_tokens;
-    if (maxTok) {
-      setMaxTokens(String(maxTok));
-      setMaxTokensHint(true);
-    }
-    if (effort) {
-      const allowed = m.reasoning_efforts ?? [];
-      if (!allowed.includes(effort)) {
-        setEffort("");
-      }
-    }
+    // An empty list means the catalog does not know the levels: keep the choice.
+    if (effort && m.reasoning_efforts?.length && !m.reasoning_efforts.includes(effort)) setEffort("");
   };
 
   useEffect(() => {
@@ -403,11 +391,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
           <TextField
             label={t("models.maxTokens")}
             value={maxTokens}
-            onChangeText={(v) => {
-              setMaxTokensHint(false);
-              setMaxTokens(v);
-            }}
-            helper={maxTokensHint ? t("models.setByModel") : undefined}
+            onChangeText={setMaxTokens}
             error={errors.maxTokens}
             keyboardType="number-pad"
           />
