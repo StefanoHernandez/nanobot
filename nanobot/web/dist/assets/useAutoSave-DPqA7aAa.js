@@ -1,0 +1,1 @@
+import{r as e}from"./react-vendor-CenIYebu.js";function a(i,u,n,s,c=!0){const o=e.useRef(s);o.current=s;const t=e.useRef(null),r=JSON.stringify(i);e.useEffect(()=>{if(!u){t.current=null;return}if(!c||n||t.current===r)return;const f=window.setTimeout(()=>{t.current=r,o.current()},600);return()=>window.clearTimeout(f)},[r,u,n,c])}export{a as u};
