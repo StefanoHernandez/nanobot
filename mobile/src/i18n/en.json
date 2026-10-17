@@ -496,11 +496,10 @@
   "models": {
     "title": "Call order",
     "primary": "Primary",
+    "help": "Disabled models are not used or proposed in chats. The first active model is the primary.",
+    "disabledTag": "disabled",
     "moveUp": "Move up {{name}}",
     "moveDown": "Move down {{name}}",
-    "remove": "Remove {{name}}",
-    "disabled": "Disabled",
-    "addToOrder": "Add to order",
     "variants": "{{n}} effort variants",
     "addPreset": "Add model",
     "migrate": "Convert legacy configuration",

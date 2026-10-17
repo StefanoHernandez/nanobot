@@ -496,11 +496,10 @@
   "models": {
     "title": "Ordine di chiamata",
     "primary": "Primario",
+    "help": "I modelli disattivati non vengono usati né proposti nelle chat. Il primo attivo è il principale.",
+    "disabledTag": "disattivato",
     "moveUp": "Sposta su {{name}}",
     "moveDown": "Sposta giu {{name}}",
-    "remove": "Rimuovi {{name}}",
-    "disabled": "Disattivati",
-    "addToOrder": "Aggiungi all'ordine",
     "variants": "{{n}} varianti di ragionamento",
     "addPreset": "Aggiungi modello",
     "migrate": "Converti la configurazione precedente",
