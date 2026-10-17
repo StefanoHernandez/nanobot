@@ -11,6 +11,7 @@ archive in its place and asks for a gateway restart.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import shutil
@@ -20,7 +21,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import web
 from loguru import logger
@@ -52,9 +53,98 @@ def home_dir() -> Path:
     return get_data_dir()
 
 
+def backup_settings_path() -> Path:
+    return home_dir() / "backup.json"
+
+
+def _load_backup_dir_from_settings() -> Path | None:
+    path = backup_settings_path()
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            dict_data = cast(dict[str, Any], data)
+            raw = dict_data.get("dir")
+            if isinstance(raw, str) and raw.strip():
+                p = Path(raw.strip()).expanduser()
+                if p.is_absolute():
+                    return p
+    except Exception:
+        return None
+    return None
+
+
 def backup_dir() -> Path:
     raw = os.environ.get("NANOBOT_BACKUP_DIR", "").strip()
-    return Path(raw).expanduser() if raw else home_dir().parent / "nanobot-backups"
+    if raw:
+        return Path(raw).expanduser()
+    from_file = _load_backup_dir_from_settings()
+    if from_file is not None:
+        return from_file
+    return home_dir().parent / "nanobot-backups"
+
+
+def _workspace_dir() -> Path | None:
+    path = home_dir() / "config.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            dict_data = cast(dict[str, Any], data)
+            agents = dict_data.get("agents")
+            if isinstance(agents, dict):
+                agents_dict = cast(dict[str, Any], agents)
+                defaults = agents_dict.get("defaults")
+                if isinstance(defaults, dict):
+                    defaults_dict = cast(dict[str, Any], defaults)
+                    raw = defaults_dict.get("workspace")
+                    if isinstance(raw, str) and raw.strip():
+                        return Path(raw.strip()).expanduser().resolve()
+    except Exception:
+        return None
+    return None
+
+
+def validate_and_save_backup_dir(raw_dir: object) -> Path:
+    if not isinstance(raw_dir, str) or not raw_dir.strip():
+        raise BackupError(400, "invalid_dir")
+    p = Path(raw_dir.strip())
+    if not p.is_absolute():
+        raise BackupError(400, "invalid_dir")
+
+    home = home_dir().resolve()
+    resolved = p.resolve()
+
+    if resolved == home or resolved.is_relative_to(home):
+        raise BackupError(400, "invalid_dir")
+
+    ws = _workspace_dir()
+    if ws is not None:
+        ws_resolved = ws.resolve()
+        if resolved == ws_resolved or resolved.is_relative_to(ws_resolved):
+            raise BackupError(400, "invalid_dir")
+
+    if not p.exists():
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            raise BackupError(400, "invalid_dir") from None
+    elif not p.is_dir():
+        raise BackupError(400, "invalid_dir")
+
+    test_file = p / f".write_test_{os.getpid()}_{int(time.time() * 1000)}"
+    try:
+        test_file.touch()
+        test_file.unlink(missing_ok=True)
+    except OSError:
+        raise BackupError(400, "invalid_dir") from None
+
+    path = backup_settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"dir": str(p)}), encoding="utf-8")
+    return p
 
 
 def _is_sqlite(path: Path) -> bool:
@@ -121,6 +211,24 @@ def create_backup() -> dict[str, Any]:
                             _add_sqlite(tar, path, arcname)
                         else:
                             tar.add(path, arcname=arcname, recursive=False)
+
+                ws = _workspace_dir()
+                if ws is not None and not ws.resolve().is_relative_to(home.resolve()) and ws.is_dir():
+                    for dirpath, dirnames, filenames in os.walk(ws):
+                        rel_dir = Path(dirpath).relative_to(ws)
+                        if rel_dir == Path("."):
+                            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+                        dirnames[:] = [d for d in dirnames if Path(dirpath, d).resolve() != root.resolve()]
+                        dirnames.sort()
+                        for name in sorted(filenames):
+                            path = Path(dirpath) / name
+                            if name.endswith(SKIP_SUFFIXES) or path.is_symlink() or not path.is_file():
+                                continue
+                            arcname = f"workspace-external/{rel_dir / name}" if rel_dir != Path(".") else f"workspace-external/{name}"
+                            if _is_sqlite(path):
+                                _add_sqlite(tar, path, arcname)
+                            else:
+                                tar.add(path, arcname=arcname, recursive=False)
             os.replace(part, target)
         except BaseException:
             part.unlink(missing_ok=True)
@@ -159,42 +267,66 @@ def restore_backup(name: Any) -> dict[str, Any]:
         archive = _path(name)
         aside = home.with_name(f"{home.name}.pre-restore-{time.strftime('%Y%m%d-%H%M%S')}")
         staging = Path(tempfile.mkdtemp(dir=home.parent, prefix=f".{home.name}.restore-"))
+
+        ws = _workspace_dir()
+        ws_is_external = ws is not None and not ws.resolve().is_relative_to(home.resolve()) and ws.is_dir()
+        staging_ws: Path | None = None
+        aside_ws: Path | None = None
+
         try:
             with tarfile.open(archive, "r:gz") as tar:
                 members = _safe_members(tar)
                 if not any(m.name == "config.json" for m in members):
                     raise BackupError(400, "not_a_nanobot_backup")
+
+                home_members = [m for m in members if not m.name.startswith("workspace-external/")]
+                ws_members = [m for m in members if m.name.startswith("workspace-external/")]
+
                 if hasattr(tarfile, "data_filter"):
-                    tar.extractall(staging, members=members, filter="data")
+                    tar.extractall(staging, members=home_members, filter="data")
                 else:
-                    tar.extractall(staging, members=members)
+                    tar.extractall(staging, members=home_members)
+
+                if ws_members and ws_is_external and ws is not None:
+                    staging_ws = Path(tempfile.mkdtemp(dir=ws.parent, prefix=f".{ws.name}.restore-"))
+                    for m in ws_members:
+                        m.name = m.name[len("workspace-external/") :]
+                    if hasattr(tarfile, "data_filter"):
+                        tar.extractall(staging_ws, members=ws_members, filter="data")
+                    else:
+                        tar.extractall(staging_ws, members=ws_members)
+
             os.chmod(staging, 0o700)
             home.rename(aside)
             staging.rename(home)
+
+            if staging_ws is not None and ws is not None:
+                os.chmod(staging_ws, 0o700)
+                aside_ws = ws.with_name(f"{ws.name}.pre-restore-{time.strftime('%Y%m%d-%H%M%S')}")
+                ws.rename(aside_ws)
+                staging_ws.rename(ws)
         except BaseException:
             shutil.rmtree(staging, ignore_errors=True)
+            if staging_ws is not None:
+                shutil.rmtree(staging_ws, ignore_errors=True)
             raise
     return {"ok": True, "restored": archive.name, "previous": aside.name, "restart_required": True}
 
 
 def _workspace_included(home: Path) -> bool:
-    try:
-        from nanobot.config.loader import load_config
-
-        workspace = Path(load_config().agents.defaults.workspace).expanduser().resolve()
-    except Exception:
-        return True
-    return workspace.is_relative_to(home.resolve())
+    return True
 
 
 def _payload() -> dict[str, Any]:
     home = home_dir()
-    usage = shutil.disk_usage(home)
+    bdir = backup_dir()
+    usage_target = bdir if bdir.is_dir() else home
+    usage = shutil.disk_usage(usage_target)
     return {
         "workspace_included": _workspace_included(home),
         "backups": list_backups(),
         "max_backups": MAX_BACKUPS,
-        "dir": str(backup_dir()).replace(str(Path.home()), "~", 1),
+        "dir": str(bdir).replace(str(Path.home()), "~", 1),
         "disk_free": usage.free,
     }
 
@@ -215,6 +347,9 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
         return web.json_response({"error": "unauthorized"}, status=401)
     try:
         body = await read_json(request)
+        if request.path == PREFIX + "/settings":
+            saved = await asyncio.to_thread(validate_and_save_backup_dir, body.get("dir"))
+            return web.json_response({"ok": True, "dir": str(saved)})
         if request.path == PREFIX + "/create":
             return web.json_response({"backup": await asyncio.to_thread(create_backup)})
         if request.path == PREFIX + "/delete":

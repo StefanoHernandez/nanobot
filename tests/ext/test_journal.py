@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -127,7 +127,7 @@ PRESETS = frozenset({"fast", "writer"})
 
 def test_settings_validation(tmp_path):
     workspace, _sessions_unused = _sessions(tmp_path)
-    assert journal.load_settings(workspace) == {"enabled": False, "hour": 22, "model": None}
+    assert journal.load_settings(workspace) == {"enabled": False, "hour": 3, "model": None}
     saved = journal.save_settings(workspace, {"enabled": True, "hour": 7}, preset_names=PRESETS)
     assert saved == {"enabled": True, "hour": 7, "model": None}
     assert journal.load_settings(workspace)["hour"] == 7
@@ -289,7 +289,7 @@ async def test_routes_list_day_and_run(tmp_path, monkeypatch):
     listing = journal.dispatch_journal_get(router, _get("/api/ext/journal"), "/api/ext/journal")
     assert listing is not None
     body = json.loads(listing.body.decode("utf-8"))
-    assert body["enabled"] is False and body["hour"] == 22 and body["model"] is None and body["days"] == []
+    assert body["enabled"] is False and body["hour"] == 3 and body["model"] is None and body["days"] == []
 
     missing = journal.dispatch_journal_get(
         router, _get("/api/ext/journal/day?date=2026-10-16"), "/api/ext/journal/day"
@@ -353,7 +353,7 @@ def test_job_is_scheduled_only_when_enabled(tmp_path):
 @pytest.mark.asyncio
 async def test_run_journal_job_writes_the_turn_and_does_not_deliver(tmp_path):
     workspace, sessions = _sessions(tmp_path)
-    _say(sessions, "websocket:chat", "user", "open question about backups", "2026-10-16T18:00:00")
+    _say(sessions, "websocket:chat", "user", "open question about backups", "2026-10-15T18:00:00")
     calls: list[str] = []
 
     class _Resp:
@@ -375,10 +375,12 @@ async def test_run_journal_job_writes_the_turn_and_does_not_deliver(tmp_path):
     try:
         await journal.run_journal_job(_Agent(), tz_name="UTC")
         assert calls == []  # off by default: a leftover job writes nothing
-        journal.save_settings(workspace, {"enabled": True, "hour": 22}, preset_names=frozenset())
+        journal.save_settings(workspace, {"enabled": True, "hour": 3}, preset_names=frozenset())
         await journal.run_journal_job(_Agent(), tz_name="UTC")
     finally:
         journal.local_today = original
     assert calls and "open question about backups" in calls[0]
-    text = (workspace / "memory" / "journal" / "2026-10-16.md").read_text(encoding="utf-8")
+    yesterday = monkey_day - timedelta(days=1)
+    assert not (workspace / "memory" / "journal" / f"{monkey_day.isoformat()}.md").exists()
+    text = (workspace / "memory" / "journal" / f"{yesterday.isoformat()}.md").read_text(encoding="utf-8")
     assert "Diario breve." in text

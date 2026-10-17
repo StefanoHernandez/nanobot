@@ -95,10 +95,10 @@ describe("Ecosystem memory screen", () => {
 
   test("the journal switch sends the settings", async () => {
     mockGet.mockImplementation(async (path: string) => {
-      if (String(path).includes("/api/ext/journal")) return { enabled: false, hour: 22, days: [] };
+      if (String(path).includes("/api/ext/journal")) return { enabled: false, hour: 3, days: [] };
       return memoryFixture;
     });
-    const fetchMock = jest.fn(async () => ({ ok: true, json: async () => ({ enabled: true, hour: 22 }) }));
+    const fetchMock = jest.fn(async () => ({ ok: true, json: async () => ({ enabled: true, hour: 3 }) }));
     global.fetch = fetchMock as unknown as typeof fetch;
     const view = await renderScreen();
     await act(async () => {
@@ -106,7 +106,38 @@ describe("Ecosystem memory screen", () => {
     });
     await fireEvent(view.getByLabelText("Automatic journal"), "valueChange", true);
     const firstCall = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
-    expect(JSON.parse(String(firstCall[1].body))).toEqual({ enabled: true, hour: 22 });
+    expect(JSON.parse(String(firstCall[1].body))).toEqual({ enabled: true, hour: 3 });
+  });
+
+  test("Write another day opens picker and calls runJournal with chosen date", async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal")) {
+        return { enabled: false, hour: 3, days: [] };
+      }
+      return memoryFixture;
+    });
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ date: "2026-10-10", written: true }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const view = await renderScreen();
+    await act(async () => {
+      fireEvent.press(await view.findByText("Journal"));
+    });
+    const otherBtn = await view.findByLabelText("Write another day");
+    expect(otherBtn).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(otherBtn);
+    });
+    const picker = view.getByTestId("journal-date-picker");
+    expect(picker).toBeTruthy();
+    await act(async () => {
+      fireEvent(picker, "onChange", { nativeEvent: { timestamp: new Date(2026, 9, 10).getTime() } });
+    });
+    const runCall = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
+    expect(String(runCall[0])).toContain("/api/ext/journal/run");
+    expect(JSON.parse(String(runCall[1].body))).toEqual({ date: "2026-10-10" });
   });
 
   test("Write today calls run and refreshes the list", async () => {
