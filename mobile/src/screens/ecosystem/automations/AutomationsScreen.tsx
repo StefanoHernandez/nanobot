@@ -8,14 +8,16 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
-import { IconButton, goBackOr } from "../../../ui/components";
+import { Button, IconButton, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toastEcosystemError } from "../../../ecosystem/common";
 import { groupByDay, useAutomations } from "../../../ecosystem/automations";
 import { AutomationRow } from "./AutomationRow";
 import { AutomationJobSheet } from "./AutomationJobSheet";
+import { NewAutomationSheet } from "./NewAutomationSheet";
 import type { SessionAutomationJob } from "@/lib/types";
 
 export function AutomationsScreen({ now }: { now?: number }) {
@@ -36,6 +38,7 @@ export function AutomationsScreen({ now }: { now?: number }) {
   } = useAutomations();
 
   const [selectedJob, setSelectedJob] = useState<SessionAutomationJob | null>(null);
+  const [showNewSheet, setShowNewSheet] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const activeJob = selectedJob ? (jobs.find((j) => j.id === selectedJob.id) ?? selectedJob) : null;
@@ -71,9 +74,14 @@ export function AutomationsScreen({ now }: { now?: number }) {
           accessibilityLabel={t("common.back", "Back")}
           onPress={() => goBackOr(router, "/ecosystem")}
         />
-        <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.display }]}>
+        <Text style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.display, flex: 1 }]}>
           {t("automations.title")}
         </Text>
+        <IconButton
+          icon="plus"
+          accessibilityLabel={t("automations.new", "Nuova automazione")}
+          onPress={() => setShowNewSheet(true)}
+        />
       </View>
 
       {error ? (
@@ -122,9 +130,14 @@ export function AutomationsScreen({ now }: { now?: number }) {
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+              <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular, marginBottom: 16 }]}>
                 {t("automations.empty")}
               </Text>
+              <Button
+                title={t("automations.new", "Nuova automazione")}
+                icon={<MaterialCommunityIcons name="plus" size={18} color={th.colors.primaryForeground} />}
+                onPress={() => setShowNewSheet(true)}
+              />
             </View>
           )
         }
@@ -141,6 +154,13 @@ export function AutomationsScreen({ now }: { now?: number }) {
         onUpdate={update}
         onChangeChat={changeChat}
         onFetchResult={fetchResult}
+        onRefresh={refresh}
+      />
+
+      {/* New Automation Sheet */}
+      <NewAutomationSheet
+        open={showNewSheet}
+        onClose={() => setShowNewSheet(false)}
         onRefresh={refresh}
       />
     </SafeAreaView>

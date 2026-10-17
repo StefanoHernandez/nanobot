@@ -85,6 +85,27 @@ export async function fetchAutomationRunResult(
   return session.get<{ response: string | null }>(`/api/webui/automations/result?${query}`);
 }
 
+export type CreateAutomationPayload = {
+  name?: string;
+  message: string;
+  schedule: {
+    kind: "at" | "every" | "cron";
+    at_ms?: number;
+    every_ms?: number;
+    expr?: string;
+    tz?: string;
+  };
+  session_key: string;
+};
+
+export async function createAutomation(
+  session: NanobotSession,
+  payload: CreateAutomationPayload,
+): Promise<SessionAutomationJob> {
+  return session.post<SessionAutomationJob>("/api/ext/automations/create", payload);
+}
+
+
 function toSnakeCaseUpdate(values: any): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (values.name !== undefined) out.name = values.name;
@@ -252,6 +273,17 @@ export function useAutomations() {
     [session],
   );
 
+  const create = useCallback(
+    async (payload: CreateAutomationPayload) => {
+      if (!session) throw new Error("No session");
+      const job = await createAutomation(session, payload);
+      await refresh();
+      return job;
+    },
+    [session, refresh],
+  );
+
+
   const jobs = (data?.jobs ?? []).filter((j) => !j.protected);
 
   return {
@@ -266,5 +298,6 @@ export function useAutomations() {
     update,
     changeChat,
     result,
+    create,
   };
 }
