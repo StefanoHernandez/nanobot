@@ -98,18 +98,88 @@ test("deferred providers search only after 2 characters", async () => {
   expect(screen.getByText("llama3")).toBeTruthy();
 });
 
-test("the model list shows 30 matches and says how many more there are", async () => {
+test("inline model suggestions cap at 8 with no more-models line", async () => {
   settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
   get.mockResolvedValue({ status: "available", models: Array.from({ length: 40 }, (_, i) => ({ id: `gpt-${i}` })) });
   await show();
   await fireEvent.press(screen.getByText("Add model"));
   await waitFor(() => expect(screen.getByText("gpt-0")).toBeTruthy());
-  expect(screen.getByText("gpt-29")).toBeTruthy();
-  expect(screen.queryByText("gpt-30")).toBeNull();
-  expect(screen.getByText("10 more models: type to search")).toBeTruthy();
+  expect(screen.getByText("gpt-7")).toBeTruthy();
+  expect(screen.queryByText("gpt-8")).toBeNull();
+  expect(screen.queryByText(/more models/)).toBeNull();
   await fireEvent.changeText(screen.getByLabelText("Model"), "gpt-3");
   expect(screen.getByText("gpt-35")).toBeTruthy();
-  expect(screen.queryByText(/more models/)).toBeNull();
+});
+
+test("the model picker lists the full catalog with search", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
+  get.mockResolvedValue({ status: "available", models: Array.from({ length: 300 }, (_, i) => ({ id: `gpt-${i}` })) });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.press(screen.getByText("Choose from list"));
+  expect(screen.getByText("300 models")).toBeTruthy();
+  await fireEvent.changeText(screen.getByLabelText("Search"), "gpt-299");
+  expect(screen.getByText("gpt-299")).toBeTruthy();
+});
+
+test("picker search filters by id and label and shows count of total", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
+  get.mockResolvedValue({
+    status: "available",
+    models: [{ id: "m1", label: "Alpha One" }, { id: "m2", label: "Beta Two" }],
+  });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.press(screen.getByText("Choose from list"));
+  await fireEvent.changeText(screen.getByLabelText("Search"), "alpha");
+  expect(screen.getByText("1 of 2")).toBeTruthy();
+  expect(screen.getAllByText("m1").length).toBeGreaterThan(0);
+});
+
+test("deferred provider shows models in the picker without typing in the model field", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ name: "openrouter", label: "OpenRouter", model_catalog: "remote" })] }) as never);
+  get.mockResolvedValue({ status: "available", models: [{ id: "or-model-a" }, { id: "or-model-b" }] });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  expect(screen.queryByText("or-model-a")).toBeNull();
+  await fireEvent.press(screen.getByText("Choose from list"));
+  expect(screen.getByText("or-model-a")).toBeTruthy();
+});
+
+test("picking a model fills fields and closes the picker", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
+  get.mockResolvedValue({ status: "available", models: [{ id: "big-model", context_window: 200000 }] });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.press(screen.getByText("Choose from list"));
+  await fireEvent.press(screen.getAllByText("big-model").at(-1)!);
+  expect(screen.getByLabelText("Model").props.value).toBe("big-model");
+  expect(screen.getByLabelText("Context window").props.value).toBe("200000");
+  expect(screen.queryByLabelText("Search")).toBeNull();
+});
+
+test("empty or failed catalog shows retry and refresh refetches", async () => {
+  settingsStore.getState().setData(base({ providers: [provider({ model_catalog: "remote" })] }) as never);
+  get.mockRejectedValueOnce(new Error("network"));
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.press(screen.getByText("Choose from list"));
+  expect(screen.getByText("Could not load the models.")).toBeTruthy();
+  get.mockResolvedValue({ status: "available", models: [{ id: "recovered" }] });
+  await fireEvent.press(screen.getByText("Retry"));
+  await waitFor(() => expect(get.mock.calls.some((c) => String(c[0]).includes("refresh=1"))).toBe(true));
+  await waitFor(() => expect(screen.getAllByText("recovered").length).toBeGreaterThan(0));
+});
+
+test("choose from list is hidden when the provider has no catalog", async () => {
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  expect(screen.queryByText("Choose from list")).toBeNull();
 });
 
 test("provider key shows the hint and save omits api_key when untouched", async () => {
