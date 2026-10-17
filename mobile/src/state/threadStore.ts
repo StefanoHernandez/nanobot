@@ -46,6 +46,9 @@ export type ThreadSlice = {
   forkBoundary: number | null;
   /** Connection-owned chat: no history, no draft persistence, no workspace/subagents. */
   temporary: boolean;
+  hasMoreBefore?: boolean;
+  loadingOlder?: boolean;
+  beforeCursor?: string | null;
 };
 
 type SendFrameOpts = NonNullable<Parameters<NanobotSession["client"]["sendMessage"]>[3]>;
@@ -61,6 +64,7 @@ type S = {
   threads: Record<string, ThreadSlice>;
   load(session: NanobotSession, key: string): Promise<void>;
   unload(key: string): void;
+  loadOlder(key: string, session?: NanobotSession): Promise<void>;
   /** Leaving a chat: a temporary one is discarded on the server and forgotten locally (exactly once). */
   leave(session: NanobotSession, key: string): void;
   /** Deferred leave for effect cleanup: a quick remount (StrictMode, fast refresh) of the same key cancels it. */
@@ -76,7 +80,7 @@ type S = {
   cancelLeave(key: string): void;
 };
 
-const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false };
+const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false, hasMoreBefore: false, loadingOlder: false, beforeCursor: null };
 const LEAVE_DELAY_MS = 300;
 const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end"]);
 const threadPath = (key: string) => `/api/sessions/${encodeURIComponent(key)}/webui-thread`;
@@ -89,6 +93,10 @@ type Runtime = {
   buffer: InboundEvent[] | null;
   /** Id of the bubble that was still streaming when the run status last went null (drop/stop); else null. */
   reopenId: string | null;
+  session: NanobotSession | null;
+  loadedOnce: boolean;
+  olderEvents: ThreadProjectionEvent[];
+  newestEvents: ThreadProjectionEvent[];
 };
 
 export function createThreadStore() {
@@ -101,8 +109,17 @@ export function createThreadStore() {
   };
   const rtOf = (key: string): Runtime => {
     let rt = rts.get(key);
-    if (!rt) rts.set(key, (rt = { proj: createThreadProjectionState(), unsubs: [], gen: 0, buffer: null, reopenId: null }));
+    if (!rt) rts.set(key, (rt = { proj: createThreadProjectionState(), unsubs: [], gen: 0, buffer: null, reopenId: null, session: null, loadedOnce: false, olderEvents: [], newestEvents: [] }));
     return rt;
+  };
+
+  const eventKey = (ev: ThreadProjectionEvent): string => {
+    if (ev.projection_id) return ev.projection_id;
+    const anyEv = ev as Record<string, unknown>;
+    if (anyEv.turn_id && anyEv.event) {
+      return `${anyEv.event}:${anyEv.turn_id}:${anyEv.turn_seq ?? anyEv.text ?? anyEv.created_at_ms ?? ""}`;
+    }
+    return JSON.stringify(ev);
   };
 
   return createStore<S>((set, get) => {
@@ -246,10 +263,29 @@ export function createThreadStore() {
           throw e;
         });
         if (gen !== rt.gen) return;
+        rt.session = session;
         const payload = raw ? parseWebuiThreadPayload(raw) : null;
-        const history = payload ? projectThreadEvents(payload.events) : [];
+        const incomingEvents = payload?.events ?? [];
+        if (!rt.loadedOnce) {
+          rt.loadedOnce = true;
+          rt.olderEvents = [];
+          rt.newestEvents = incomingEvents;
+          patch(key, () => ({
+            hasMoreBefore: !!payload?.page?.has_more_before,
+            beforeCursor: payload?.page?.before_cursor ?? null,
+          }));
+        } else {
+          rt.newestEvents = incomingEvents;
+        }
+
+        const olderKeys = new Set(rt.olderEvents.map(eventKey));
+        const nonOverlappingNewest = rt.newestEvents.filter((e) => !olderKeys.has(eventKey(e)));
+        const allCanonicalEvents = [...rt.olderEvents, ...nonOverlappingNewest];
+        const history = allCanonicalEvents.length > 0 ? projectThreadEvents(allCanonicalEvents) : [];
         const fb = payload?.fork_boundary_event_index;
-        patch(key, () => ({ forkBoundary: typeof fb === "number" ? projectThreadEvents(payload!.events.slice(0, fb)).length : null }));
+        patch(key, () => ({
+          forkBoundary: typeof fb === "number" ? projectThreadEvents(allCanonicalEvents.slice(0, rt.olderEvents.length + fb)).length : null,
+        }));
         if (payload?.workspace_scope) workspaceStore.getState().setScope(key, payload.workspace_scope);
         const completed = payload?.completed_turn_ids ?? [];
         const hasPending = !!payload?.has_pending_tool_calls;
@@ -317,8 +353,11 @@ export function createThreadStore() {
       async load(session, key) {
         cancelLeave(key);
         get().unload(key);
-        patch(key, () => ({ temporary: chatsStore.getState().isTemporary(key) }));
         const rt = rtOf(key);
+        rt.loadedOnce = false;
+        rt.olderEvents = [];
+        rt.newestEvents = [];
+        patch(key, () => ({ temporary: chatsStore.getState().isTemporary(key) }));
         rt.buffer = []; // before onChat: vendor flushes queued inbound frames synchronously on subscribe
         if (isWritable(key)) {
           const chatId = chatIdOf(key);
@@ -354,9 +393,52 @@ export function createThreadStore() {
         if (!rt) return;
         rt.gen++;
         rt.buffer = null;
-        if (get().threads[key]) patch(key, () => ({ hydrating: false }));
+        if (get().threads[key]) patch(key, () => ({ hydrating: false, loadingOlder: false }));
         rt.unsubs.forEach((u) => u());
         rt.unsubs = [];
+      },
+
+      async loadOlder(key, session) {
+        const rt = rtOf(key);
+        const s = session ?? rt.session;
+        const cur = get().threads[key] ?? EMPTY;
+        if (!s || cur.loadingOlder || !cur.hasMoreBefore || !cur.beforeCursor) return;
+        const cursor = cur.beforeCursor;
+        patch(key, () => ({ loadingOlder: true }));
+        try {
+          const path = `${threadPath(key)}?before=${encodeURIComponent(cursor)}`;
+          const raw = await s.get<unknown>(path).catch(() => null);
+          if (!raw) {
+            patch(key, () => ({ loadingOlder: false }));
+            return;
+          }
+          const payload = parseWebuiThreadPayload(raw);
+          const incomingEvents = payload.events ?? [];
+
+          const currentKeys = new Set([...rt.olderEvents, ...rt.newestEvents].map(eventKey));
+          const newOlderEvents = incomingEvents.filter((e) => !currentKeys.has(eventKey(e)));
+          rt.olderEvents = [...newOlderEvents, ...rt.olderEvents];
+
+          const olderKeys = new Set(rt.olderEvents.map(eventKey));
+          const nonOverlappingNewest = rt.newestEvents.filter((e) => !olderKeys.has(eventKey(e)));
+          const allCanonicalEvents = [...rt.olderEvents, ...nonOverlappingNewest];
+
+          const allHistory = projectThreadEvents(allCanonicalEvents);
+
+          const currentMessages = (get().threads[key] ?? EMPTY).messages;
+          const liveMessages = currentMessages.filter((m) => m.id.startsWith("live-") || m.isStreaming);
+          const messages = [...allHistory, ...liveMessages];
+
+          rt.proj = { ...rt.proj, messages };
+          patch(key, () => ({
+            messages,
+            hasMoreBefore: !!payload.page?.has_more_before,
+            beforeCursor: payload.page?.before_cursor ?? null,
+            loadingOlder: false,
+          }));
+        } catch {
+          patch(key, () => ({ loadingOlder: false }));
+        }
       },
 
       leave(session, key) {
@@ -471,6 +553,7 @@ export function useThreadSlice(key: string) {
   const slice = useStore(threadStore, (s) => s.threads[key] ?? EMPTY);
   return {
     ...slice,
+    loadOlder: () => (session ? threadStore.getState().loadOlder(key, session) : Promise.resolve()),
     send: (text: string, opts?: SendOpts) => !!session && threadStore.getState().send(session, key, text, opts),
     setPendingFiles: (files: LocalFile[]) => threadStore.getState().setPendingFiles(key, files),
     stop: () => session && threadStore.getState().stop(session, key),
