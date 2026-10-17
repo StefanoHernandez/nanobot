@@ -15,10 +15,13 @@ import type { InboundEvent, SessionMention, ThreadProjectionEvent, UIMessage } f
 import type { NanobotSession } from "../core/session";
 import { prepareImage, uploadFiles, validateFiles, type LocalFile } from "../core/upload";
 import { chatIdOf, chatsStore, isWritable } from "./chatsStore";
-import { useSession } from "./sessionStore";
+import { sessionStore, useSession } from "./sessionStore";
 import { subagentsStore } from "./subagentsStore";
 import { isStaleThreadSnapshot } from "./staleSnapshot";
 import { workspaceStore } from "./workspace";
+import { latestContextUsage } from "./usage";
+import { toast } from "../ui/components/Toast";
+import { i18n } from "../i18n";
 
 export type Notice = { kind: "compaction" | "recovery" | "fallback" | "stream_error" | "retry"; text: string };
 
@@ -46,6 +49,17 @@ export type ThreadSlice = {
   forkBoundary: number | null;
   /** Connection-owned chat: no history, no draft persistence, no workspace/subagents. */
   temporary: boolean;
+  hasMoreBefore?: boolean;
+  loadingOlder?: boolean;
+  beforeCursor?: string | null;
+  queuedMessages?: QueuedMessage[];
+  replyingTo?: UIMessage | null;
+};
+
+export type QueuedMessage = {
+  id: string;
+  text: string;
+  opts?: SendOpts;
 };
 
 type SendFrameOpts = NonNullable<Parameters<NanobotSession["client"]["sendMessage"]>[3]>;
@@ -55,12 +69,14 @@ export type SendOpts = {
   mcpPresets?: SendFrameOpts["mcpPresets"];
   sessionMentions?: SessionMention[];
   workspaceScope?: SendFrameOpts["workspaceScope"];
+  steer?: boolean;
 };
 
 type S = {
   threads: Record<string, ThreadSlice>;
   load(session: NanobotSession, key: string): Promise<void>;
   unload(key: string): void;
+  loadOlder(key: string, session?: NanobotSession): Promise<void>;
   /** Leaving a chat: a temporary one is discarded on the server and forgotten locally (exactly once). */
   leave(session: NanobotSession, key: string): void;
   /** Deferred leave for effect cleanup: a quick remount (StrictMode, fast refresh) of the same key cancels it. */
@@ -69,6 +85,10 @@ type S = {
   reset(): void;
   /** Returns true when the send started. With opts.files the upload is async: failures set sendError and mark the row failed; the draft and pendingFiles are cleared only on success. */
   send(session: NanobotSession, key: string, text: string, opts?: SendOpts): boolean;
+  sendQueuedNow(session: NanobotSession, key: string, id: string): void;
+  modifyQueued(key: string, id: string): void;
+  removeQueued(key: string, id: string): void;
+  setReplyingTo(key: string, message: UIMessage | null): void;
   setPendingFiles(key: string, files: LocalFile[]): void;
   stop(session: NanobotSession, key: string): void;
   setDraft(key: string, text: string): void;
@@ -76,9 +96,9 @@ type S = {
   cancelLeave(key: string): void;
 };
 
-const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false };
+const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false, hasMoreBefore: false, loadingOlder: false, beforeCursor: null, queuedMessages: [], replyingTo: null };
 const LEAVE_DELAY_MS = 300;
-const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end"]);
+const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end", "context_compaction"]);
 const threadPath = (key: string) => `/api/sessions/${encodeURIComponent(key)}/webui-thread`;
 
 type Runtime = {
@@ -89,20 +109,34 @@ type Runtime = {
   buffer: InboundEvent[] | null;
   /** Id of the bubble that was still streaming when the run status last went null (drop/stop); else null. */
   reopenId: string | null;
+  session: NanobotSession | null;
+  loadedOnce: boolean;
+  olderEvents: ThreadProjectionEvent[];
+  newestEvents: ThreadProjectionEvent[];
 };
 
 export function createThreadStore() {
   const rts = new Map<string, Runtime>();
   let ids = 0;
   const leaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const compactTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const cancelLeave = (key: string) => {
     clearTimeout(leaveTimers.get(key));
     leaveTimers.delete(key);
   };
   const rtOf = (key: string): Runtime => {
     let rt = rts.get(key);
-    if (!rt) rts.set(key, (rt = { proj: createThreadProjectionState(), unsubs: [], gen: 0, buffer: null, reopenId: null }));
+    if (!rt) rts.set(key, (rt = { proj: createThreadProjectionState(), unsubs: [], gen: 0, buffer: null, reopenId: null, session: null, loadedOnce: false, olderEvents: [], newestEvents: [] }));
     return rt;
+  };
+
+  const eventKey = (ev: ThreadProjectionEvent): string => {
+    if (ev.projection_id) return ev.projection_id;
+    const anyEv = ev as Record<string, unknown>;
+    if (anyEv.turn_id && anyEv.event) {
+      return `${anyEv.event}:${anyEv.turn_id}:${anyEv.turn_seq ?? anyEv.text ?? anyEv.created_at_ms ?? ""}`;
+    }
+    return JSON.stringify(ev);
   };
 
   return createStore<S>((set, get) => {
@@ -158,12 +192,58 @@ export function createThreadStore() {
             notices: notice(s.notices, failed ? { kind: "stream_error", text: ev.failure_message || "This turn failed and has ended." } : null, ["retry"]),
           }));
           rtOf(key).proj = resetThreadProjectionCursor(rtOf(key).proj, get().threads[key].messages);
+
+          const queue = get().threads[key]?.queuedMessages ?? [];
+          if (queue.length > 0) {
+            const [first, ...rest] = queue;
+            patch(key, () => ({ queuedMessages: rest }));
+            const s = rtOf(key).session ?? sessionStore.getState().session;
+            if (s) {
+              get().send(s, key, first.text, first.opts);
+            }
+          }
           return;
         }
-        case "context_compaction":
-          if (ev.phase !== "started")
-            patch(key, (s) => ({ notices: notice(s.notices, { kind: "compaction", text: ev.phase === "succeeded" ? "Context compacted" : `Context compaction ${ev.phase}` }, []) }));
+        case "context_compaction": {
+          clearTimeout(compactTimers.get(key));
+          compactTimers.delete(key);
+          const curMsgs = (get().threads[key] ?? EMPTY).messages;
+          const currentBeforeTokens = latestContextUsage(curMsgs)?.contextTokens;
+          project(key, ev);
+          if (ev.phase === "started") {
+            (rtOf(key) as unknown as { lastCompactionBeforeTokens?: number }).lastCompactionBeforeTokens = currentBeforeTokens;
+            patch(key, (s) => ({
+              notices: notice(s.notices, { kind: "compaction", text: i18n.t("thread.compaction.started", { defaultValue: "Compattazione in corso…" }) }, ["compaction"]),
+            }));
+          } else {
+            const rtExt = rtOf(key) as unknown as { lastCompactionBeforeTokens?: number };
+            const beforeTokens = rtExt.lastCompactionBeforeTokens ?? currentBeforeTokens;
+            rtExt.lastCompactionBeforeTokens = undefined;
+            patch(key, (s) => ({ notices: notice(s.notices, null, ["compaction"]) }));
+            if (ev.phase === "succeeded") {
+              const compId = `compaction-${ev.compaction_id}`;
+              const s = rtOf(key).session ?? sessionStore.getState().session;
+              if (s) {
+                void (async () => {
+                  try {
+                    const ctx = await s.get<{ estimated_session_tokens?: number }>(`/api/sessions/${encodeURIComponent(key)}/context`);
+                    const afterTokens = ctx?.estimated_session_tokens;
+                    if (typeof afterTokens === "number") {
+                      patch(key, (st) => ({
+                        messages: st.messages.map((m) =>
+                          m.id === compId
+                            ? { ...m, compaction: { ...m.compaction!, tokensBefore: beforeTokens, tokensAfter: afterTokens } }
+                            : m
+                        ),
+                      }));
+                    }
+                  } catch {}
+                })();
+              }
+            }
+          }
           return;
+        }
         case "retry_status":
           patch(key, (s) => ({
             running: ev.state === "recovered" || ev.state === "cleared" ? s.running : true,
@@ -246,10 +326,29 @@ export function createThreadStore() {
           throw e;
         });
         if (gen !== rt.gen) return;
+        rt.session = session;
         const payload = raw ? parseWebuiThreadPayload(raw) : null;
-        const history = payload ? projectThreadEvents(payload.events) : [];
+        const incomingEvents = payload?.events ?? [];
+        if (!rt.loadedOnce) {
+          rt.loadedOnce = true;
+          rt.olderEvents = [];
+          rt.newestEvents = incomingEvents;
+          patch(key, () => ({
+            hasMoreBefore: !!payload?.page?.has_more_before,
+            beforeCursor: payload?.page?.before_cursor ?? null,
+          }));
+        } else {
+          rt.newestEvents = incomingEvents;
+        }
+
+        const olderKeys = new Set(rt.olderEvents.map(eventKey));
+        const nonOverlappingNewest = rt.newestEvents.filter((e) => !olderKeys.has(eventKey(e)));
+        const allCanonicalEvents = [...rt.olderEvents, ...nonOverlappingNewest];
+        const history = allCanonicalEvents.length > 0 ? projectThreadEvents(allCanonicalEvents) : [];
         const fb = payload?.fork_boundary_event_index;
-        patch(key, () => ({ forkBoundary: typeof fb === "number" ? projectThreadEvents(payload!.events.slice(0, fb)).length : null }));
+        patch(key, () => ({
+          forkBoundary: typeof fb === "number" ? projectThreadEvents(allCanonicalEvents.slice(0, rt.olderEvents.length + fb)).length : null,
+        }));
         if (payload?.workspace_scope) workspaceStore.getState().setScope(key, payload.workspace_scope);
         const completed = payload?.completed_turn_ids ?? [];
         const hasPending = !!payload?.has_pending_tool_calls;
@@ -290,7 +389,27 @@ export function createThreadStore() {
           return;
         }
         rt.proj = createThreadProjectionState(history);
-        patch(key, () => ({ messages: history, running: active, loaded: true }));
+        patch(key, (s) => ({ messages: history, running: active, loaded: true, notices: notice(s.notices, null, ["compaction"]) }));
+        const lastUsageIdx = history.map((m, i) => m.role === "assistant" && typeof m.usage?.context_tokens === "number" && m.usage.context_tokens >= 0 ? i : -1).reduce((max, i) => Math.max(max, i), -1);
+        const lastCompactionIdx = history.map((m, i) => m.kind === "compaction" && m.compaction?.phase === "succeeded" ? i : -1).reduce((max, i) => Math.max(max, i), -1);
+        if (lastCompactionIdx >= 0 && lastCompactionIdx > lastUsageIdx) {
+          const targetId = history[lastCompactionIdx].id;
+          void (async () => {
+            try {
+              const ctx = await session.get<{ estimated_session_tokens?: number }>(`/api/sessions/${encodeURIComponent(key)}/context`);
+              const after = ctx?.estimated_session_tokens;
+              if (typeof after === "number") {
+                patch(key, (st) => ({
+                  messages: st.messages.map((m) =>
+                    m.id === targetId
+                      ? { ...m, compaction: { ...m.compaction!, tokensAfter: after } }
+                      : m
+                  ),
+                }));
+              }
+            } catch {}
+          })();
+        }
         if (writable && !active) {
           client.reconcileCanonicalCompletion(chatId, runGen, canonicalCompleted, snapshot);
           patch(key, () => ({ running: client.getRunStartedAt(chatId) != null }));
@@ -317,8 +436,11 @@ export function createThreadStore() {
       async load(session, key) {
         cancelLeave(key);
         get().unload(key);
-        patch(key, () => ({ temporary: chatsStore.getState().isTemporary(key) }));
         const rt = rtOf(key);
+        rt.loadedOnce = false;
+        rt.olderEvents = [];
+        rt.newestEvents = [];
+        patch(key, () => ({ temporary: chatsStore.getState().isTemporary(key) }));
         rt.buffer = []; // before onChat: vendor flushes queued inbound frames synchronously on subscribe
         if (isWritable(key)) {
           const chatId = chatIdOf(key);
@@ -350,13 +472,58 @@ export function createThreadStore() {
       },
 
       unload(key) {
+        clearTimeout(compactTimers.get(key));
+        compactTimers.delete(key);
         const rt = rts.get(key);
         if (!rt) return;
         rt.gen++;
         rt.buffer = null;
-        if (get().threads[key]) patch(key, () => ({ hydrating: false }));
+        if (get().threads[key]) patch(key, () => ({ hydrating: false, loadingOlder: false }));
         rt.unsubs.forEach((u) => u());
         rt.unsubs = [];
+      },
+
+      async loadOlder(key, session) {
+        const rt = rtOf(key);
+        const s = session ?? rt.session;
+        const cur = get().threads[key] ?? EMPTY;
+        if (!s || cur.loadingOlder || !cur.hasMoreBefore || !cur.beforeCursor) return;
+        const cursor = cur.beforeCursor;
+        patch(key, () => ({ loadingOlder: true }));
+        try {
+          const path = `${threadPath(key)}?before=${encodeURIComponent(cursor)}`;
+          const raw = await s.get<unknown>(path).catch(() => null);
+          if (!raw) {
+            patch(key, () => ({ loadingOlder: false }));
+            return;
+          }
+          const payload = parseWebuiThreadPayload(raw);
+          const incomingEvents = payload.events ?? [];
+
+          const currentKeys = new Set([...rt.olderEvents, ...rt.newestEvents].map(eventKey));
+          const newOlderEvents = incomingEvents.filter((e) => !currentKeys.has(eventKey(e)));
+          rt.olderEvents = [...newOlderEvents, ...rt.olderEvents];
+
+          const olderKeys = new Set(rt.olderEvents.map(eventKey));
+          const nonOverlappingNewest = rt.newestEvents.filter((e) => !olderKeys.has(eventKey(e)));
+          const allCanonicalEvents = [...rt.olderEvents, ...nonOverlappingNewest];
+
+          const allHistory = projectThreadEvents(allCanonicalEvents);
+
+          const currentMessages = (get().threads[key] ?? EMPTY).messages;
+          const liveMessages = currentMessages.filter((m) => m.id.startsWith("live-") || m.isStreaming);
+          const messages = [...allHistory, ...liveMessages];
+
+          rt.proj = { ...rt.proj, messages };
+          patch(key, () => ({
+            messages,
+            hasMoreBefore: !!payload.page?.has_more_before,
+            beforeCursor: payload.page?.before_cursor ?? null,
+            loadingOlder: false,
+          }));
+        } catch {
+          patch(key, () => ({ loadingOlder: false }));
+        }
       },
 
       leave(session, key) {
@@ -385,25 +552,73 @@ export function createThreadStore() {
         const files = opts.files ?? [];
         if (!isWritable(key) || (!text.trim() && !files.length)) return false;
         const rt = rtOf(key);
+        rt.session = session;
         if ((get().threads[key] ?? EMPTY).uploading) return false;
-        const running = (get().threads[key] ?? EMPTY).running;
+
+        if (files.length > 0) {
+          const lim = session.limits;
+          const v0 = validateFiles(files, { ...lim, max_file_bytes: Infinity, max_total_bytes: Infinity });
+          if (!v0.ok) {
+            patch(key, () => ({ sendError: v0.reason }));
+            return false;
+          }
+          const v1 = validateFiles(files, lim);
+          const hasOnlyImages = files.every((f) => f.mime.startsWith("image/"));
+          if (!v1.ok && !hasOnlyImages) {
+            patch(key, () => ({ sendError: v1.reason }));
+            return false;
+          }
+        }
+
+        const slice = get().threads[key] ?? EMPTY;
+        const replyingTo = slice.replyingTo;
+        let fullText = text;
+        if (replyingTo?.content) {
+          const raw = replyingTo.content;
+          const cut = raw.length > 500 ? raw.slice(0, 500) + "…" : raw;
+          const quoteLines = cut.split(/\r?\n/).map((l) => `> ${l}`).join("\n");
+          fullText = text ? `${quoteLines}\n\n${text}` : quoteLines;
+          patch(key, () => ({ replyingTo: null }));
+        }
+
+        const running = slice.running;
+
+        if (running && !opts.steer) {
+          const id = `${Date.now().toString(36)}-${++ids}`;
+          patch(key, (s) => ({
+            queuedMessages: [...(s.queuedMessages ?? []), { id, text: fullText, opts }],
+            draft: "",
+          }));
+          return true;
+        }
+
         const turnId = `${Date.now().toString(36)}-${++ids}`;
         const rowId = `local-${turnId}`;
-        const { files: _f, ...frameOpts } = opts;
+        const { files: _f, steer: _s, ...frameOpts } = opts;
         const options = { ...frameOpts, turnId, ...(running ? { startsNewRun: false } : {}) };
         patch(key, (s) => {
           // Guidance keeps the active answer cursor (useNanobotStream.ts:966); a fresh turn resets it.
           const base = { ...rt.proj, messages: s.messages };
           const proj = running ? clearThreadProjectionActivity(base) : resetThreadProjectionCursor(base, s.messages);
-          const row: UIMessage = { id: rowId, role: "user", content: text, turnId, turnPhase: "user", turnSeq: 0, deliveryStatus: "sending", createdAt: Date.now() };
+          const row: UIMessage = { id: rowId, role: "user", content: fullText, turnId, turnPhase: "user", turnSeq: 0, deliveryStatus: "sending", createdAt: Date.now() };
           if (files.length) row.media = files.map((f) => toMediaAttachment({ kind: f.mime.startsWith("image/") ? "image" : "file", url: f.uri, name: f.name }));
           const messages: UIMessage[] = [...s.messages, row];
           rt.proj = { ...proj, messages };
-          return { messages, running: true, stopped: false, sendError: null, uploading: files.length > 0, ...(files.length ? {} : { draft: "" }), notices: s.notices.filter((n) => n.kind !== "stream_error") };
+          return { messages, running: true, stopped: false, sendError: null, uploading: files.length > 0, ...(files.length ? {} : { draft: "" }), notices: s.notices.filter((n) => n.kind !== "stream_error" && n.kind !== "compaction") };
         });
-        chatsStore.getState().titleTemporary(key, text);
+        if (fullText.trim() === "/compact") {
+          clearTimeout(compactTimers.get(key));
+          compactTimers.set(
+            key,
+            setTimeout(() => {
+              compactTimers.delete(key);
+              toast.show(i18n.t("thread.compaction.nothingToCompact", { defaultValue: "Niente da compattare" }));
+            }, 10000)
+          );
+        }
+        chatsStore.getState().titleTemporary(key, fullText);
         if (!files.length) {
-          session.client.sendMessage(chatIdOf(key), text, undefined, options);
+          session.client.sendMessage(chatIdOf(key), fullText, undefined, options);
           return true;
         }
         void (async () => {
@@ -420,7 +635,7 @@ export function createThreadStore() {
             const refs = await uploadFiles(session, prepared);
             if (rts.get(key) !== rt) return;
             if (session.uploadCapability !== cap0) throw new Error("upload_unavailable");
-            session.client.sendMessage(chatIdOf(key), text, refs, options);
+            session.client.sendMessage(chatIdOf(key), fullText, refs, options);
             patch(key, (s) => ({ uploading: false, pendingFiles: [], ...(s.draft.trim() === text.trim() ? { draft: "" } : {}) }));
           } catch (e) {
             if (rts.get(key) !== rt) return;
@@ -433,6 +648,36 @@ export function createThreadStore() {
           }
         })();
         return true;
+      },
+
+      sendQueuedNow(session, key, id) {
+        const queue = get().threads[key]?.queuedMessages ?? [];
+        const item = queue.find((q) => q.id === id);
+        if (!item) return;
+        patch(key, (s) => ({
+          queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id),
+        }));
+        get().send(session, key, item.text, { ...item.opts, steer: true });
+      },
+
+      modifyQueued(key, id) {
+        const queue = get().threads[key]?.queuedMessages ?? [];
+        const item = queue.find((q) => q.id === id);
+        if (!item) return;
+        patch(key, (s) => ({
+          queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id),
+          draft: item.text,
+        }));
+      },
+
+      removeQueued(key, id) {
+        patch(key, (s) => ({
+          queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id),
+        }));
+      },
+
+      setReplyingTo(key, message) {
+        patch(key, () => ({ replyingTo: message }));
       },
 
       setPendingFiles(key, pendingFiles) {
@@ -471,6 +716,13 @@ export function useThreadSlice(key: string) {
   const slice = useStore(threadStore, (s) => s.threads[key] ?? EMPTY);
   return {
     ...slice,
+    queuedMessages: slice.queuedMessages ?? [],
+    replyingTo: slice.replyingTo ?? null,
+    setReplyingTo: (m: UIMessage | null) => threadStore.getState().setReplyingTo(key, m),
+    sendQueuedNow: (id: string) => session && threadStore.getState().sendQueuedNow(session, key, id),
+    modifyQueued: (id: string) => threadStore.getState().modifyQueued(key, id),
+    removeQueued: (id: string) => threadStore.getState().removeQueued(key, id),
+    loadOlder: () => (session ? threadStore.getState().loadOlder(key, session) : Promise.resolve()),
     send: (text: string, opts?: SendOpts) => !!session && threadStore.getState().send(session, key, text, opts),
     setPendingFiles: (files: LocalFile[]) => threadStore.getState().setPendingFiles(key, files),
     stop: () => session && threadStore.getState().stop(session, key),

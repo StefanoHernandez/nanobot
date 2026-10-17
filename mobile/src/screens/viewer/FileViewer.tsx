@@ -330,7 +330,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
       request,
     });
     sending.current = true;
-    const ok = threadStore.getState().send(session, chatKey, text);
+    const ok = threadStore.getState().send(session, chatKey, text, { steer: true });
     sending.current = false;
     if (!ok) {
       toast.show(t("artifact.sendFailed"));
