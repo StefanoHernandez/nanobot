@@ -11,6 +11,7 @@ import { parseJsonObject } from "../../settings/providers";
 import { SettingsError, useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
 import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
+import { ProviderIcon } from "../../ui/ProviderIcon";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 import { ProvidersPanel } from "./ProvidersPanel";
@@ -49,25 +50,33 @@ export function ModelsSection() {
     <>
       <Head>{t("models.title")}</Head>
       <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
-        {order.map((name, i) => (
-          <View key={`${name}-${i}`} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
-            <ListItem
-              title={name}
-              subtitle={byName.get(name)?.model}
-              left={i === 0 ? <Text style={{ backgroundColor: th.colors.brandSoft, color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.sm, overflow: "hidden" }}>{t("models.primary")}</Text> : undefined}
-              onPress={byName.get(name) ? () => setEditing(byName.get(name)!) : undefined}
-              right={
-                editable ? (
-                  <View style={{ flexDirection: "row" }}>
-                    <IconButton icon="chevron-up" accessibilityLabel={t("models.moveUp", { name })} disabled={busy || i === 0} onPress={() => setOrder(callOrderOps.moveUp(order, i))} />
-                    <IconButton icon="chevron-down" accessibilityLabel={t("models.moveDown", { name })} disabled={busy || i === order.length - 1} onPress={() => setOrder(callOrderOps.moveDown(order, i))} />
-                    <IconButton icon="close" accessibilityLabel={t("models.remove", { name })} disabled={busy || order.length <= 1} onPress={() => setOrder(callOrderOps.remove(order, i))} />
+        {order.map((name, i) => {
+          const pr = byName.get(name);
+          return (
+            <View key={`${name}-${i}`} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+              <ListItem
+                title={name}
+                subtitle={pr?.model}
+                left={
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    {pr?.provider ? <ProviderIcon provider={pr.provider} label={pr.provider} size={24} /> : null}
+                    {i === 0 ? <Text style={{ backgroundColor: th.colors.brandSoft, color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.sm, overflow: "hidden" }}>{t("models.primary")}</Text> : null}
                   </View>
-                ) : undefined
-              }
-            />
-          </View>
-        ))}
+                }
+                onPress={pr ? () => setEditing(pr) : undefined}
+                right={
+                  editable ? (
+                    <View style={{ flexDirection: "row" }}>
+                      <IconButton icon="chevron-up" accessibilityLabel={t("models.moveUp", { name })} disabled={busy || i === 0} onPress={() => setOrder(callOrderOps.moveUp(order, i))} />
+                      <IconButton icon="chevron-down" accessibilityLabel={t("models.moveDown", { name })} disabled={busy || i === order.length - 1} onPress={() => setOrder(callOrderOps.moveDown(order, i))} />
+                      <IconButton icon="close" accessibilityLabel={t("models.remove", { name })} disabled={busy || order.length <= 1} onPress={() => setOrder(callOrderOps.remove(order, i))} />
+                    </View>
+                  ) : undefined
+                }
+              />
+            </View>
+          );
+        })}
       </View>
       {disabled.length > 0 && editable ? (
         <>
@@ -76,6 +85,7 @@ export function ModelsSection() {
             {disabled.map((g, idx) => (
               <View key={g.preset.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
                 <ListItem
+                  left={g.preset.provider ? <ProviderIcon provider={g.preset.provider} label={g.preset.provider} size={24} /> : undefined}
                   title={g.preset.name}
                   subtitle={[g.preset.model, g.variants.length ? t("models.variants", { n: g.variants.length }) : null].filter(Boolean).join(" · ")}
                   onPress={() => setEditing(g.preset)}
@@ -114,7 +124,7 @@ function modelPickerSubtitle(m: CatalogState["models"][number]) {
   return parts.length ? parts.join(" · ") : undefined;
 }
 
-function ModelPicker({ open, onClose, model, cat, onPick }: { open: boolean; onClose: () => void; model: string; cat: CatalogState; onPick: (id: string) => void }) {
+function ModelPicker({ open, onClose, model, cat, provider, onPick }: { open: boolean; onClose: () => void; model: string; cat: CatalogState; provider: string; onPick: (id: string) => void }) {
   const t = useT();
   const th = useTheme();
   const insets = useSafeAreaInsets();
@@ -136,7 +146,17 @@ function ModelPicker({ open, onClose, model, cat, onPick }: { open: boolean; onC
   const pending = cat.loading && total === 0;
 
   return (
-    <Sheet open={open} onClose={onClose} title={t("models.choose")} scroll={false}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <ProviderIcon provider={provider} size={24} />
+          <Text accessibilityRole="header" style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20 }}>{t("models.choose")}</Text>
+        </View>
+      }
+      scroll={false}
+    >
       <View style={{ height: bodyHeight }}>
       <TextField label={t("models.search")} value={search} onChangeText={setSearch} autoCapitalize="none" autoCorrect={false} />
       <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginBottom: 8 }}>
@@ -281,7 +301,15 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
           {configured.length ? (
             <>
               <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{t("models.provider")}</Text>
-              <Chips options={configured.map((p) => ({ value: p.name, label: p.label }))} value={provider} onChange={setProvider} />
+              <Chips
+                options={configured.map((p) => ({
+                  value: p.name,
+                  label: p.label,
+                  icon: <ProviderIcon provider={p.name} label={p.label} size={18} />,
+                }))}
+                value={provider}
+                onChange={setProvider}
+              />
             </>
           ) : (
             <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, marginBottom: 12 }}>{t("models.noProviders")}</Text>
@@ -339,6 +367,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
         onClose={() => setPickerOpen(false)}
         model={model}
         cat={cat}
+        provider={provider}
         onPick={(id) => {
           pickModel(id);
           setPickerOpen(false);
