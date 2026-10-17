@@ -106,6 +106,17 @@ export const canSaveOrder = (prev: string[], next: string[]) =>
 
 export const canDelete = (name: string, order: string[]) => order[0] !== name;
 
+/** Presets in the call order are active; disabled models are hidden from pickers. */
+export function activePresetNames(
+  settings?: { model_call_order?: string[]; model_presets?: Preset[] } | string[] | null,
+): Set<string> {
+  if (Array.isArray(settings)) return new Set(settings);
+  if (!settings) return new Set();
+  if (settings.model_call_order != null) return new Set(settings.model_call_order);
+  if (settings.model_presets != null) return new Set(settings.model_presets.map((p) => p.name));
+  return new Set();
+}
+
 /** Wire payload for create (extras sent only when the host supports overrides). */
 export function createPayload(form: PresetForm, overrides = true): Record<string, unknown> {
   return {
