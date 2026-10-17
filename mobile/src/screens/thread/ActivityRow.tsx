@@ -54,34 +54,12 @@ export function ActivityRow({
   const tools = calls.length;
   const ms = durationMs(messages, live, now, startedAtMs);
 
-  let title = "";
-  if (live) {
-    if (ms > 0) {
-      const dur = formatActivityDuration(ms);
-      title =
-        tools > 0
-          ? `${t("thread.activityWorkedFor", { duration: dur })} · ${t("thread.tools", { count: tools })} ›`
-          : `${t("thread.activityWorkingFor", { duration: dur })} ›`;
-    } else {
-      title =
-        tools > 0
-          ? `${t("thread.activityExecuting")} · ${t("thread.tools", { count: tools })} ›`
-          : `${t("thread.activityExecuting")} ›`;
-    }
-  } else {
-    if (ms > 0) {
-      const dur = formatActivityDuration(ms);
-      title =
-        tools > 0
-          ? `${t("thread.activityWorkedFor", { duration: dur })} · ${t("thread.tools", { count: tools })} ›`
-          : `${t("thread.activityWorkedFor", { duration: dur })} ›`;
-    } else {
-      title =
-        tools > 0
-          ? `${t("thread.toolsExecuted", { count: tools })} ›`
-          : `${t("thread.activityWorked")} ›`;
-    }
-  }
+  const dur = ms > 0 ? formatActivityDuration(ms) : null;
+  const toolsLabel = tools > 0 ? t("thread.tools", { count: tools }) : null;
+  const head = live
+    ? dur ? t("thread.activityWorkingFor", { duration: dur }) : t("thread.activityExecuting")
+    : dur ? t("thread.activityWorkedFor", { duration: dur }) : toolsLabel ? null : t("thread.activityWorked");
+  const title = `${[head ?? t("thread.toolsExecuted", { count: tools }), head ? toolsLabel : null].filter(Boolean).join(" · ")} ›`;
 
   const hasInBetweenContent = messages.some(
     (m) => (m.activityKind === "model" && m.content.trim()) || isReasoningOnlyAssistant(m)

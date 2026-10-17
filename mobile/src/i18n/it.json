@@ -431,6 +431,7 @@
     "error": "Impossibile creare il fork",
     "copied": "Copiato",
     "edit": "Modifica",
+    "editedTitle": "{{title}} (modificata)",
     "editDisabledRunning": "Non disponibile durante la risposta",
     "attachmentsNotCarried": "Gli allegati vanno riaggiunti"
   },

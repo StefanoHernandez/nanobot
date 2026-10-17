@@ -430,9 +430,10 @@
     "here": "Forked here",
     "error": "Could not create the fork",
     "copied": "Copied",
-    "edit": "Modifica",
+    "edit": "Edit",
+    "editedTitle": "{{title}} (edited)",
     "editDisabledRunning": "Unavailable while responding",
-    "attachmentsNotCarried": "Gli allegati vanno riaggiunti"
+    "attachmentsNotCarried": "Attachments need to be added again"
   },
   "temporary": {
     "label": "Temporary"
