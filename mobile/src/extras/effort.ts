@@ -5,6 +5,7 @@ import { useStore } from "zustand";
 import { useSession } from "../state/sessionStore";
 import { threadStore } from "../state/threadStore";
 import { basePresetName, derivedPresetName, sortEfforts } from "./logic";
+import { loadProviderModels } from "../settings/models";
 
 export type Preset = {
   name: string; provider: string; model: string; max_tokens: number;
@@ -26,7 +27,21 @@ export async function loadEffortState(session: NanobotSession, sessionKey: strin
     presets.find((p) => p.name === row.model_preset) ?? presets.find((p) => p.active) ?? presets.find((p) => p.is_default);
   if (!preset) return null;
   const base = presets.find((p) => p.name === basePresetName(preset.name)) ?? preset;
-  const levels = sortEfforts(base.reasoning_effort_values ?? []);
+
+  let rawLevels: string[] | undefined = undefined;
+  if (base.provider) {
+    try {
+      const cat = await loadProviderModels((path) => session.get(path), base.provider);
+      const catModel = (cat.models ?? []).find((m) => m.id === base.model);
+      if (catModel?.reasoning_efforts !== undefined) {
+        rawLevels = catModel.reasoning_efforts;
+      }
+    } catch {
+      // fallback to preset values
+    }
+  }
+
+  const levels = sortEfforts(rawLevels !== undefined ? rawLevels : (base.reasoning_effort_values ?? []));
   if (!levels.length) return null;
   return { base, current: preset.reasoning_effort, levels };
 }

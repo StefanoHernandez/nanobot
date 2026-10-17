@@ -8,9 +8,11 @@ import {
   useProviderModels, validatePreset, visiblePresets, type Preset, type PresetForm,
 } from "../../settings/models";
 import { parseJsonObject } from "../../settings/providers";
+import { prefs } from "../../settings/prefs";
 import { SettingsError, useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
 import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
+import { ProviderIcon } from "../../ui/ProviderIcon";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 import { ProvidersPanel } from "./ProvidersPanel";
@@ -25,6 +27,7 @@ export function ModelsSection() {
   const { data, mutate } = useSettings();
   const [editing, setEditing] = useState<Preset | "new" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [defaultTemp, setDefaultTemp] = useState(() => prefs.defaultTemperature());
   const groups = useMemo(() => (data ? visiblePresets(data) : []), [data]);
   if (!data) return null;
   const order = data.model_call_order;
@@ -49,25 +52,33 @@ export function ModelsSection() {
     <>
       <Head>{t("models.title")}</Head>
       <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
-        {order.map((name, i) => (
-          <View key={`${name}-${i}`} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
-            <ListItem
-              title={name}
-              subtitle={byName.get(name)?.model}
-              left={i === 0 ? <Text style={{ backgroundColor: th.colors.brandSoft, color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.sm, overflow: "hidden" }}>{t("models.primary")}</Text> : undefined}
-              onPress={byName.get(name) ? () => setEditing(byName.get(name)!) : undefined}
-              right={
-                editable ? (
-                  <View style={{ flexDirection: "row" }}>
-                    <IconButton icon="chevron-up" accessibilityLabel={t("models.moveUp", { name })} disabled={busy || i === 0} onPress={() => setOrder(callOrderOps.moveUp(order, i))} />
-                    <IconButton icon="chevron-down" accessibilityLabel={t("models.moveDown", { name })} disabled={busy || i === order.length - 1} onPress={() => setOrder(callOrderOps.moveDown(order, i))} />
-                    <IconButton icon="close" accessibilityLabel={t("models.remove", { name })} disabled={busy || order.length <= 1} onPress={() => setOrder(callOrderOps.remove(order, i))} />
+        {order.map((name, i) => {
+          const pr = byName.get(name);
+          return (
+            <View key={`${name}-${i}`} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+              <ListItem
+                title={name}
+                subtitle={pr?.model}
+                left={
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    {pr?.provider ? <ProviderIcon provider={pr.provider} label={pr.provider} size={24} /> : null}
+                    {i === 0 ? <Text style={{ backgroundColor: th.colors.brandSoft, color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.sm, overflow: "hidden" }}>{t("models.primary")}</Text> : null}
                   </View>
-                ) : undefined
-              }
-            />
-          </View>
-        ))}
+                }
+                onPress={pr ? () => setEditing(pr) : undefined}
+                right={
+                  editable ? (
+                    <View style={{ flexDirection: "row" }}>
+                      <IconButton icon="chevron-up" accessibilityLabel={t("models.moveUp", { name })} disabled={busy || i === 0} onPress={() => setOrder(callOrderOps.moveUp(order, i))} />
+                      <IconButton icon="chevron-down" accessibilityLabel={t("models.moveDown", { name })} disabled={busy || i === order.length - 1} onPress={() => setOrder(callOrderOps.moveDown(order, i))} />
+                      <IconButton icon="close" accessibilityLabel={t("models.remove", { name })} disabled={busy || order.length <= 1} onPress={() => setOrder(callOrderOps.remove(order, i))} />
+                    </View>
+                  ) : undefined
+                }
+              />
+            </View>
+          );
+        })}
       </View>
       {disabled.length > 0 && editable ? (
         <>
@@ -76,6 +87,7 @@ export function ModelsSection() {
             {disabled.map((g, idx) => (
               <View key={g.preset.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
                 <ListItem
+                  left={g.preset.provider ? <ProviderIcon provider={g.preset.provider} label={g.preset.provider} size={24} /> : undefined}
                   title={g.preset.name}
                   subtitle={[g.preset.model, g.variants.length ? t("models.variants", { n: g.variants.length }) : null].filter(Boolean).join(" · ")}
                   onPress={() => setEditing(g.preset)}
@@ -87,6 +99,38 @@ export function ModelsSection() {
         </>
       ) : null}
       <TaskModels />
+      <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 16, overflow: "hidden" }}>
+        <ListItem
+          title={t("models.defaultTemperature")}
+          right={
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <IconButton
+                icon="minus"
+                accessibilityLabel={t("models.decreaseTemp")}
+                disabled={defaultTemp <= 0}
+                onPress={() => {
+                  const next = Math.max(0, Math.round((defaultTemp - 0.1) * 10) / 10);
+                  prefs.setDefaultTemperature(next);
+                  setDefaultTemp(next);
+                }}
+              />
+              <Text style={{ minWidth: 28, textAlign: "center", color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
+                {defaultTemp.toFixed(1)}
+              </Text>
+              <IconButton
+                icon="plus"
+                accessibilityLabel={t("models.increaseTemp")}
+                disabled={defaultTemp >= 2}
+                onPress={() => {
+                  const next = Math.min(2, Math.round((defaultTemp + 0.1) * 10) / 10);
+                  prefs.setDefaultTemperature(next);
+                  setDefaultTemp(next);
+                }}
+              />
+            </View>
+          }
+        />
+      </View>
       <View style={{ padding: 16, gap: 8 }}>
         <Button title={t("models.addPreset")} variant="secondary" onPress={() => setEditing("new")} />
         {data.model_configuration_migratable ? (
@@ -114,7 +158,7 @@ function modelPickerSubtitle(m: CatalogState["models"][number]) {
   return parts.length ? parts.join(" · ") : undefined;
 }
 
-function ModelPicker({ open, onClose, model, cat, onPick }: { open: boolean; onClose: () => void; model: string; cat: CatalogState; onPick: (id: string) => void }) {
+function ModelPicker({ open, onClose, model, cat, provider, onPick }: { open: boolean; onClose: () => void; model: string; cat: CatalogState; provider: string; onPick: (id: string) => void }) {
   const t = useT();
   const th = useTheme();
   const insets = useSafeAreaInsets();
@@ -136,7 +180,17 @@ function ModelPicker({ open, onClose, model, cat, onPick }: { open: boolean; onC
   const pending = cat.loading && total === 0;
 
   return (
-    <Sheet open={open} onClose={onClose} title={t("models.choose")} scroll={false}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <ProviderIcon provider={provider} size={24} />
+          <Text accessibilityRole="header" style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20 }}>{t("models.choose")}</Text>
+        </View>
+      }
+      scroll={false}
+    >
       <View style={{ height: bodyHeight }}>
       <TextField label={t("models.search")} value={search} onChangeText={setSearch} autoCapitalize="none" autoCorrect={false} />
       <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginBottom: 8 }}>
@@ -191,7 +245,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const [effort, setEffort] = useState(preset?.reasoning_effort ?? "");
   const [ctx, setCtx] = useState(String(preset?.context_window_tokens ?? 200000));
   const [maxTokens, setMaxTokens] = useState(String(preset?.max_tokens ?? 8192));
-  const [temp, setTemp] = useState(String(preset?.temperature ?? 0.1));
+  const [temp, setTemp] = useState(String(preset?.temperature ?? prefs.defaultTemperature()));
   const [apiPref, setApiPref] = useState<string>(preset?.api?.preferred_api ?? "");
   const [headers, setHeaders] = useState(jsonText(preset?.extra_headers));
   const [query, setQuery] = useState(jsonText(preset?.extra_query));
@@ -201,6 +255,9 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [autoApi, setAutoApi] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  const [ctxHint, setCtxHint] = useState(false);
+  const [maxTokensHint, setMaxTokensHint] = useState(false);
 
   const row = d.providers.find((p) => p.name === provider);
   const catalogued = !!row && row.model_catalog !== "unsupported" && row.configured;
@@ -213,6 +270,28 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const efforts = info?.reasoning_efforts?.length ? info.reasoning_efforts : preset?.reasoning_effort_values ?? [];
   const supported = (info?.api ?? preset?.api)?.supported_apis ?? ((row?.request_apis ?? []).filter((a) => ["chat_completions", "responses", "anthropic_messages"].includes(a)) as ModelRequestAPI[]);
 
+  const applyModelDefaults = (id: string, catalogModels: typeof cat.models) => {
+    const m = catalogModels.find((x) => x.id === id);
+    if (!m) return;
+    if (m.context_window) {
+      setCtx(String(m.context_window));
+      setCtxHint(true);
+    }
+    const maxTok = (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_tokens
+      ?? (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_output_tokens
+      ?? (m as { max_tokens?: number; max_output_tokens?: number; max_completion_tokens?: number }).max_completion_tokens;
+    if (maxTok) {
+      setMaxTokens(String(maxTok));
+      setMaxTokensHint(true);
+    }
+    if (effort) {
+      const allowed = m.reasoning_efforts ?? [];
+      if (!allowed.includes(effort)) {
+        setEffort("");
+      }
+    }
+  };
+
   useEffect(() => {
     if (!d.model_api_resolution_supported || !session || !provider || !model) return setAutoApi(null);
     let live = true;
@@ -224,8 +303,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const pickModel = (id: string) => {
     setModel(id);
     if (!nameTouched) setName(suggestPresetName(id));
-    const m = cat.models.find((x) => x.id === id);
-    if (m?.context_window && !preset) setCtx(String(m.context_window));
+    applyModelDefaults(id, cat.models);
   };
 
   const save = async () => {
@@ -281,7 +359,15 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
           {configured.length ? (
             <>
               <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 13, marginBottom: 4 }}>{t("models.provider")}</Text>
-              <Chips options={configured.map((p) => ({ value: p.name, label: p.label }))} value={provider} onChange={setProvider} />
+              <Chips
+                options={configured.map((p) => ({
+                  value: p.name,
+                  label: p.label,
+                  icon: <ProviderIcon provider={p.name} label={p.label} size={18} />,
+                }))}
+                value={provider}
+                onChange={setProvider}
+              />
             </>
           ) : (
             <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13, marginBottom: 12 }}>{t("models.noProviders")}</Text>
@@ -303,8 +389,28 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
               <Chips options={[{ value: "", label: t("models.effortDefault") }, ...efforts.map((x) => ({ value: x, label: x }))]} value={effort} onChange={setEffort} />
             </>
           ) : null}
-          <TextField label={t("models.context")} value={ctx} onChangeText={setCtx} error={errors.contextWindowTokens} autoCapitalize="none" />
-          <TextField label={t("models.maxTokens")} value={maxTokens} onChangeText={setMaxTokens} error={errors.maxTokens} keyboardType="number-pad" />
+          <TextField
+            label={t("models.context")}
+            value={ctx}
+            onChangeText={(v) => {
+              setCtxHint(false);
+              setCtx(v);
+            }}
+            helper={ctxHint ? t("models.setByModel") : undefined}
+            error={errors.contextWindowTokens}
+            autoCapitalize="none"
+          />
+          <TextField
+            label={t("models.maxTokens")}
+            value={maxTokens}
+            onChangeText={(v) => {
+              setMaxTokensHint(false);
+              setMaxTokens(v);
+            }}
+            helper={maxTokensHint ? t("models.setByModel") : undefined}
+            error={errors.maxTokens}
+            keyboardType="number-pad"
+          />
           <TextField label={t("models.temperature")} value={temp} onChangeText={setTemp} error={errors.temperature} keyboardType="decimal-pad" />
           {supported.length > 1 ? (
             <>
@@ -339,6 +445,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
         onClose={() => setPickerOpen(false)}
         model={model}
         cat={cat}
+        provider={provider}
         onPick={(id) => {
           pickModel(id);
           setPickerOpen(false);
@@ -352,6 +459,7 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
     return (v: string) => {
       set(v);
       if (!nameTouched) setName(suggestPresetName(v));
+      applyModelDefaults(v, cat.models);
     };
   }
 }
