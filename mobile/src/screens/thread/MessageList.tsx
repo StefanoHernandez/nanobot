@@ -12,6 +12,7 @@ import { ListItem, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { MessageRow } from "./MessageRow";
 import { NoticeRow } from "./NoticeRow";
+import { markComposerForFocus } from "./Composer";
 
 type Item = TurnUnit | { type: "fork" };
 
@@ -46,6 +47,45 @@ export function MessageList({ chatKey, messages, running, notices, forkBoundary 
   }, [messages, forkBoundary]);
 
   const onLongPress = useCallback((m: UIMessage) => setMenu(m), []);
+
+  const isTemp = !!chatKey && typeof chatsStore.getState().isTemporary === "function" && chatsStore.getState().isTemporary(chatKey);
+
+  const editMessage = async (m: UIMessage) => {
+    setMenu(null);
+    if (!chatKey) return;
+
+    while (threadStore.getState().threads[chatKey]?.hasMoreBefore) {
+      const prevCursor = threadStore.getState().threads[chatKey]?.beforeCursor;
+      await threadStore.getState().loadOlder(chatKey);
+      if (threadStore.getState().threads[chatKey]?.beforeCursor === prevCursor) break;
+    }
+
+    const fullMessages = threadStore.getState().threads[chatKey]?.messages ?? msgsRef.current;
+    const targetIdx = fullMessages.findIndex((x) => x.id === m.id);
+    const beforeUserIndex = (targetIdx >= 0 ? fullMessages.slice(0, targetIdx) : msgsRef.current.slice(0, msgsRef.current.findIndex((x) => x.id === m.id))).filter((x) => x.role === "user").length;
+
+    const origTitle = chatsStore.getState().chats?.find((c) => c.key === chatKey)?.title;
+    const title = `${origTitle || t("chats.untitled")} (modificata)`;
+
+    const hasAttachments = Boolean(
+      (m.media && m.media.length > 0) ||
+      (m.images && m.images.length > 0) ||
+      ((m as unknown as { attachments?: unknown[] }).attachments && (m as unknown as { attachments: unknown[] }).attachments.length > 0)
+    );
+
+    try {
+      const nk = await chatsStore.getState().fork(chatKey, beforeUserIndex, title);
+      threadStore.getState().setDraft(nk, m.content);
+      markComposerForFocus(nk);
+      if (hasAttachments) {
+        toast.show(t("fork.attachmentsNotCarried", { defaultValue: "Gli allegati vanno riaggiunti" }));
+      }
+      router.push(("/chat/" + encodeURIComponent(nk)) as never);
+    } catch {
+      toast.show(t("common.error"));
+    }
+  };
+
   const fork = async () => {
     const m = menu;
     setMenu(null);
@@ -102,7 +142,18 @@ export function MessageList({ chatKey, messages, running, notices, forkBoundary 
       {menu ? (
         <Sheet open onClose={() => setMenu(null)}>
           <ListItem title={t("fork.copy")} onPress={() => { void Clipboard.setStringAsync(menu.content); setMenu(null); toast.show(t("fork.copied")); }} />
-          <ListItem title={t("fork.fork")} onPress={() => void fork()} />
+          {menu.role === "user" ? (
+            !isTemp ? (
+              <ListItem
+                title={t("fork.edit", { defaultValue: "Modifica" })}
+                subtitle={running ? t("fork.editDisabledRunning", { defaultValue: "Non disponibile durante la risposta" }) : undefined}
+                disabled={running}
+                onPress={() => void editMessage(menu)}
+              />
+            ) : null
+          ) : (
+            <ListItem title={t("fork.fork")} onPress={() => void fork()} />
+          )}
         </Sheet>
       ) : null}
     </>
