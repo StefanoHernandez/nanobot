@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
@@ -36,6 +37,7 @@ export function MemoryScreen() {
   const [journal, setJournal] = useState<JournalIndex | null>(null);
   const [dayText, setDayText] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const loadJournal = useCallback(async () => {
     if (!session) return;
@@ -63,7 +65,7 @@ export function MemoryScreen() {
 
   const page = tab === "journal" ? undefined : pages?.pages[tab];
   const enabled = journal?.enabled === true;
-  const hour = journal?.hour ?? 22;
+  const hour = journal?.hour ?? 3;
 
   const changeSettings = async (next: { enabled: boolean; hour: number }) => {
     if (!session) return;
@@ -76,17 +78,28 @@ export function MemoryScreen() {
     }));
   };
 
-  const writeToday = async () => {
+  const writeDate = async (dateStr?: string) => {
     if (!session || writing) return;
     setWriting(true);
     try {
-      const result = await runJournal(session);
+      const result = await runJournal(session, dateStr);
       if (!result.written) toast.show(t("memory.journalNothing"));
       await loadJournal();
     } catch {
       toast.show(t("common.operationFailed"));
     } finally {
       setWriting(false);
+    }
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android" || event?.type === "dismissed") {
+      setShowDatePicker(false);
+    }
+    if (selectedDate && event?.type !== "dismissed") {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const dStr = `${selectedDate.getFullYear()}-${pad(selectedDate.getMonth() + 1)}-${pad(selectedDate.getDate())}`;
+      void writeDate(dStr);
     }
   };
   const dreamLine = pages
@@ -208,21 +221,44 @@ export function MemoryScreen() {
                 <Text style={{ color: th.colors.foreground, fontSize: 20 }}>+</Text>
               </Pressable>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("memory.journalWrite")}
-              disabled={writing}
-              onPress={() => void writeToday()}
-              style={[styles.writeButton, { backgroundColor: th.colors.primary, borderRadius: th.radius.md }]}
-            >
-              {writing ? (
-                <ActivityIndicator color={th.colors.primaryForeground} />
-              ) : (
-                <Text style={{ color: th.colors.primaryForeground, fontFamily: th.font.medium, fontSize: 16 }}>
-                  {t("memory.journalWrite")}
+            <View style={styles.writeButtonRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("memory.journalWrite")}
+                disabled={writing}
+                onPress={() => void writeDate()}
+                style={[styles.writeButton, { backgroundColor: th.colors.primary, borderRadius: th.radius.md, flex: 1 }]}
+              >
+                {writing ? (
+                  <ActivityIndicator color={th.colors.primaryForeground} />
+                ) : (
+                  <Text style={{ color: th.colors.primaryForeground, fontFamily: th.font.medium, fontSize: 15, textAlign: "center" }}>
+                    {t("memory.journalWrite")}
+                  </Text>
+                )}
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("memory.journalWriteOther")}
+                disabled={writing}
+                onPress={() => setShowDatePicker(true)}
+                style={[styles.writeButton, { backgroundColor: th.colors.secondary, borderRadius: th.radius.md, flex: 1 }]}
+              >
+                <Text style={{ color: th.colors.secondaryForeground, fontFamily: th.font.medium, fontSize: 15, textAlign: "center" }}>
+                  {t("memory.journalWriteOther")}
                 </Text>
-              )}
-            </Pressable>
+              </Pressable>
+            </View>
+            {showDatePicker ? (
+              <DateTimePicker
+                testID="journal-date-picker"
+                value={new Date()}
+                mode="date"
+                display="default"
+                maximumDate={new Date()}
+                onChange={handleDateChange}
+              />
+            ) : null}
             {(journal?.days.length ?? 0) === 0 ? (
               <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15 }}>
                 {t("memory.journalEmpty")}
@@ -343,6 +379,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
+  },
+  writeButtonRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
   },
   dayButton: {
     minHeight: 48,

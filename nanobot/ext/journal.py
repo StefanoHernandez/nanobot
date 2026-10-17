@@ -6,7 +6,7 @@ import json
 import re
 import sqlite3
 from collections.abc import Awaitable, Callable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
@@ -56,14 +56,14 @@ def load_settings(workspace: Path) -> dict[str, Any]:
     try:
         parsed: object = json.loads(settings_path(workspace).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {"enabled": False, "hour": 22, "model": None}
+        return {"enabled": False, "hour": 3, "model": None}
     if not isinstance(parsed, dict):
-        return {"enabled": False, "hour": 22, "model": None}
+        return {"enabled": False, "hour": 3, "model": None}
     raw = cast(dict[str, Any], parsed)
     enabled = raw.get("enabled") is True
     hour = raw.get("hour")
     if isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23:
-        hour = 22
+        hour = 3
     model_raw = raw.get("model")
     if model_raw is None or model_raw == "default":
         model: str | None = None
@@ -416,12 +416,18 @@ def agent_turn(agent: Any) -> _Turn:
 
 
 async def run_journal_job(agent: Any, *, tz_name: str | None = None) -> None:
-    """Write today's journal. The server writes the file. Nothing is delivered."""
+    """Write yesterday's journal. The server writes the file. Nothing is delivered."""
     workspace = Path(agent.context.memory.workspace)
     # A job left over from before the journal was turned off does nothing.
     if not load_settings(workspace)["enabled"]:
         return
-    await execute_day(workspace, agent.sessions, local_today(tz_name), agent_turn(agent), tz_name=tz_name)
+    await execute_day(
+        workspace,
+        agent.sessions,
+        local_today(tz_name) - timedelta(days=1),
+        agent_turn(agent),
+        tz_name=tz_name,
+    )
 
 
 def _workspace(router: Any) -> Path:

@@ -14,11 +14,11 @@ test("normalizeJournal drops bad rows and keeps a safe hour", () => {
   ).toEqual({ enabled: true, hour: 21, model: null, days: ["2026-10-16", "2026-10-15"] });
   expect(normalizeJournal({ enabled: "yes", hour: 24, days: "2026-10-16" })).toEqual({
     enabled: false,
-    hour: 22,
+    hour: 3,
     model: null,
     days: [],
   });
-  expect(normalizeJournal(null)).toEqual({ enabled: false, hour: 22, model: null, days: [] });
+  expect(normalizeJournal(null)).toEqual({ enabled: false, hour: 3, model: null, days: [] });
   expect(normalizeJournal({ model: "writer" }).model).toBe("writer");
   expect(normalizeJournal({ model: "default" }).model).toBeNull();
   expect(normalizeJournal({ model: "" }).model).toBeNull();
