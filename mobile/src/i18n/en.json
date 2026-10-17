@@ -73,6 +73,11 @@
       "modify": "Edit",
       "remove": "Delete"
     },
+    "reply": {
+      "you": "You",
+      "assistant": "Nanobot",
+      "dismiss": "Cancel reply"
+    },
     "changeModel": "Change model",
     "chooseModel": "Choose model",
     "historyError": "Couldn't load this chat's history.",
