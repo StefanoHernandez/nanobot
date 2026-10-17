@@ -1,4 +1,5 @@
 import { loadEffortState, applyEffort, RefreshGuard, type Preset } from "../../src/extras/effort";
+import { clearCatalogCache } from "../../src/settings/models";
 import { fakeSession } from "../state/fake";
 
 const P = (name: string, extra: Partial<Preset> = {}): Preset => ({
@@ -14,6 +15,10 @@ function mk(presets: Preset[], sessions: unknown[] = []) {
   return { ...f, mutate };
 }
 
+beforeEach(() => {
+  clearCatalogCache();
+});
+
 describe("loadEffortState", () => {
   it("resolves base, current, levels", async () => {
     const { session } = mk(
@@ -28,6 +33,38 @@ describe("loadEffortState", () => {
   it("null when session missing", async () => {
     const { session } = mk([P("gpt", { reasoning_effort_values: ["low"] })]);
     expect(await loadEffortState(session, "x")).toBeNull();
+  });
+  it("the catalog levels win", async () => {
+    const f = fakeSession({
+      "/api/settings": { model_presets: [P("gpt", { provider: "p", model: "m", reasoning_effort_values: ["low", "high"] })] },
+      "/api/sessions": { sessions: [{ key: "websocket:abc", model_preset: "gpt" }] },
+      "/api/settings/provider-models?provider=p": {
+        provider: "p",
+        models: [{ id: "m", reasoning_efforts: ["low", "medium", "max"] }],
+      },
+    });
+    const s = await loadEffortState(f.session, "websocket:abc");
+    expect(s!.levels).toEqual(["low", "medium", "max"]);
+  });
+  it("without a catalog it falls back", async () => {
+    const { session } = mk(
+      [P("gpt", { reasoning_effort_values: ["low", "high"] })],
+      [{ key: "websocket:abc", model_preset: "gpt" }],
+    );
+    const s = await loadEffortState(session, "websocket:abc");
+    expect(s!.levels).toEqual(["low", "high"]);
+  });
+  it("an empty list hides the pill", async () => {
+    const f = fakeSession({
+      "/api/settings": { model_presets: [P("gpt", { provider: "p", model: "m", reasoning_effort_values: ["low", "high"] })] },
+      "/api/sessions": { sessions: [{ key: "websocket:abc", model_preset: "gpt" }] },
+      "/api/settings/provider-models?provider=p": {
+        provider: "p",
+        models: [{ id: "m", reasoning_efforts: [] }],
+      },
+    });
+    const s = await loadEffortState(f.session, "websocket:abc");
+    expect(s).toBeNull();
   });
 });
 
