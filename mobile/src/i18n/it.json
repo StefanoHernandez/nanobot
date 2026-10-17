@@ -467,7 +467,7 @@
       "dream": "Dream (memoria)",
       "dreamHelp": "consolidamento periodico della memoria",
       "journal": "Diario",
-      "journalHelp": "Il modello che scrive il diario della sera",
+      "journalHelp": "Il modello che scrive il diario ogni notte",
       "sameAsChat": "Come la chat",
       "selected": "Selezionato",
       "saveFailed": "Impossibile salvare la scelta del modello"
@@ -790,6 +790,7 @@
     "journalAuto": "Diario automatico",
     "journalHour": "Ora",
     "journalWrite": "Scrivi il diario di oggi",
+    "journalWriteOther": "Scrivi un altro giorno",
     "journalNothing": "Niente da scrivere oggi.",
     "journalEmpty": "Nessun diario.",
     "hourEarlier": "Ora prima",
