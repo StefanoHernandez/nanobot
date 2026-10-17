@@ -7,9 +7,9 @@ import { useT } from "../../i18n";
 import { lockSettings } from "../../extras/lock";
 import { prefs, type Language, type VoiceEngine } from "../../settings/prefs";
 import { isOfflineLocaleInstalled } from "../../extras/sttEngine";
-import { Button, ListItem, toast } from "../../ui/components";
+import { ListItem, toast } from "../../ui/components";
 import { useThemePreference, useTheme, type ThemePref } from "../../ui/ThemeProvider";
-import { Head } from "./common";
+import { Chips, Head } from "./common";
 import { ApprovalsCard } from "./ApprovalsCard";
 
 const THEMES: ThemePref[] = ["system", "light", "dark"];
@@ -50,29 +50,24 @@ export function AppearanceSection() {
   return (
     <>
       <Head>{t("settings.theme")}</Head>
-      <View style={{ ...th.surface, marginHorizontal: 16, padding: 12 }}>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          {THEMES.map((p) => (
-            <Button key={p} title={t(`settings.${p}`)} variant={pref === p ? "primary" : "secondary"} onPress={() => setPref(p)} />
-          ))}
-        </View>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 12, paddingBottom: 0 }}>
+        <Chips
+          options={THEMES.map((p) => ({ value: p, label: t(`settings.${p}`) }))}
+          value={pref}
+          onChange={setPref}
+        />
       </View>
 
       <Head>{t("settings.language")}</Head>
-      <View style={{ ...th.surface, marginHorizontal: 16, padding: 12 }}>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          {LANGS.map((l) => (
-            <Button
-              key={l}
-              title={l === "system" ? t("settings.system") : l.toUpperCase()}
-              variant={lang === l ? "primary" : "secondary"}
-              onPress={() => {
-                prefs.setLanguage(l);
-                setLang(l);
-              }}
-            />
-          ))}
-        </View>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 12, paddingBottom: 0 }}>
+        <Chips
+          options={LANGS.map((l) => ({ value: l, label: l === "system" ? t("settings.system") : l.toUpperCase() }))}
+          value={lang}
+          onChange={(l) => {
+            prefs.setLanguage(l);
+            setLang(l);
+          }}
+        />
       </View>
 
       <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 16, overflow: "hidden" }}>
@@ -130,27 +125,20 @@ export function AppearanceSection() {
                   ? t("voice.offlineReady")
                   : t("voice.offlineMissing")
               }
-              right={
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Button
-                    title={t("voice.engineDevice")}
-                    variant={voiceEngine === "device" ? "primary" : "secondary"}
-                    onPress={() => {
-                      prefs.setVoiceEngine?.("device");
-                      setVoiceEngineState("device");
-                    }}
-                  />
-                  <Button
-                    title={t("voice.engineServer")}
-                    variant={voiceEngine === "server" ? "primary" : "secondary"}
-                    onPress={() => {
-                      prefs.setVoiceEngine?.("server");
-                      setVoiceEngineState("server");
-                    }}
-                  />
-                </View>
-              }
             />
+            <View style={{ paddingHorizontal: 16 }}>
+              <Chips
+                options={[
+                  { value: "device", label: t("voice.engineDevice") },
+                  { value: "server", label: t("voice.engineServer") },
+                ]}
+                value={voiceEngine}
+                onChange={(v) => {
+                  prefs.setVoiceEngine?.(v);
+                  setVoiceEngineState(v);
+                }}
+              />
+            </View>
             <Text style={{ fontFamily: th.font.regular, fontSize: 13, color: th.colors.mutedForeground, paddingHorizontal: 16, paddingBottom: 4 }}>
               {t("voice.offlineHint")}
             </Text>
