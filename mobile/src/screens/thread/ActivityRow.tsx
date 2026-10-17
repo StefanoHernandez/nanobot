@@ -1,13 +1,13 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import type { UIFileEdit, UIMessage } from "@/lib/types";
+import type { UIMessage } from "@/lib/types";
 import { isReasoningOnlyAssistant } from "@/lib/activity-timeline";
 import { useT } from "../../i18n";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { useTheme } from "../../ui/ThemeProvider";
 import { ReasoningBlock } from "./ReasoningBlock";
-import { FileEditList } from "./FileEditList";
+import { ToolActivitySheet } from "./ToolActivitySheet";
+import { toolCallsOf } from "./toolCalls";
 
 // Same format as WebUI AgentActivityCluster.formatActivityDuration (:500-506).
 export function formatActivityDuration(ms: number): string {
@@ -17,9 +17,6 @@ export function formatActivityDuration(ms: number): string {
   const rest = seconds % 60;
   return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
 }
-
-// WebUI traceLines (:508-511)
-const traceLines = (m: UIMessage) => (m.traces?.length ? m.traces : m.content.trim() ? [m.content] : []);
 
 /** Mirrors activityDurationMs (:464-491): completed uses persisted latency, else the createdAt span (live: up to now). */
 function durationMs(messages: UIMessage[], live: boolean, now: number, startedAtMs?: number): number {
@@ -31,63 +28,130 @@ function durationMs(messages: UIMessage[], live: boolean, now: number, startedAt
   return Math.max(0, (live ? now : Math.max(...ts)) - first);
 }
 
-export function ActivityRow({ messages, live, startedAtMs }: { messages: UIMessage[]; live: boolean; startedAtMs?: number }) {
+export function ActivityRow({
+  messages,
+  live,
+  startedAtMs,
+  chatKey,
+}: {
+  messages: UIMessage[];
+  live: boolean;
+  startedAtMs?: number;
+  chatKey?: string;
+}) {
   const th = useTheme();
   const t = useT();
-  // WebUI: auto-open while the turn streams, collapsed once done (outerExpanded :287-291); a manual toggle wins.
-  const [manual, setManual] = useState<boolean | null>(null);
-  const open = manual ?? live;
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+
   useEffect(() => {
     if (!live) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [live]);
 
-  let tools = 0;
-  for (const m of messages) if (m.kind === "trace") tools += m.traceDetail?.traceCount ?? traceLines(m).length;
+  const calls = useMemo(() => toolCallsOf(messages), [messages]);
+  const tools = calls.length;
   const ms = durationMs(messages, live, now, startedAtMs);
-  const label = live
-    ? t("thread.activityWorkingFor", { duration: formatActivityDuration(ms) })
-    : ms <= 0
-      ? t("thread.activityWorked")
-      : t("thread.activityWorkedFor", { duration: formatActivityDuration(ms) });
-  const title = tools > 0 ? `${label} · ${t("thread.tools", { count: tools })}` : label;
 
-  const fileEdits = useMemo(() => {
-    const map = new Map<string, UIFileEdit>();
-    for (const m of messages) {
-      if (m.fileEdits) {
-        for (const edit of m.fileEdits) {
-          map.set(edit.call_id, edit); // last one wins
-        }
-      }
+  let title = "";
+  if (live) {
+    if (ms > 0) {
+      const dur = formatActivityDuration(ms);
+      title =
+        tools > 0
+          ? `${t("thread.activityWorkedFor", { duration: dur })} · ${t("thread.tools", { count: tools })} ›`
+          : `${t("thread.activityWorkingFor", { duration: dur })} ›`;
+    } else {
+      title =
+        tools > 0
+          ? `${t("thread.activityExecuting")} · ${t("thread.tools", { count: tools })} ›`
+          : `${t("thread.activityExecuting")} ›`;
     }
-    return Array.from(map.values());
-  }, [messages]);
+  } else {
+    if (ms > 0) {
+      const dur = formatActivityDuration(ms);
+      title =
+        tools > 0
+          ? `${t("thread.activityWorkedFor", { duration: dur })} · ${t("thread.tools", { count: tools })} ›`
+          : `${t("thread.activityWorkedFor", { duration: dur })} ›`;
+    } else {
+      title =
+        tools > 0
+          ? `${t("thread.toolsExecuted", { count: tools })} ›`
+          : `${t("thread.activityWorked")} ›`;
+    }
+  }
+
+  const hasInBetweenContent = messages.some(
+    (m) => (m.activityKind === "model" && m.content.trim()) || isReasoningOnlyAssistant(m)
+  );
 
   return (
     <View style={{ marginVertical: 4 }}>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setManual(!open)} style={{ minHeight: 48, justifyContent: "center", alignSelf: "flex-start" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: th.colors.brandSoft, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 }}>
-          <MaterialCommunityIcons name={live ? "cog-outline" : "check"} size={14} color={th.colors.brandSoftForeground} />
-          <Text style={{ color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13 }}>{title} {open ? "▾" : "▸"}</Text>
-        </View>
+      {/* Quiet line instead of pill */}
+      <Pressable
+        testID="activity-row-line"
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        onPress={() => setSheetOpen(true)}
+        style={{
+          minHeight: 48,
+          justifyContent: "center",
+          alignSelf: "flex-start",
+          paddingVertical: 4,
+          paddingHorizontal: 2,
+        }}
+      >
+        <Text
+          style={{
+            color: th.colors.mutedForeground,
+            fontFamily: th.font.medium,
+            fontSize: 13,
+          }}
+        >
+          {title}
+        </Text>
       </Pressable>
-      {open ? (
-        <View style={{ borderLeftWidth: 2, borderLeftColor: th.colors.brandSoft, paddingLeft: 12, marginLeft: 10 }}>
+
+      {/* Model in-between text and reasoning stay readable in the chat, under the line */}
+      {hasInBetweenContent ? (
+        <View
+          style={{
+            borderLeftWidth: 2,
+            borderLeftColor: th.colors.brandSoft,
+            paddingLeft: 12,
+            marginLeft: 10,
+            marginTop: 4,
+          }}
+        >
           {messages.map((m) => {
-            if (m.activityKind === "model") return m.content.trim() ? <Markdown key={m.id} text={m.content} fontSize={14} /> : null;
-            if (isReasoningOnlyAssistant(m)) return <ReasoningBlock key={m.id} text={m.reasoning ?? ""} streaming={live && !!m.reasoningStreaming} />;
-            if (m.kind === "trace")
-              return traceLines(m).map((l, i) => (
-                <Text key={`${m.id}:${i}`} selectable style={{ color: th.colors.mutedForeground, fontFamily: th.font.mono, fontSize: 12, marginVertical: 2 }}>{l}</Text>
-              ));
+            if (m.activityKind === "model") {
+              return m.content.trim() ? (
+                <Markdown key={m.id} text={m.content} fontSize={14} />
+              ) : null;
+            }
+            if (isReasoningOnlyAssistant(m)) {
+              return (
+                <ReasoningBlock
+                  key={m.id}
+                  text={m.reasoning ?? ""}
+                  streaming={live && !!m.reasoningStreaming}
+                />
+              );
+            }
             return null;
           })}
-          <FileEditList edits={fileEdits} />
         </View>
       ) : null}
+
+      {/* Tool activity bottom sheet */}
+      <ToolActivitySheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        messages={messages}
+        chatKey={chatKey}
+      />
     </View>
   );
 }

@@ -38,7 +38,7 @@ function MessageRowImpl({ unit, live, chatKey, onLongPress, onReply }: Props) {
   const showOpenDocument = isFinishedAnswer && (m?.content.trim().length ?? 0) >= 800;
 
 
-  if (unit.type === "activity") return <ActivityRow messages={unit.messages} live={live} startedAtMs={unit.startedAtMs} />;
+  if (unit.type === "activity") return <ActivityRow messages={unit.messages} live={live} startedAtMs={unit.startedAtMs} chatKey={chatKey} />;
   if (!m) return null;
 
   if (m.kind === "compaction") {
