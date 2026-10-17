@@ -84,6 +84,7 @@
     "face": {
       "thinking": "thinking…",
       "working": "working…",
+      "writing": "writing…",
       "offline": "unreachable",
       "error": "something went wrong"
     }
