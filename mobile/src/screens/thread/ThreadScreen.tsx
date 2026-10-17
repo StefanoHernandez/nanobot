@@ -33,7 +33,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const loadError = useStore(threadStore, (s) => !!s.threads[chatKey]?.loadError);
   const { session } = useSession();
   const conn = useStore(sessionStore, (s) => s.state);
-  const chatTitle = useStore(chatsStore, (s) => s.chats.find((c) => c.key === chatKey)?.title) || "Nuova chat";
+  const chatTitle = useStore(chatsStore, (s) => s.chats.find((c) => c.key === chatKey)?.title) || t("chats.untitled");
   const last = messages[messages.length - 1];
   const isStreaming = running && messages.some((m) => m.role === "assistant" && !!m.isStreaming && m.kind !== "trace");
   const face = faceStateOf(conn, running, !!last && last.kind === "trace", notices.some((n) => n.kind === "stream_error"), isStreaming);

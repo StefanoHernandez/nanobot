@@ -86,25 +86,31 @@ def backup_dir() -> Path:
 
 
 def _workspace_dir() -> Path | None:
-    path = home_dir() / "config.json"
-    if not path.is_file():
-        return None
+    """The workspace set explicitly in home's config.json; None means the default, inside home."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            dict_data = cast(dict[str, Any], data)
-            agents = dict_data.get("agents")
-            if isinstance(agents, dict):
-                agents_dict = cast(dict[str, Any], agents)
-                defaults = agents_dict.get("defaults")
-                if isinstance(defaults, dict):
-                    defaults_dict = cast(dict[str, Any], defaults)
-                    raw = defaults_dict.get("workspace")
-                    if isinstance(raw, str) and raw.strip():
-                        return Path(raw.strip()).expanduser().resolve()
-    except Exception:
+        data = json.loads((home_dir() / "config.json").read_text(encoding="utf-8"))
+        raw = data["agents"]["defaults"]["workspace"]
+    except (OSError, ValueError, KeyError, TypeError):
         return None
-    return None
+    return Path(raw).expanduser().resolve() if isinstance(raw, str) and raw.strip() else None
+
+
+def _add_tree(tar: tarfile.TarFile, src: Path, prefix: str, skip: Path) -> None:
+    for dirpath, dirnames, filenames in os.walk(src):
+        rel_dir = Path(dirpath).relative_to(src)
+        if rel_dir == Path("."):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if Path(dirpath, d).resolve() != skip]
+        dirnames.sort()
+        for name in sorted(filenames):
+            path = Path(dirpath) / name
+            if name.endswith(SKIP_SUFFIXES) or path.is_symlink() or not path.is_file():
+                continue
+            arcname = prefix + str(rel_dir / name)
+            if _is_sqlite(path):
+                _add_sqlite(tar, path, arcname)
+            else:
+                tar.add(path, arcname=arcname, recursive=False)
 
 
 def validate_and_save_backup_dir(raw_dir: object) -> Path:
@@ -196,39 +202,10 @@ def create_backup() -> dict[str, Any]:
         fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
             with os.fdopen(fd, "wb") as fh, tarfile.open(fileobj=fh, mode="w:gz") as tar:
-                for dirpath, dirnames, filenames in os.walk(home):
-                    rel_dir = Path(dirpath).relative_to(home)
-                    if rel_dir == Path("."):
-                        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-                    dirnames[:] = [d for d in dirnames if Path(dirpath, d).resolve() != root.resolve()]
-                    dirnames.sort()
-                    for name in sorted(filenames):
-                        path = Path(dirpath) / name
-                        if name.endswith(SKIP_SUFFIXES) or path.is_symlink() or not path.is_file():
-                            continue
-                        arcname = str(rel_dir / name)
-                        if _is_sqlite(path):
-                            _add_sqlite(tar, path, arcname)
-                        else:
-                            tar.add(path, arcname=arcname, recursive=False)
-
+                _add_tree(tar, home, "", root.resolve())
                 ws = _workspace_dir()
-                if ws is not None and not ws.resolve().is_relative_to(home.resolve()) and ws.is_dir():
-                    for dirpath, dirnames, filenames in os.walk(ws):
-                        rel_dir = Path(dirpath).relative_to(ws)
-                        if rel_dir == Path("."):
-                            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-                        dirnames[:] = [d for d in dirnames if Path(dirpath, d).resolve() != root.resolve()]
-                        dirnames.sort()
-                        for name in sorted(filenames):
-                            path = Path(dirpath) / name
-                            if name.endswith(SKIP_SUFFIXES) or path.is_symlink() or not path.is_file():
-                                continue
-                            arcname = f"workspace-external/{rel_dir / name}" if rel_dir != Path(".") else f"workspace-external/{name}"
-                            if _is_sqlite(path):
-                                _add_sqlite(tar, path, arcname)
-                            else:
-                                tar.add(path, arcname=arcname, recursive=False)
+                if ws is not None and ws.is_dir() and not ws.is_relative_to(home.resolve()):
+                    _add_tree(tar, ws, "workspace-external/", root.resolve())
             os.replace(part, target)
         except BaseException:
             part.unlink(missing_ok=True)
@@ -269,7 +246,7 @@ def restore_backup(name: Any) -> dict[str, Any]:
         staging = Path(tempfile.mkdtemp(dir=home.parent, prefix=f".{home.name}.restore-"))
 
         ws = _workspace_dir()
-        ws_is_external = ws is not None and not ws.resolve().is_relative_to(home.resolve()) and ws.is_dir()
+        ws_is_external = ws is not None and ws.is_dir() and not ws.is_relative_to(home.resolve())
         staging_ws: Path | None = None
         aside_ws: Path | None = None
 
@@ -313,17 +290,13 @@ def restore_backup(name: Any) -> dict[str, Any]:
     return {"ok": True, "restored": archive.name, "previous": aside.name, "restart_required": True}
 
 
-def _workspace_included(home: Path) -> bool:
-    return True
-
-
 def _payload() -> dict[str, Any]:
     home = home_dir()
     bdir = backup_dir()
     usage_target = bdir if bdir.is_dir() else home
     usage = shutil.disk_usage(usage_target)
     return {
-        "workspace_included": _workspace_included(home),
+        "workspace_included": True,
         "backups": list_backups(),
         "max_backups": MAX_BACKUPS,
         "dir": str(bdir).replace(str(Path.home()), "~", 1),
