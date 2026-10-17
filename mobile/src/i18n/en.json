@@ -1078,7 +1078,25 @@
     "err": {
       "past": "Selected time is in the past",
       "invalid": "Invalid value"
-    }
+    },
+    "new": "New automation",
+    "whatToDo": "What should it do",
+    "whatToDoPlaceholder": "Summarize news about…",
+    "name": "Name",
+    "namePlaceholder": "Optional name",
+    "when": "When",
+    "whenDaily": "Every day",
+    "whenEvery": "Every N",
+    "whenOnce": "Once",
+    "whenAdvanced": "Advanced",
+    "cronExample": "E.g. 0 8 * * 1-5 (Mon-Fri at 8:00)",
+    "whereToReply": "Where to reply",
+    "newChat": "New chat",
+    "existingChat": "Existing chat",
+    "create": "Create",
+    "creating": "Creating...",
+    "createdSuccess": "Automation created",
+    "describeToBot": "Or describe it to the bot"
   },
   "share": {
     "pickChatTitle": "Share to nanobot",

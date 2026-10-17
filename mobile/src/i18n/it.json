@@ -1078,7 +1078,25 @@
     "err": {
       "past": "La data selezionata è nel passato",
       "invalid": "Valore non valido"
-    }
+    },
+    "new": "Nuova automazione",
+    "whatToDo": "Cosa deve fare",
+    "whatToDoPlaceholder": "Riassumi le notizie su…",
+    "name": "Nome",
+    "namePlaceholder": "Nome opzionale",
+    "when": "Quando",
+    "whenDaily": "Ogni giorno",
+    "whenEvery": "Ogni N",
+    "whenOnce": "Una volta",
+    "whenAdvanced": "Avanzato",
+    "cronExample": "Es. 0 8 * * 1-5 (Lun-Ven alle 8:00)",
+    "whereToReply": "Dove risponde",
+    "newChat": "Nuova chat",
+    "existingChat": "Chat esistente",
+    "create": "Crea",
+    "creating": "Creazione...",
+    "createdSuccess": "Automazione creata",
+    "describeToBot": "Oppure descrivila al bot"
   },
   "share": {
     "pickChatTitle": "Condividi in nanobot",

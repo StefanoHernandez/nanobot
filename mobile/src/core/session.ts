@@ -270,6 +270,41 @@ export class NanobotSession {
     return (await res.json()) as T;
   }
 
+  async post<T>(path: string, body?: unknown): Promise<T> {
+    const doFetch = (token: string) =>
+      this.f(`${this.baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    if (this.inflight) await this.inflight.catch(() => {});
+    const used = this.api;
+    let res = await doFetch(used);
+    if (res.status === 401) {
+      if (this.api === used || !this.api) await this.refresh();
+      res = await doFetch(this.api);
+      if (res.status === 401) {
+        this.setOverride("auth_error");
+        throw new Error("unauthorized");
+      }
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let msg = text;
+      try {
+        const j = JSON.parse(text) as { error?: unknown };
+        if (typeof j?.error === "string") msg = j.error;
+      } catch {}
+      const err = new Error(msg || `HTTP ${res.status}`);
+      (err as Error & { status?: number }).status = res.status;
+      throw err;
+    }
+    return (await res.json()) as T;
+  }
+
   async mutate<T>(action: string, payload: Record<string, unknown> = {}, timeoutMs?: number): Promise<T> {
     try {
       return await this.client.requestMutation<T>(action, payload, timeoutMs);
