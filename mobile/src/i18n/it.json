@@ -65,6 +65,7 @@
     "face": {
       "thinking": "sta pensando…",
       "working": "sta lavorando…",
+      "writing": "sta scrivendo…",
       "offline": "non raggiungibile",
       "error": "qualcosa è andato storto"
     }

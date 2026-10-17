@@ -159,3 +159,13 @@ test("export failure in ThreadScreen shows common.operationFailed toast and clea
   expect(toast.show).toHaveBeenCalledWith(i18n.t("common.operationFailed"));
   exportChatMock.mockRestore();
 });
+
+test("ThreadScreen shows writing face state while assistant text is streaming", async () => {
+  const f = await mount();
+  await act(flush);
+  await emit(f, { event: "user_message", text: "hi", starts_turn: true, ...T });
+  await emit(f, { event: "delta", text: "hello", stream_id: "s", ...T });
+  expect(screen.getByTestId("face-writing", { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.getByText("sta scrivendo…")).toBeTruthy();
+});
+
