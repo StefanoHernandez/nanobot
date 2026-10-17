@@ -59,6 +59,15 @@
       "stream_error": "Il turno non è riuscito",
       "retry": "Nuovo tentativo in corso"
     },
+    "compaction": {
+      "started": "Compattazione in corso…",
+      "succeeded": "Contesto compattato",
+      "failed": "Compattazione non riuscita",
+      "cancelled": "Compattazione annullata",
+      "freed": "Contesto compattato · liberati ~{{freed}} token (da {{before}} a {{after}})",
+      "afterOnly": "Contesto compattato · dopo: {{after}} token",
+      "nothingToCompact": "Niente da compattare"
+    },
     "changeModel": "Cambia modello",
     "chooseModel": "Scegli il modello",
     "historyError": "Impossibile caricare lo storico di questa chat.",

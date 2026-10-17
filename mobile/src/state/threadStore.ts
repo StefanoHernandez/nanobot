@@ -15,10 +15,13 @@ import type { InboundEvent, SessionMention, ThreadProjectionEvent, UIMessage } f
 import type { NanobotSession } from "../core/session";
 import { prepareImage, uploadFiles, validateFiles, type LocalFile } from "../core/upload";
 import { chatIdOf, chatsStore, isWritable } from "./chatsStore";
-import { useSession } from "./sessionStore";
+import { sessionStore, useSession } from "./sessionStore";
 import { subagentsStore } from "./subagentsStore";
 import { isStaleThreadSnapshot } from "./staleSnapshot";
 import { workspaceStore } from "./workspace";
+import { latestContextUsage } from "./usage";
+import { toast } from "../ui/components/Toast";
+import { i18n } from "../i18n";
 
 export type Notice = { kind: "compaction" | "recovery" | "fallback" | "stream_error" | "retry"; text: string };
 
@@ -82,7 +85,7 @@ type S = {
 
 const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false, hasMoreBefore: false, loadingOlder: false, beforeCursor: null };
 const LEAVE_DELAY_MS = 300;
-const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end"]);
+const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end", "context_compaction"]);
 const threadPath = (key: string) => `/api/sessions/${encodeURIComponent(key)}/webui-thread`;
 
 type Runtime = {
@@ -103,6 +106,7 @@ export function createThreadStore() {
   const rts = new Map<string, Runtime>();
   let ids = 0;
   const leaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const compactTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const cancelLeave = (key: string) => {
     clearTimeout(leaveTimers.get(key));
     leaveTimers.delete(key);
@@ -177,10 +181,46 @@ export function createThreadStore() {
           rtOf(key).proj = resetThreadProjectionCursor(rtOf(key).proj, get().threads[key].messages);
           return;
         }
-        case "context_compaction":
-          if (ev.phase !== "started")
-            patch(key, (s) => ({ notices: notice(s.notices, { kind: "compaction", text: ev.phase === "succeeded" ? "Context compacted" : `Context compaction ${ev.phase}` }, []) }));
+        case "context_compaction": {
+          clearTimeout(compactTimers.get(key));
+          compactTimers.delete(key);
+          const curMsgs = (get().threads[key] ?? EMPTY).messages;
+          const currentBeforeTokens = latestContextUsage(curMsgs)?.contextTokens;
+          project(key, ev);
+          if (ev.phase === "started") {
+            (rtOf(key) as unknown as { lastCompactionBeforeTokens?: number }).lastCompactionBeforeTokens = currentBeforeTokens;
+            patch(key, (s) => ({
+              notices: notice(s.notices, { kind: "compaction", text: i18n.t("thread.compaction.started", { defaultValue: "Compattazione in corso…" }) }, ["compaction"]),
+            }));
+          } else {
+            const rtExt = rtOf(key) as unknown as { lastCompactionBeforeTokens?: number };
+            const beforeTokens = rtExt.lastCompactionBeforeTokens ?? currentBeforeTokens;
+            rtExt.lastCompactionBeforeTokens = undefined;
+            patch(key, (s) => ({ notices: notice(s.notices, null, ["compaction"]) }));
+            if (ev.phase === "succeeded") {
+              const compId = `compaction-${ev.compaction_id}`;
+              const s = rtOf(key).session ?? sessionStore.getState().session;
+              if (s) {
+                void (async () => {
+                  try {
+                    const ctx = await s.get<{ estimated_session_tokens?: number }>(`/api/sessions/${encodeURIComponent(key)}/context`);
+                    const afterTokens = ctx?.estimated_session_tokens;
+                    if (typeof afterTokens === "number") {
+                      patch(key, (st) => ({
+                        messages: st.messages.map((m) =>
+                          m.id === compId
+                            ? { ...m, compaction: { ...m.compaction!, tokensBefore: beforeTokens, tokensAfter: afterTokens } }
+                            : m
+                        ),
+                      }));
+                    }
+                  } catch {}
+                })();
+              }
+            }
+          }
           return;
+        }
         case "retry_status":
           patch(key, (s) => ({
             running: ev.state === "recovered" || ev.state === "cleared" ? s.running : true,
@@ -326,7 +366,27 @@ export function createThreadStore() {
           return;
         }
         rt.proj = createThreadProjectionState(history);
-        patch(key, () => ({ messages: history, running: active, loaded: true }));
+        patch(key, (s) => ({ messages: history, running: active, loaded: true, notices: notice(s.notices, null, ["compaction"]) }));
+        const lastUsageIdx = history.map((m, i) => m.role === "assistant" && typeof m.usage?.context_tokens === "number" && m.usage.context_tokens >= 0 ? i : -1).reduce((max, i) => Math.max(max, i), -1);
+        const lastCompactionIdx = history.map((m, i) => m.kind === "compaction" && m.compaction?.phase === "succeeded" ? i : -1).reduce((max, i) => Math.max(max, i), -1);
+        if (lastCompactionIdx >= 0 && lastCompactionIdx > lastUsageIdx) {
+          const targetId = history[lastCompactionIdx].id;
+          void (async () => {
+            try {
+              const ctx = await session.get<{ estimated_session_tokens?: number }>(`/api/sessions/${encodeURIComponent(key)}/context`);
+              const after = ctx?.estimated_session_tokens;
+              if (typeof after === "number") {
+                patch(key, (st) => ({
+                  messages: st.messages.map((m) =>
+                    m.id === targetId
+                      ? { ...m, compaction: { ...m.compaction!, tokensAfter: after } }
+                      : m
+                  ),
+                }));
+              }
+            } catch {}
+          })();
+        }
         if (writable && !active) {
           client.reconcileCanonicalCompletion(chatId, runGen, canonicalCompleted, snapshot);
           patch(key, () => ({ running: client.getRunStartedAt(chatId) != null }));
@@ -389,6 +449,8 @@ export function createThreadStore() {
       },
 
       unload(key) {
+        clearTimeout(compactTimers.get(key));
+        compactTimers.delete(key);
         const rt = rts.get(key);
         if (!rt) return;
         rt.gen++;
@@ -481,8 +543,18 @@ export function createThreadStore() {
           if (files.length) row.media = files.map((f) => toMediaAttachment({ kind: f.mime.startsWith("image/") ? "image" : "file", url: f.uri, name: f.name }));
           const messages: UIMessage[] = [...s.messages, row];
           rt.proj = { ...proj, messages };
-          return { messages, running: true, stopped: false, sendError: null, uploading: files.length > 0, ...(files.length ? {} : { draft: "" }), notices: s.notices.filter((n) => n.kind !== "stream_error") };
+          return { messages, running: true, stopped: false, sendError: null, uploading: files.length > 0, ...(files.length ? {} : { draft: "" }), notices: s.notices.filter((n) => n.kind !== "stream_error" && n.kind !== "compaction") };
         });
+        if (text.trim() === "/compact") {
+          clearTimeout(compactTimers.get(key));
+          compactTimers.set(
+            key,
+            setTimeout(() => {
+              compactTimers.delete(key);
+              toast.show(i18n.t("thread.compaction.nothingToCompact", { defaultValue: "Niente da compattare" }));
+            }, 10000)
+          );
+        }
         chatsStore.getState().titleTemporary(key, text);
         if (!files.length) {
           session.client.sendMessage(chatIdOf(key), text, undefined, options);
