@@ -51,17 +51,42 @@ test("reorder sends the new call order", async () => {
   expect(mutate).toHaveBeenCalledWith("settings.model_call_order.update", { order: ["b", "a"] }, undefined);
 });
 
-test("remove is disabled when only one entry is left", async () => {
+test("the switch is disabled when only one entry is left", async () => {
   settingsStore.getState().setData(base({ model_call_order: ["a"] }) as never);
   await show();
-  expect(screen.getByLabelText("Remove a").props.accessibilityState.disabled).toBe(true);
+  const switchA = screen.getByRole("switch", { name: "a" });
+  expect(switchA.props.accessibilityState?.disabled ?? switchA.props.disabled).toBe(true);
   expect(screen.getByText("Primary")).toBeTruthy();
 });
 
-test("disabled presets can be added to the order", async () => {
+test("the primary's switch is disabled", async () => {
   await show();
-  await fireEvent.press(screen.getByText("Add to order"));
+  const switchA = screen.getByRole("switch", { name: "a" });
+  expect(switchA.props.accessibilityState?.disabled ?? switchA.props.disabled).toBe(true);
+});
+
+test("a row's switch off sends the order without it; on appends it", async () => {
+  await show();
+  const switchB = screen.getByRole("switch", { name: "b" });
+  expect(switchB.props.value).toBe(true);
+  await fireEvent(switchB, "valueChange", false);
+  expect(mutate).toHaveBeenCalledWith("settings.model_call_order.update", { order: ["a"] }, undefined);
+
+  const switchC = screen.getByRole("switch", { name: "c" });
+  expect(switchC.props.value).toBe(false);
+  await fireEvent(switchC, "valueChange", true);
   expect(mutate).toHaveBeenCalledWith("settings.model_call_order.update", { order: ["a", "b", "c"] }, undefined);
+});
+
+test("disabled rows render after the active ones and have no arrows", async () => {
+  await show();
+  expect(screen.getByLabelText("Move down a")).toBeTruthy();
+  expect(screen.getByLabelText("Move up b")).toBeTruthy();
+  expect(screen.queryByLabelText("Move up c")).toBeNull();
+  expect(screen.queryByLabelText("Move down c")).toBeNull();
+  const switchC = screen.getByRole("switch", { name: "c" });
+  expect(switchC.props.value).toBe(false);
+  expect(screen.getByText("Disabled models are not used or proposed in chats. The first active model is the primary.")).toBeTruthy();
 });
 
 test("saving an edited preset sends only the diff", async () => {
