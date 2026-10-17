@@ -28,6 +28,7 @@ import { DEFAULT_LIMITS } from "../../core/session";
 import { prepareImage, validateFiles, type LocalFile } from "../../core/upload";
 import { AttachmentBar } from "./AttachmentBar";
 import { QueuedMessages } from "./QueuedMessages";
+import { ReplyBar } from "./ReplyBar";
 import { toLocalFile, type RawPickerAsset } from "./attachments";
 import { MentionMenu } from "./MentionMenu";
 import {
@@ -60,6 +61,8 @@ export function Composer({ chatKey }: { chatKey: string }) {
     setDraft,
     send,
     modifyQueued = () => {},
+    replyingTo = null,
+    setReplyingTo = () => {},
     running,
     stop,
     pendingFiles = [],
@@ -367,6 +370,12 @@ export function Composer({ chatKey }: { chatKey: string }) {
             inputRef.current?.focus();
           }}
         />
+        {replyingTo ? (
+          <ReplyBar
+            message={replyingTo}
+            onDismiss={() => setReplyingTo(null)}
+          />
+        ) : null}
         <View style={[styles.container, th.bezel]}>
       <View style={[th.surface, { borderRadius: th.radius.lg, padding: 4 }]}>
         {isSlash ? (

@@ -53,6 +53,7 @@ export type ThreadSlice = {
   loadingOlder?: boolean;
   beforeCursor?: string | null;
   queuedMessages?: QueuedMessage[];
+  replyingTo?: UIMessage | null;
 };
 
 export type QueuedMessage = {
@@ -87,6 +88,7 @@ type S = {
   sendQueuedNow(session: NanobotSession, key: string, id: string): void;
   modifyQueued(key: string, id: string): void;
   removeQueued(key: string, id: string): void;
+  setReplyingTo(key: string, message: UIMessage | null): void;
   setPendingFiles(key: string, files: LocalFile[]): void;
   stop(session: NanobotSession, key: string): void;
   setDraft(key: string, text: string): void;
@@ -94,7 +96,7 @@ type S = {
   cancelLeave(key: string): void;
 };
 
-const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false, hasMoreBefore: false, loadingOlder: false, beforeCursor: null, queuedMessages: [] };
+const EMPTY: ThreadSlice = { messages: [], running: false, model: null, preset: null, notices: [], draft: "", loaded: false, stopped: false, sendError: null, uploading: false, hydrating: false, pendingFiles: [], forkBoundary: null, temporary: false, hasMoreBefore: false, loadingOlder: false, beforeCursor: null, queuedMessages: [], replyingTo: null };
 const LEAVE_DELAY_MS = 300;
 const PROJECTED = new Set(["user_message", "message", "file_edit", "delta", "stream_end", "reasoning_delta", "reasoning_end", "turn_end", "context_compaction"]);
 const threadPath = (key: string) => `/api/sessions/${encodeURIComponent(key)}/webui-thread`;
@@ -568,12 +570,23 @@ export function createThreadStore() {
           }
         }
 
-        const running = (get().threads[key] ?? EMPTY).running;
+        const slice = get().threads[key] ?? EMPTY;
+        const replyingTo = slice.replyingTo;
+        let fullText = text;
+        if (replyingTo?.content) {
+          const raw = replyingTo.content;
+          const cut = raw.length > 500 ? raw.slice(0, 500) + "…" : raw;
+          const quoteLines = cut.split(/\r?\n/).map((l) => `> ${l}`).join("\n");
+          fullText = text ? `${quoteLines}\n\n${text}` : quoteLines;
+          patch(key, () => ({ replyingTo: null }));
+        }
+
+        const running = slice.running;
 
         if (running && !opts.steer) {
           const id = `${Date.now().toString(36)}-${++ids}`;
           patch(key, (s) => ({
-            queuedMessages: [...(s.queuedMessages ?? []), { id, text, opts }],
+            queuedMessages: [...(s.queuedMessages ?? []), { id, text: fullText, opts }],
             draft: "",
           }));
           return true;
@@ -587,13 +600,13 @@ export function createThreadStore() {
           // Guidance keeps the active answer cursor (useNanobotStream.ts:966); a fresh turn resets it.
           const base = { ...rt.proj, messages: s.messages };
           const proj = running ? clearThreadProjectionActivity(base) : resetThreadProjectionCursor(base, s.messages);
-          const row: UIMessage = { id: rowId, role: "user", content: text, turnId, turnPhase: "user", turnSeq: 0, deliveryStatus: "sending", createdAt: Date.now() };
+          const row: UIMessage = { id: rowId, role: "user", content: fullText, turnId, turnPhase: "user", turnSeq: 0, deliveryStatus: "sending", createdAt: Date.now() };
           if (files.length) row.media = files.map((f) => toMediaAttachment({ kind: f.mime.startsWith("image/") ? "image" : "file", url: f.uri, name: f.name }));
           const messages: UIMessage[] = [...s.messages, row];
           rt.proj = { ...proj, messages };
           return { messages, running: true, stopped: false, sendError: null, uploading: files.length > 0, ...(files.length ? {} : { draft: "" }), notices: s.notices.filter((n) => n.kind !== "stream_error" && n.kind !== "compaction") };
         });
-        if (text.trim() === "/compact") {
+        if (fullText.trim() === "/compact") {
           clearTimeout(compactTimers.get(key));
           compactTimers.set(
             key,
@@ -603,9 +616,9 @@ export function createThreadStore() {
             }, 10000)
           );
         }
-        chatsStore.getState().titleTemporary(key, text);
+        chatsStore.getState().titleTemporary(key, fullText);
         if (!files.length) {
-          session.client.sendMessage(chatIdOf(key), text, undefined, options);
+          session.client.sendMessage(chatIdOf(key), fullText, undefined, options);
           return true;
         }
         void (async () => {
@@ -622,7 +635,7 @@ export function createThreadStore() {
             const refs = await uploadFiles(session, prepared);
             if (rts.get(key) !== rt) return;
             if (session.uploadCapability !== cap0) throw new Error("upload_unavailable");
-            session.client.sendMessage(chatIdOf(key), text, refs, options);
+            session.client.sendMessage(chatIdOf(key), fullText, refs, options);
             patch(key, (s) => ({ uploading: false, pendingFiles: [], ...(s.draft.trim() === text.trim() ? { draft: "" } : {}) }));
           } catch (e) {
             if (rts.get(key) !== rt) return;
@@ -663,6 +676,10 @@ export function createThreadStore() {
         }));
       },
 
+      setReplyingTo(key, message) {
+        patch(key, () => ({ replyingTo: message }));
+      },
+
       setPendingFiles(key, pendingFiles) {
         patch(key, () => ({ pendingFiles }));
       },
@@ -700,6 +717,8 @@ export function useThreadSlice(key: string) {
   return {
     ...slice,
     queuedMessages: slice.queuedMessages ?? [],
+    replyingTo: slice.replyingTo ?? null,
+    setReplyingTo: (m: UIMessage | null) => threadStore.getState().setReplyingTo(key, m),
     sendQueuedNow: (id: string) => session && threadStore.getState().sendQueuedNow(session, key, id),
     modifyQueued: (id: string) => threadStore.getState().modifyQueued(key, id),
     removeQueued: (id: string) => threadStore.getState().removeQueued(key, id),

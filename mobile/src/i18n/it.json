@@ -73,6 +73,11 @@
       "modify": "Modifica",
       "remove": "Elimina"
     },
+    "reply": {
+      "you": "Tu",
+      "assistant": "Nanobot",
+      "dismiss": "Annulla risposta"
+    },
     "changeModel": "Cambia modello",
     "chooseModel": "Scegli il modello",
     "historyError": "Impossibile caricare lo storico di questa chat.",
