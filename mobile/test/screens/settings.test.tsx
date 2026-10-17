@@ -32,6 +32,8 @@ jest.mock("../../src/settings/prefs", () => ({
     setNotificationSound: jest.fn(),
     voiceAutoRead: jest.fn(() => false),
     setVoiceAutoRead: jest.fn(),
+    voiceEngine: jest.fn(() => "device"),
+    setVoiceEngine: jest.fn(),
   },
 }));
 
@@ -89,6 +91,20 @@ test("voice auto-read switch calls setVoiceAutoRead", async () => {
   await fireEvent(sw, "valueChange", true);
   expect(prefs.setVoiceAutoRead).toHaveBeenCalledWith(true);
   expect(sw.props.value).toBe(true);
+});
+
+test("voice engine renders both options as chips and pressing saves preference", async () => {
+  await show();
+  const deviceBtn = screen.getByText(i18n.t("voice.engineDevice"));
+  const serverBtn = screen.getByText(i18n.t("voice.engineServer"));
+  expect(deviceBtn).toBeTruthy();
+  expect(serverBtn).toBeTruthy();
+
+  await fireEvent.press(serverBtn);
+  expect(prefs.setVoiceEngine).toHaveBeenCalledWith("server");
+
+  await fireEvent.press(deviceBtn);
+  expect(prefs.setVoiceEngine).toHaveBeenCalledWith("device");
 });
 
 test("enabling lock failing shows toast and switch stays off", async () => {
