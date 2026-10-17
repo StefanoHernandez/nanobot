@@ -53,6 +53,12 @@ import type {
   SkillSummary,
 } from "@/lib/types";
 
+const focusTargets = new Set<string>();
+
+export function markComposerForFocus(chatKey: string) {
+  focusTargets.add(chatKey);
+}
+
 export function Composer({ chatKey }: { chatKey: string }) {
   const t = useT();
   const th = useTheme();
@@ -87,7 +93,24 @@ export function Composer({ chatKey }: { chatKey: string }) {
   const [pickedApps, setPickedApps] = useState<OutboundCliAppMention[]>([]);
   const [pickedPresets, setPickedPresets] = useState<OutboundMcpPresetMention[]>([]);
   const [cursor, setCursor] = useState<number | undefined>(undefined);
+  const [selection, setSelection] = useState<{ start: number; end: number } | undefined>(() => {
+    if (focusTargets.has(chatKey) && draft) {
+      return { start: draft.length, end: draft.length };
+    }
+    return undefined;
+  });
   const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (focusTargets.has(chatKey)) {
+      focusTargets.delete(chatKey);
+      if (draft) {
+        setSelection({ start: draft.length, end: draft.length });
+        setCursor(draft.length);
+      }
+      inputRef.current?.focus();
+    }
+  }, [chatKey, draft]);
 
   const limits = session?.limits ?? DEFAULT_LIMITS;
 
@@ -193,6 +216,7 @@ export function Composer({ chatKey }: { chatKey: string }) {
   const handleDraftChange = (newDraft: string) => {
     setDraft(newDraft);
     setCursor(newDraft.length);
+    if (selection) setSelection(undefined);
     setPickedSessions((prev) => pruneMentions(newDraft, prev));
     setPickedApps((prev) => pruneMentions(newDraft, prev));
     setPickedPresets((prev) => pruneMentions(newDraft, prev));
@@ -451,7 +475,11 @@ export function Composer({ chatKey }: { chatKey: string }) {
             // Read-only while the partial is shown: typing would commit it and the final would repeat it.
             editable={!voicePartial}
             onChangeText={handleDraftChange}
-            onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
+            selection={selection}
+            onSelectionChange={(e) => {
+              setCursor(e.nativeEvent.selection.end);
+              if (selection) setSelection(undefined);
+            }}
             onKeyPress={handleKeyPress}
             placeholder={t("composer.placeholder")}
             placeholderTextColor={th.colors.mutedForeground}

@@ -93,7 +93,9 @@ function MessageRowImpl({ unit, live, chatKey, onLongPress, onReply }: Props) {
     </View>
   );
 
-  if (m.role === "user")
+  if (m.role === "user") {
+    const canEdit = !!onLongPress && m.deliveryStatus !== "sending";
+    const UserWrap = canEdit ? Pressable : View;
     return (
       <Swipeable
         ref={swipeableRef}
@@ -109,12 +111,16 @@ function MessageRowImpl({ unit, live, chatKey, onLongPress, onReply }: Props) {
           }
         }}
       >
-        <View style={{ alignSelf: "flex-end", maxWidth: "85%", marginTop: 22, marginBottom: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: th.radius.md, borderBottomRightRadius: 6, backgroundColor: th.colors.userBubble, opacity: m.deliveryStatus === "sending" ? 0.6 : 1 }}>
+        <UserWrap
+          {...(canEdit ? { onLongPress: () => onLongPress!(m) } : {})}
+          style={{ alignSelf: "flex-end", maxWidth: "85%", marginTop: 22, marginBottom: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: th.radius.md, borderBottomRightRadius: 6, backgroundColor: th.colors.userBubble, opacity: m.deliveryStatus === "sending" ? 0.6 : 1 }}
+        >
           <Text selectable style={{ color: th.colors.userBubbleForeground, fontFamily: th.font.regular, fontSize: 16, lineHeight: 23 }}>{m.content}</Text>
           {m.media?.length ? <MediaList media={m.media} /> : null}
-        </View>
+        </UserWrap>
       </Swipeable>
     );
+  }
 
   // finished, non-empty assistant answer: long-press opens the copy/fork menu
   const finished = !!onLongPress && isFinishedAnswer;
