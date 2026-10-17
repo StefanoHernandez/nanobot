@@ -68,6 +68,11 @@
       "afterOnly": "Context compacted · after: {{after}} tokens",
       "nothingToCompact": "Nothing to compact"
     },
+    "queue": {
+      "sendNow": "Send now",
+      "modify": "Edit",
+      "remove": "Delete"
+    },
     "changeModel": "Change model",
     "chooseModel": "Choose model",
     "historyError": "Couldn't load this chat's history.",

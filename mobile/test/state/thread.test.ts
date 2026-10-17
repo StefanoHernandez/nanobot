@@ -95,9 +95,11 @@ test("send: optimistic user row, /stop frame, guidance while running, drafts", a
   s.send(f.session, KEY, "hello");
   expect(f.sent[0]).toMatchObject({ chatId: "c1", content: "hello" });
   expect(slice(store).messages[0]).toMatchObject({ role: "user", content: "hello", deliveryStatus: "sending" });
-  expect(slice(store).running).toBe(true);
-  s.send(f.session, KEY, "also this"); // guidance while running
+  s.send(f.session, KEY, "also this"); // queues while running
+  expect(slice(store).queuedMessages).toHaveLength(1);
+  s.sendQueuedNow(f.session, KEY, slice(store).queuedMessages![0].id); // send now steers
   expect(f.sent[1].options).toMatchObject({ startsNewRun: false });
+  expect(slice(store).queuedMessages).toHaveLength(0);
   s.stop(f.session, KEY);
   expect(f.sent[2].content).toBe("/stop");
   expect(f.client.finishRunLocally).toHaveBeenCalledWith("c1");
