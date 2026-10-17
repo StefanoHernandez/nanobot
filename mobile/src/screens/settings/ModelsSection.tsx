@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ModelRequestAPI } from "@/lib/types";
 import { useT } from "../../i18n";
 import {
-  callOrderOps, canDelete, DEFERRED_PROVIDERS, canSaveOrder, createPresetAndOrder, parseContextWindowTokens, presetUpdateDiff, suggestPresetName,
+  activePresetNames, callOrderOps, canDelete, DEFERRED_PROVIDERS, canSaveOrder, createPresetAndOrder, parseContextWindowTokens, presetUpdateDiff, suggestPresetName,
   useProviderModels, validatePreset, visiblePresets, type Preset, type PresetForm,
 } from "../../settings/models";
 import { parseJsonObject } from "../../settings/providers";
@@ -32,7 +32,8 @@ export function ModelsSection() {
   if (!data) return null;
   const order = data.model_call_order;
   const editable = data.model_call_order_editable !== false;
-  const byName = new Map(data.model_presets.map((p) => [p.name, p]));
+  const activeSet = activePresetNames(data);
+  const byName = new Map(groups.map((g) => [g.preset.name, g]));
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     try {
@@ -46,58 +47,105 @@ export function ModelsSection() {
   const setOrder = (next: string[]) => {
     if (canSaveOrder(order, next)) void run(() => mutate("settings.model_call_order.update", { order: next }));
   };
-  const disabled = groups.filter((g) => !order.includes(g.preset.name));
+
+  const activeRows = order
+    .map((name, i) => {
+      const g = byName.get(name);
+      const pr = g?.preset ?? data.model_presets.find((p) => p.name === name);
+      if (!pr) return null;
+      return {
+        preset: pr,
+        variants: g?.variants ?? [],
+        active: true,
+        index: i,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r != null);
+
+  const disabledRows = groups
+    .filter((g) => !activeSet.has(g.preset.name))
+    .map((g) => ({
+      preset: g.preset,
+      variants: g.variants,
+      active: false,
+      index: -1,
+    }));
+
+  const allRows = [...activeRows, ...disabledRows];
 
   return (
     <>
       <Head>{t("models.title")}</Head>
       <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
-        {order.map((name, i) => {
-          const pr = byName.get(name);
+        {allRows.map((r, i) => {
+          const isPrimary = r.active && r.index === 0;
+          const subtitle = [
+            r.preset.model,
+            r.variants.length ? t("models.variants", { n: r.variants.length }) : null,
+          ].filter(Boolean).join(" · ");
+
           return (
-            <View key={`${name}-${i}`} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
+            <View
+              key={r.preset.name}
+              style={[
+                i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined,
+                !r.active ? { opacity: 0.5 } : undefined,
+              ]}
+            >
               <ListItem
-                title={name}
-                subtitle={pr?.model}
+                title={r.preset.name}
+                subtitle={subtitle}
                 left={
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    {pr?.provider ? <ProviderIcon provider={pr.provider} label={pr.provider} size={24} /> : null}
-                    {i === 0 ? <Text style={{ backgroundColor: th.colors.brandSoft, color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.sm, overflow: "hidden" }}>{t("models.primary")}</Text> : null}
+                    {r.preset.provider ? <ProviderIcon provider={r.preset.provider} label={r.preset.provider} size={24} /> : null}
+                    {isPrimary ? (
+                      <Text style={{ backgroundColor: th.colors.brandSoft, color: th.colors.brandSoftForeground, fontFamily: th.font.medium, fontSize: 13, paddingHorizontal: 8, paddingVertical: 2, borderRadius: th.radius.sm, overflow: "hidden" }}>
+                        {t("models.primary")}
+                      </Text>
+                    ) : null}
                   </View>
                 }
-                onPress={pr ? () => setEditing(pr) : undefined}
+                onPress={() => setEditing(r.preset)}
                 right={
-                  editable ? (
-                    <View style={{ flexDirection: "row" }}>
-                      <IconButton icon="chevron-up" accessibilityLabel={t("models.moveUp", { name })} disabled={busy || i === 0} onPress={() => setOrder(callOrderOps.moveUp(order, i))} />
-                      <IconButton icon="chevron-down" accessibilityLabel={t("models.moveDown", { name })} disabled={busy || i === order.length - 1} onPress={() => setOrder(callOrderOps.moveDown(order, i))} />
-                      <IconButton icon="close" accessibilityLabel={t("models.remove", { name })} disabled={busy || order.length <= 1} onPress={() => setOrder(callOrderOps.remove(order, i))} />
-                    </View>
-                  ) : undefined
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {r.active && editable ? (
+                      <>
+                        <IconButton
+                          icon="chevron-up"
+                          accessibilityLabel={t("models.moveUp", { name: r.preset.name })}
+                          disabled={busy || r.index === 0}
+                          onPress={() => setOrder(callOrderOps.moveUp(order, r.index))}
+                        />
+                        <IconButton
+                          icon="chevron-down"
+                          accessibilityLabel={t("models.moveDown", { name: r.preset.name })}
+                          disabled={busy || r.index === order.length - 1}
+                          onPress={() => setOrder(callOrderOps.moveDown(order, r.index))}
+                        />
+                      </>
+                    ) : null}
+                    <Switch
+                      accessibilityLabel={r.preset.name}
+                      value={r.active}
+                      disabled={busy || !editable || (r.active && (r.index === 0 || order.length <= 1))}
+                      onValueChange={(on) => {
+                        if (r.active && !on) {
+                          setOrder(callOrderOps.remove(order, r.index));
+                        } else if (!r.active && on) {
+                          setOrder(callOrderOps.add(order, r.preset.name));
+                        }
+                      }}
+                    />
+                  </View>
                 }
               />
             </View>
           );
         })}
       </View>
-      {disabled.length > 0 && editable ? (
-        <>
-          <Head>{t("models.disabled")}</Head>
-          <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
-            {disabled.map((g, idx) => (
-              <View key={g.preset.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
-                <ListItem
-                  left={g.preset.provider ? <ProviderIcon provider={g.preset.provider} label={g.preset.provider} size={24} /> : undefined}
-                  title={g.preset.name}
-                  subtitle={[g.preset.model, g.variants.length ? t("models.variants", { n: g.variants.length }) : null].filter(Boolean).join(" · ")}
-                  onPress={() => setEditing(g.preset)}
-                  right={<Button title={t("models.addToOrder")} variant="secondary" disabled={busy} onPress={() => setOrder(callOrderOps.add(order, g.preset.name))} />}
-                />
-              </View>
-            ))}
-          </View>
-        </>
-      ) : null}
+      <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginHorizontal: 16, marginTop: 8 }}>
+        {t("models.help")}
+      </Text>
       <TaskModels />
       <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 16, overflow: "hidden" }}>
         <ListItem
