@@ -32,7 +32,7 @@ class AutomationError(Exception):
         super().__init__(code)
 
 
-def create_automation(
+async def create_automation(
     body: dict[str, Any],
     *,
     cron: CronService,
@@ -94,8 +94,7 @@ def create_automation(
         try:
             sidebar = read_webui_sidebar_state()
             if session_key in sidebar.get("title_overrides", {}):
-                session = sessions.get_or_create(session_key)
-                sessions.save(session)
+                session = await sessions.state.get_header(session_key)
         except Exception:
             pass
 
@@ -156,7 +155,7 @@ async def _handle_post(
 
     try:
         body = await _read_json(request)
-        job_payload = create_automation(
+        job_payload = await create_automation(
             body,
             cron=cron,
             sessions=sessions,

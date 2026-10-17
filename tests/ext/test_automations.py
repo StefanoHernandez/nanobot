@@ -243,7 +243,7 @@ async def test_rejects_unknown_chat(tmp_path):
 async def test_rejects_temporary_chat(tmp_path):
     workspace, sessions = _sessions(tmp_path)
     # Create transient (temporary) session
-    sessions.get_or_create_transient("websocket:temp1")
+    await sessions.state.register_transient("websocket:temp1")
     cron = CronService(tmp_path / "cron" / "jobs.json")
 
     handler = automations.automations_post_handler(
