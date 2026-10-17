@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchJournal, saveJournalSettings, type JournalIndex } from "../../ecosystem/journal";
 import { useT } from "../../i18n";
+import { activePresetNames } from "../../settings/models";
 import { useSettings } from "../../settings/store";
 import { useSession } from "../../state/sessionStore";
 import { ListItem, Sheet, toast } from "../../ui/components";
@@ -82,6 +83,23 @@ export function TaskModels() {
       : []),
   ];
 
+  const active = activePresetNames(data);
+  const cur = picking ? current(picking) : null;
+  const byName = new Map(data.model_presets.map((p) => [p.name, p]));
+  const order = data.model_call_order ?? data.model_presets.map((p) => p.name);
+  const seen = new Set<string>();
+  const activeList: string[] = [];
+  for (const name of order) {
+    if (byName.has(name) && active.has(name) && !seen.has(name)) {
+      seen.add(name);
+      activeList.push(name);
+    }
+  }
+  const taskOptions: (string | null)[] = [null, ...activeList];
+  if (cur && !active.has(cur) && byName.has(cur) && !seen.has(cur)) {
+    taskOptions.push(cur);
+  }
+
   return (
     <>
       <Head>{t("models.tasks.title")}</Head>
@@ -99,19 +117,28 @@ export function TaskModels() {
       {picking ? (
         <Sheet open onClose={() => setPicking(null)} title={rows.find((r) => r.task === picking)!.title}>
           <ScrollView style={{ maxHeight: 420 }}>
-            {[null, ...data.model_presets.map((p) => p.name)].map((name) => (
-              <ListItem
-                key={name ?? "__same__"}
-                title={name ?? t("models.tasks.sameAsChat")}
-                subtitle={name ? data.model_presets.find((p) => p.name === name)?.model : undefined}
-                onPress={() => void choose(picking, name)}
-                right={
-                  current(picking) === name ? (
-                    <Text accessibilityLabel={t("models.tasks.selected")} style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 16 }}>✓</Text>
-                  ) : undefined
-                }
-              />
-            ))}
+            {taskOptions.map((name) => {
+              const isCurrent = current(picking) === name;
+              const isActive = name == null || active.has(name);
+              const title = name == null
+                ? t("models.tasks.sameAsChat")
+                : isActive
+                ? name
+                : `${name} (${t("models.disabledTag")})`;
+              return (
+                <ListItem
+                  key={name ?? "__same__"}
+                  title={title}
+                  subtitle={name ? byName.get(name)?.model : undefined}
+                  onPress={() => void choose(picking, name)}
+                  right={
+                    isCurrent ? (
+                      <Text accessibilityLabel={t("models.tasks.selected")} style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 16 }}>✓</Text>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </ScrollView>
         </Sheet>
       ) : null}

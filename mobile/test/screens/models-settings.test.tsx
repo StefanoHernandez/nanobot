@@ -51,17 +51,42 @@ test("reorder sends the new call order", async () => {
   expect(mutate).toHaveBeenCalledWith("settings.model_call_order.update", { order: ["b", "a"] }, undefined);
 });
 
-test("remove is disabled when only one entry is left", async () => {
+test("the switch is disabled when only one entry is left", async () => {
   settingsStore.getState().setData(base({ model_call_order: ["a"] }) as never);
   await show();
-  expect(screen.getByLabelText("Remove a").props.accessibilityState.disabled).toBe(true);
+  const switchA = screen.getByRole("switch", { name: "a" });
+  expect(switchA.props.accessibilityState?.disabled ?? switchA.props.disabled).toBe(true);
   expect(screen.getByText("Primary")).toBeTruthy();
 });
 
-test("disabled presets can be added to the order", async () => {
+test("the primary's switch is disabled", async () => {
   await show();
-  await fireEvent.press(screen.getByText("Add to order"));
+  const switchA = screen.getByRole("switch", { name: "a" });
+  expect(switchA.props.accessibilityState?.disabled ?? switchA.props.disabled).toBe(true);
+});
+
+test("a row's switch off sends the order without it; on appends it", async () => {
+  await show();
+  const switchB = screen.getByRole("switch", { name: "b" });
+  expect(switchB.props.value).toBe(true);
+  await fireEvent(switchB, "valueChange", false);
+  expect(mutate).toHaveBeenCalledWith("settings.model_call_order.update", { order: ["a"] }, undefined);
+
+  const switchC = screen.getByRole("switch", { name: "c" });
+  expect(switchC.props.value).toBe(false);
+  await fireEvent(switchC, "valueChange", true);
   expect(mutate).toHaveBeenCalledWith("settings.model_call_order.update", { order: ["a", "b", "c"] }, undefined);
+});
+
+test("disabled rows render after the active ones and have no arrows", async () => {
+  await show();
+  expect(screen.getByLabelText("Move down a")).toBeTruthy();
+  expect(screen.getByLabelText("Move up b")).toBeTruthy();
+  expect(screen.queryByLabelText("Move up c")).toBeNull();
+  expect(screen.queryByLabelText("Move down c")).toBeNull();
+  const switchC = screen.getByRole("switch", { name: "c" });
+  expect(switchC.props.value).toBe(false);
+  expect(screen.getByText("Disabled models are not used or proposed in chats. The first active model is the primary.")).toBeTruthy();
 });
 
 test("saving an edited preset sends only the diff", async () => {
@@ -318,10 +343,28 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     await show();
     expect(screen.getAllByText(/Same as the chat/).length).toBeGreaterThan(0);
     await fireEvent.press(screen.getByText("Subagents"));
-    await fireEvent.press(screen.getAllByText("c").at(-1)!); // the sheet renders last
+    await fireEvent.press(screen.getAllByText("b").at(-1)!); // the sheet renders last
     await waitFor(() =>
-      expect(mutate).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.subagent_model_preset": "c" } }, undefined),
+      expect(mutate).toHaveBeenCalledWith("settings.runtime_config.update", { values: { "agents.defaults.subagent_model_preset": "b" } }, undefined),
     );
+  });
+
+  test("task models picker hides disabled presets", async () => {
+    settingsStore.getState().setData(withTasks({}) as never);
+    await show();
+    await fireEvent.press(screen.getByText("Subagents"));
+    expect(screen.getAllByText("a").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("b").length).toBeGreaterThan(0);
+    // "c" is in the main list once, but NOT in the sheet
+    expect(screen.getAllByText("c")).toHaveLength(1);
+  });
+
+  test("task models picker keeps and marks currently selected disabled preset", async () => {
+    settingsStore.getState().setData(withTasks({ "agents.defaults.subagent_model_preset": "c" }) as never);
+    await show();
+    await fireEvent.press(screen.getByText("Subagents"));
+    expect(screen.getByText("c (disabled)")).toBeTruthy();
+    expect(screen.getByLabelText("Selected")).toBeTruthy();
   });
 
   test("Dream can go back to the chat model (null)", async () => {
@@ -373,7 +416,7 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     } as never);
     const fetchMock = jest.fn(async () => ({
       ok: true,
-      json: async () => ({ enabled: true, hour: 21, model: "c" }),
+      json: async () => ({ enabled: true, hour: 21, model: "b" }),
     }));
     const previous = global.fetch;
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -381,11 +424,11 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
     try {
       await show();
       await fireEvent.press(await screen.findByText("Journal"));
-      await fireEvent.press(screen.getAllByText("c").at(-1)!);
+      await fireEvent.press(screen.getAllByText("b").at(-1)!);
       await waitFor(() => expect(fetchMock).toHaveBeenCalled());
       const call = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
       expect(String(call[0])).toContain("/api/ext/journal/settings");
-      expect(JSON.parse(String(call[1].body))).toEqual({ enabled: true, hour: 21, model: "c" });
+      expect(JSON.parse(String(call[1].body))).toEqual({ enabled: true, hour: 21, model: "b" });
     } finally {
       global.fetch = previous;
     }
