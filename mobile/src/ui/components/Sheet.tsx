@@ -8,7 +8,7 @@ import { ToastHost } from "./ToastHost";
 export type SheetProps = {
   open: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   children?: React.ReactNode;
   /** Set false when the sheet already scrolls its own content. */
   scroll?: boolean;
@@ -47,7 +47,11 @@ export function Sheet({ open, onClose, title, children, scroll = true }: SheetPr
           ]}
         >
           <View style={{ alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: th.colors.border, marginTop: -6, marginBottom: 12 }} />
-          {title ? <Text accessibilityRole="header" style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20, marginBottom: 12 }}>{title}</Text> : null}
+          {title ? (typeof title === "string" ? (
+            <Text accessibilityRole="header" style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20, marginBottom: 12 }}>{title}</Text>
+          ) : (
+            <View style={{ marginBottom: 12 }}>{title}</View>
+          )) : null}
           {body}
         </View>
       </KeyboardAvoidingView>

@@ -10,6 +10,7 @@ const kanbanNotifyListeners = new Set<() => void>();
 const AUTO_READ = "pref.voiceAutoRead";
 const AUDIO = "pref.audioReplies";
 const VOICE_ENGINE = "pref.voiceEngine";
+const DEFAULT_TEMP = "pref.defaultTemperature";
 
 const device = () => Intl.DateTimeFormat().resolvedOptions().locale.split("-")[0];
 
@@ -56,6 +57,16 @@ export const prefs = {
   },
   setVoiceEngine(e: VoiceEngine): void {
     kv.set(VOICE_ENGINE, e);
+  },
+  defaultTemperature: (): number => {
+    const v = kv.get(DEFAULT_TEMP);
+    if (!v) return 0.1;
+    const n = parseFloat(v);
+    return !isNaN(n) && n >= 0 && n <= 2 ? Math.round(n * 10) / 10 : 0.1;
+  },
+  setDefaultTemperature(t: number): void {
+    const clamped = Math.max(0, Math.min(2, Math.round(t * 10) / 10));
+    kv.set(DEFAULT_TEMP, String(clamped));
   },
 };
 
