@@ -614,3 +614,169 @@ def test_runs_closed_on_request_review_block_and_verdict(store_path):
     assert run3["finished_at_ms"] is not None
     assert run3["error"] == "Need API key"
 
+
+def test_claim_failure_frees_bot_and_task_is_claimed_again(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Main")
+    store.create_bot(bot_id="coder", name="Coder", max_concurrent=1)
+    store.save_task({
+        "id": "t1",
+        "board_id": "main",
+        "title": "Task 1",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+        "max_retries": 3,
+    })
+    claimed = store.claim_next_ready_task()
+    assert claimed is not None and claimed["task_id"] == "t1"
+    runs = store.get_task_detail("t1")["runs"]
+    assert len(runs) == 1 and runs[0]["finished_at_ms"] is None
+
+    # Failure on retry branch moves task to ready and MUST close the open run
+    store.record_failure("t1", "temporary glitch")
+    detail = store.get_task_detail("t1")
+    assert detail["task"]["status"] == "ready"
+    assert detail["task"]["retries"] == 1
+    assert len(detail["runs"]) == 1
+    assert detail["runs"][0]["status"] == "failed"
+    assert detail["runs"][0]["finished_at_ms"] is not None
+
+    # Bot is freed and claims the task again
+    claimed_again = store.claim_next_ready_task()
+    assert claimed_again is not None and claimed_again["task_id"] == "t1"
+    detail_again = store.get_task_detail("t1")
+    assert len(detail_again["runs"]) == 2
+    assert detail_again["runs"][1]["status"] == "running"
+    assert detail_again["runs"][1]["finished_at_ms"] is None
+
+
+def test_manual_move_frees_bot(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Main")
+    store.create_bot(bot_id="coder", name="Coder", max_concurrent=1)
+    store.save_task({
+        "id": "t1",
+        "board_id": "main",
+        "title": "Task 1",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+    })
+    store.save_task({
+        "id": "t2",
+        "board_id": "main",
+        "title": "Task 2",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+    })
+    claimed1 = store.claim_next_ready_task()
+    assert claimed1 is not None and claimed1["task_id"] == "t1"
+
+    # Moving t1 manually to 'todo' closes its open run
+    store.move_task("t1", "todo")
+    detail_t1 = store.get_task_detail("t1")
+    assert detail_t1["task"]["status"] == "todo"
+    assert detail_t1["runs"][0]["finished_at_ms"] is not None
+
+    # Bot is now free (capacity was 1) and can claim t2
+    claimed2 = store.claim_next_ready_task()
+    assert claimed2 is not None and claimed2["task_id"] == "t2"
+
+
+def test_restart_with_open_review_run_frees_reviewer(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Main")
+    store.create_bot(bot_id="coder", name="Coder", max_concurrent=1)
+    store.create_bot(bot_id="reviewer", name="Reviewer", max_concurrent=1)
+    store.save_task({
+        "id": "t1",
+        "board_id": "main",
+        "title": "Task 1",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+        "reviewer_bot_id": "reviewer",
+    })
+    store.save_task({
+        "id": "t2",
+        "board_id": "main",
+        "title": "Task 2",
+        "status": "review",
+        "reviewer_bot_id": "reviewer",
+    })
+
+    # Coder claims t1 and requests review
+    store.claim_next_ready_task()
+    store.request_review("t1", "done")
+
+    # Reviewer claims t1 (review run is open)
+    claimed_rev = store.claim_next_ready_task()
+    assert claimed_rev is not None and claimed_rev["task_id"] == "t1"
+    assert claimed_rev["bot_id"] == "reviewer"
+
+    # Reviewer bot capacity is full (1/1)
+    assert store.claim_next_ready_task() is None
+
+    # Gateway restart recovers interrupted tasks including review tasks with open runs
+    recovered = store.recover_interrupted()
+    assert "t1" in recovered
+
+    # t1 run for reviewer is closed
+    detail_t1 = store.get_task_detail("t1")
+    assert detail_t1["runs"][-1]["finished_at_ms"] is not None
+    assert detail_t1["runs"][-1]["status"] == "failed"
+
+    # Reviewer bot is freed and can claim ready/review tasks
+    next_claimed = store.claim_next_ready_task()
+    assert next_claimed is not None
+    assert next_claimed["bot_id"] == "reviewer"
+
+
+def test_save_task_rejects_reviewer_equal_assignee(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Main")
+    store.create_bot(bot_id="coder", name="Coder")
+
+    # Creating task with same assignee and reviewer raises 400 reviewer_is_assignee
+    with pytest.raises(kb.KanbanError) as exc_info:
+        store.save_task({
+            "board_id": "main",
+            "title": "Self review",
+            "assignee_bot_id": "coder",
+            "reviewer_bot_id": "coder",
+        })
+    assert exc_info.value.status == 400
+    assert exc_info.value.code == "reviewer_is_assignee"
+
+    # Creating valid task then updating to same assignee and reviewer raises 400
+    task = store.save_task({
+        "board_id": "main",
+        "title": "Task valid",
+        "assignee_bot_id": "coder",
+    })
+    with pytest.raises(kb.KanbanError) as exc_info:
+        store.save_task({
+            "id": task["id"],
+            "reviewer_bot_id": "coder",
+        })
+    assert exc_info.value.status == 400
+    assert exc_info.value.code == "reviewer_is_assignee"
+
+
+def test_claim_skips_task_when_reviewer_is_assignee(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Main")
+    store.create_bot(bot_id="coder", name="Coder")
+
+    # Insert a task directly via SQL bypassing save_task validation to simulate legacy data
+    with store._lock, store._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                id, board_id, title, description, status, priority,
+                assignee_bot_id, reviewer_bot_id, workspace_mode,
+                created_at_ms, updated_at_ms
+            ) VALUES ('legacy', 'main', 'Legacy', '', 'review', 'medium', 'coder', 'coder', 'scratch', 1, 1)
+            """
+        )
+
+    # Claim should skip this task
+    assert store.claim_next_ready_task() is None

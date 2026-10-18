@@ -498,6 +498,51 @@ async def test_revoke_route_requires_privileged(devices_path):
     assert json.loads(allowed_local.text) == {"ok": True}
 
 
+@pytest.mark.asyncio
+async def test_plain_device_can_revoke_itself(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    _, plain_id = _paired_phone(devices_path)
+    plain_api = store.issue_api_token(300)
+    dev.remember_device_tokens(plain_id, store, plain_api)
+
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+
+    # Plain device revoking itself -> 200 ok without full power
+    req_self = _post("/revoke", {"id": plain_id}, plain_api)
+    req_self.remote = "100.64.0.5"
+    req_self.headers["Host"] = "nanobot.remote:8765"
+    res = await handler(req_self)
+    assert res.status == 200
+    assert json.loads(res.text) == {"ok": True}
+
+    # Device is revoked and tokens dropped
+    devices = {d["id"]: d for d in dev.list_devices_public(devices_path)}
+    assert devices[plain_id]["revoked"] is True
+    assert plain_api not in store.api_tokens
+
+
+@pytest.mark.asyncio
+async def test_plain_device_cannot_revoke_another_device(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    _, plain_id = _paired_phone(devices_path)
+    plain_api = store.issue_api_token(300)
+    dev.remember_device_tokens(plain_id, store, plain_api)
+    _, other_id = _paired_phone(devices_path)
+
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+    req = _post("/revoke", {"id": other_id}, plain_api)
+    req.remote = "100.64.0.5"
+    req.headers["Host"] = "nanobot.remote:8765"
+    res = await handler(req)
+    assert res.status == 403
+    assert json.loads(res.text) == {"error": "full_power_required"}
+    devices = {d["id"]: d for d in dev.list_devices_public(devices_path)}
+    assert devices[other_id]["revoked"] is False
+
 
 async def test_read_json_reads_a_body_split_in_chunks() -> None:
     chunks = [b'{"name": ', b'"phone"}']
