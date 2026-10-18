@@ -2163,6 +2163,8 @@ def test_provider_models_payload_fetches_openai_compatible_models(
     monkeypatch.setattr("nanobot.config.loader._current_config_path", config_path)
 
     def fake_get(url: str, **kwargs):
+        if url == "https://models.dev/api.json":
+            return httpx.Response(200, json={}, request=httpx.Request("GET", url))
         assert url == "https://api.deepseek.com/models"
         assert kwargs["headers"]["Authorization"] == "Bearer sk-test"
         return httpx.Response(
@@ -2185,6 +2187,102 @@ def test_provider_models_payload_fetches_openai_compatible_models(
     assert payload["model_count"] == 2
     assert payload["models"][0]["id"] == "deepseek-chat"
     assert payload["models"][1]["context_window"] == 65536
+
+
+def test_provider_models_payload_enriches_opencode_go_from_models_dev(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.json"
+    config = Config()
+    config.providers.opencode_go.api_key = "sk-test"
+    save_config(config, config_path)
+    monkeypatch.setattr("nanobot.config.loader._current_config_path", config_path)
+    monkeypatch.setenv("NANOBOT_MODELS_DEV_CACHE", str(tmp_path / "cache" / "models-dev.json"))
+
+    def fake_get(url: str, **kwargs):
+        if url == "https://models.dev/api.json":
+            return httpx.Response(
+                200,
+                json={
+                    "opencode-go": {
+                        "models": {
+                            "glm-5.3": {
+                                "id": "glm-5.3",
+                                "name": "GLM-5.3",
+                                "limit": {"context": 1000000, "output": 131072},
+                                "reasoning": True,
+                                "reasoning_options": [
+                                    {"type": "effort", "values": ["low", "high", "max"]}
+                                ],
+                            }
+                        }
+                    }
+                },
+                request=httpx.Request("GET", url),
+            )
+        assert url == "https://opencode.ai/zen/go/v1/models"
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "glm-5.3", "object": "model", "owned_by": "opencode"}]},
+            request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr("nanobot.webui.settings_api.httpx.get", fake_get)
+
+    payload = provider_models_payload({"provider": ["opencode_go"]})
+    assert payload["status"] == "available"
+    assert payload["model_count"] == 1
+    model = payload["models"][0]
+    assert model["id"] == "glm-5.3"
+    assert model["context_window"] == 1000000
+    assert model["max_output_tokens"] == 131072
+    assert model["reasoning_efforts"] == ["low", "high", "max"]
+
+
+def test_provider_models_payload_returns_anthropic_models_from_models_dev(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.json"
+    config = Config()
+    save_config(config, config_path)
+    monkeypatch.setattr("nanobot.config.loader._current_config_path", config_path)
+    monkeypatch.setenv("NANOBOT_MODELS_DEV_CACHE", str(tmp_path / "cache" / "models-dev.json"))
+
+    def fake_get(url: str, **kwargs):
+        assert url == "https://models.dev/api.json"
+        return httpx.Response(
+            200,
+            json={
+                "anthropic": {
+                    "models": {
+                        "claude-sonnet-4-5": {
+                            "id": "claude-sonnet-4-5",
+                            "name": "Claude Sonnet 4.5",
+                            "limit": {"context": 200000, "output": 64000},
+                            "reasoning": True,
+                            "reasoning_options": [
+                                {"type": "effort", "values": ["low", "medium", "high"]}
+                            ],
+                        }
+                    }
+                }
+            },
+            request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr("nanobot.webui.settings_api.httpx.get", fake_get)
+
+    payload = provider_models_payload({"provider": ["anthropic"]})
+    assert payload["status"] == "available"
+    assert payload["source"] == "models.dev"
+    assert payload["model_count"] == 1
+    model = payload["models"][0]
+    assert model["id"] == "claude-sonnet-4-5"
+    assert model["label"] == "Claude Sonnet 4.5"
+    assert model["context_window"] == 200000
+    assert model["reasoning_efforts"] == ["low", "medium", "high"]
 
 
 def test_model_catalog_row_active_respects_openai_shutdown_date() -> None:

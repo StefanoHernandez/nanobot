@@ -46,6 +46,18 @@ describe("loadEffortState", () => {
     const s = await loadEffortState(f.session, "websocket:abc");
     expect(s!.levels).toEqual(["low", "medium", "max"]);
   });
+  it("resolves effort levels for an OpenCode-like catalog row", async () => {
+    const f = fakeSession({
+      "/api/settings": { model_presets: [P("glm", { provider: "opencode_go", model: "glm-5.3", reasoning_effort_values: ["low", "medium", "high"] })] },
+      "/api/sessions": { sessions: [{ key: "websocket:abc", model_preset: "glm" }] },
+      "/api/settings/provider-models?provider=opencode_go": {
+        provider: "opencode_go",
+        models: [{ id: "glm-5.3", reasoning_efforts: ["low", "high", "max"] }],
+      },
+    });
+    const s = await loadEffortState(f.session, "websocket:abc");
+    expect(s!.levels).toEqual(["low", "high", "max"]);
+  });
   it("without a catalog it falls back", async () => {
     const { session } = mk(
       [P("gpt", { reasoning_effort_values: ["low", "high"] })],

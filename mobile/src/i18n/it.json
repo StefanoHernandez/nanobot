@@ -535,6 +535,7 @@
     "searchHint": "Scrivi almeno 2 caratteri per cercare",
     "primaryNoDelete": "Il modello primario non puo essere eliminato",
     "setByModel": "Impostato dal modello",
+    "defaultContextHint": "Valore predefinito: controlla il contesto del modello",
     "defaultTemperature": "Temperatura predefinita",
     "decreaseTemp": "Riduci temperatura",
     "increaseTemp": "Aumenta temperatura",

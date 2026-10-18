@@ -305,9 +305,10 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [ctxHint, setCtxHint] = useState(false);
+  const [ctxTouched, setCtxTouched] = useState(false);
 
   const row = d.providers.find((p) => p.name === provider);
-  const catalogued = !!row && row.model_catalog !== "unsupported" && row.configured;
+  const catalogued = !!row && (row.model_catalog !== "unsupported" || row.name === "anthropic") && row.configured;
   const cat = useProviderModels(catalogued ? provider : null);
   const info = cat.models.find((m) => m.id === model);
   const deferred = DEFERRED_PROVIDERS.includes(provider);
@@ -319,10 +320,19 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
 
   const applyModelDefaults = (id: string, catalogModels: typeof cat.models) => {
     const m = catalogModels.find((x) => x.id === id);
-    if (!m) return;
+    if (!m) {
+      if (!preset && !ctxTouched) {
+        setCtx("200000");
+        setCtxHint(false);
+      }
+      return;
+    }
     if (m.context_window) {
       setCtx(String(m.context_window));
       setCtxHint(true);
+    } else if (!preset && !ctxTouched) {
+      setCtx("200000");
+      setCtxHint(false);
     }
     // An empty list means the catalog does not know the levels: keep the choice.
     if (effort && m.reasoning_efforts?.length && !m.reasoning_efforts.includes(effort)) setEffort("");
@@ -429,10 +439,17 @@ function PresetEditor({ preset, onClose }: { preset: Preset | null; onClose: () 
             label={t("models.context")}
             value={ctx}
             onChangeText={(v) => {
+              setCtxTouched(true);
               setCtxHint(false);
               setCtx(v);
             }}
-            helper={ctxHint ? t("models.setByModel") : undefined}
+            helper={
+              ctxHint
+                ? t("models.setByModel")
+                : !preset && !ctxTouched && ctx === "200000"
+                ? t("models.defaultContextHint")
+                : undefined
+            }
             error={errors.contextWindowTokens}
             autoCapitalize="none"
           />
