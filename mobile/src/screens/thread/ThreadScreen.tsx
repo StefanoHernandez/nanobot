@@ -25,6 +25,7 @@ import { WorkspaceButton } from "./WorkspaceSheet";
 import { collectThreadFiles } from "../gallery/GalleryScreen";
 import { subagentsAvailable, subagentsStore } from "../../state/subagentsStore";
 import { useWorkspace } from "../../state/workspace";
+import { proposeFromChat } from "../ecosystem/skills/proposalsApi";
 
 export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () => void }) {
   const th = useTheme();
@@ -51,6 +52,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
   const [menu, setMenu] = useState(false);
   const [panel, setPanel] = useState<null | "workspace" | "subagents" | "commands">(null);
   const [exporting, setExporting] = useState(false);
+  const [proposing, setProposing] = useState(false);
 
   const handleExport = async (format: "md" | "pdf") => {
     if (!session || exporting) return;
@@ -63,6 +65,31 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
       toast.show(t("common.operationFailed"));
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleCreateSkill = async () => {
+    if (!session || proposing) return;
+    setMenu(false);
+    setProposing(true);
+    try {
+      const res = await proposeFromChat(session, chatKey);
+      if (res?.proposal) {
+        toast.show(t("skills.proposalCreated", { name: res.proposal.name }), {
+          action: {
+            label: t("common.open", { defaultValue: "Apri" }),
+            onPress: () => {
+              router.push("/ecosystem/skills" as never);
+            },
+          },
+        });
+      } else {
+        toast.show(t("skills.nothingToSave", { reason: res?.reason || "" }));
+      }
+    } catch {
+      toast.show(t("common.operationFailed"));
+    } finally {
+      setProposing(false);
     }
   };
 
@@ -99,7 +126,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
               {t("export.exporting")}
             </Text>
           ) : null}
-          <IconButton icon="dots-vertical" accessibilityLabel={t("thread.more")} loading={exporting} disabled={exporting} onPress={() => setMenu(true)} />
+          <IconButton icon="dots-vertical" accessibilityLabel={t("thread.more")} loading={exporting || proposing} disabled={exporting || proposing} onPress={() => setMenu(true)} />
           {running || activeSubs > 0 ? (
             <View
               testID="thread-menu-dot"
@@ -138,6 +165,12 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
         {showCommands ? (
           <ListItem title={t("extras.commands")} left={<MaterialCommunityIcons name="console-line" size={22} color={th.colors.foreground} />} onPress={() => openPanel("commands")} />
         ) : null}
+        <ListItem
+          title={t("skills.createFromChat")}
+          left={<MaterialCommunityIcons name="lightbulb-outline" size={22} color={th.colors.foreground} />}
+          disabled={proposing}
+          onPress={() => void handleCreateSkill()}
+        />
         <ListItem
           title={t("export.markdown")}
           left={<MaterialCommunityIcons name="file-document-outline" size={22} color={th.colors.foreground} />}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
@@ -10,8 +10,17 @@ import { useSettings } from "../../../settings/store";
 import { useSkills } from "../../../ecosystem/skills";
 import { installGate, isPolicyError, toastEcosystemError } from "../../../ecosystem/common";
 import { usePrivileged } from "../../../ecosystem/privilege";
+import { useSession } from "../../../state/sessionStore";
 import { SkillDetailSheet } from "./SkillDetailSheet";
 import { SkillItem, SkillRow } from "./SkillRow";
+import { SkillProposalRow } from "./SkillProposalRow";
+import { SkillProposalSheet } from "./SkillProposalSheet";
+import {
+  type SkillProposal,
+  fetchProposals,
+  fetchScoutSettings,
+  saveScoutSettings,
+} from "./proposalsApi";
 import type { MarketplaceSkillSummary } from "@/lib/types";
 
 export type SkillsTab = "installed" | "discover" | "trending";
@@ -20,6 +29,7 @@ export function SkillsScreen() {
   const t = useT();
   const th = useTheme();
   const nav = useNavigation?.();
+  const { session } = useSession();
   const { data: settings, refresh: refreshSettings } = useSettings();
   const {
     skills,
@@ -32,6 +42,37 @@ export function SkillsScreen() {
     update,
   } = useSkills();
 
+  const [proposals, setProposals] = useState<SkillProposal[]>([]);
+  const [scoutEnabled, setScoutEnabled] = useState(false);
+  const [selectedProposal, setSelectedProposal] = useState<string | null>(null);
+
+  const loadProposals = useCallback(async () => {
+    if (!session) return;
+    const list = await fetchProposals(session);
+    setProposals(list);
+  }, [session]);
+
+  const loadScout = useCallback(async () => {
+    if (!session) return;
+    const s = await fetchScoutSettings(session);
+    setScoutEnabled(s.enabled);
+  }, [session]);
+
+  const toggleScout = async (val: boolean) => {
+    setScoutEnabled(val);
+    if (!session) return;
+    try {
+      await saveScoutSettings(session, val);
+    } catch {
+      setScoutEnabled(!val);
+    }
+  };
+
+  useEffect(() => {
+    void loadProposals();
+    void loadScout();
+  }, [loadProposals, loadScout]);
+
   useEffect(() => {
     if (!settings) void refreshSettings();
   }, [refreshSettings, settings]);
@@ -39,9 +80,11 @@ export function SkillsScreen() {
   useEffect(() => {
     const unsub = nav?.addListener?.("focus", () => {
       void refreshSettings();
+      void loadProposals();
+      void loadScout();
     });
     return () => unsub?.();
-  }, [nav, refreshSettings]);
+  }, [nav, refreshSettings, loadProposals, loadScout]);
 
   const privileged = usePrivileged();
   const gateAllowed = installGate(settings, privileged).allowed;
@@ -119,6 +162,8 @@ export function SkillsScreen() {
 
   const handleRefresh = async () => {
     void refreshSettings();
+    void loadProposals();
+    void loadScout();
     if (debouncedQuery) {
       const res = await search(debouncedQuery);
       setSearchResults(res.skills ?? []);
@@ -195,6 +240,16 @@ export function SkillsScreen() {
         <Text accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: th.colors.foreground, fontFamily: th.font.display }]}>
           {t("skills.title")}
         </Text>
+        <View style={styles.scoutContainer}>
+          <Text style={[styles.scoutText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+            {t("skills.scoutSwitch", "Proponi skill ogni notte")}
+          </Text>
+          <Switch
+            value={scoutEnabled}
+            onValueChange={(val) => void toggleScout(val)}
+            accessibilityLabel={t("skills.scoutSwitch", "Proponi skill ogni notte")}
+          />
+        </View>
       </View>
 
       {!gateAllowed ? (
@@ -288,6 +343,21 @@ export function SkillsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => void handleRefresh()} />}
       >
+        {!debouncedQuery && tab === "installed" && proposals.length > 0 ? (
+          <View style={styles.proposalsSection}>
+            <Text style={[styles.sectionTitle, { color: th.colors.foreground, fontFamily: th.font.displayBold }]}>
+              {t("skills.proposalsTitle", "Proposte dal bot")}
+            </Text>
+            {proposals.map((item) => (
+              <SkillProposalRow
+                key={item.name}
+                item={item}
+                onPress={(p) => setSelectedProposal(p.name)}
+              />
+            ))}
+          </View>
+        ) : null}
+
         {displayedItems.length === 0 && !isLoading ? (
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
@@ -321,6 +391,16 @@ export function SkillsScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <SkillProposalSheet
+        open={!!selectedProposal}
+        proposalName={selectedProposal}
+        onClose={() => setSelectedProposal(null)}
+        onUpdated={() => {
+          void refresh();
+          void loadProposals();
+        }}
+      />
 
       <SkillDetailSheet
         open={!!selectedDetailSkill}
@@ -361,6 +441,24 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginLeft: 4,
     flex: 1,
+  },
+  scoutContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginRight: 12,
+  },
+  scoutText: {
+    fontSize: 12,
+  },
+  proposalsSection: {
+    gap: 12,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    marginBottom: 4,
   },
   gateBanner: {
     marginHorizontal: 16,

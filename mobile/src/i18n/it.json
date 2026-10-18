@@ -1048,7 +1048,18 @@
     "delete": "Elimina skill",
     "deleteConfirm": "Eliminare {{name}}? I file della skill vengono cancellati dal server.",
     "deleteNeedsFullPower": "Serve un browser sul server o i Pieni poteri per questo dispositivo",
-    "installNeedsFullPower": "Serve un browser sul server o i Pieni poteri per questo dispositivo"
+    "installNeedsFullPower": "Serve un browser sul server o i Pieni poteri per questo dispositivo",
+    "proposalsTitle": "Proposte dal bot",
+    "proposalBadge": "Proposta",
+    "updateBadge": "Aggiornamento",
+    "activate": "Attiva",
+    "reject": "Scarta",
+    "scoutSwitch": "Proponi skill ogni notte",
+    "proposalCreated": "Proposta creata: {{name}}",
+    "nothingToSave": "Niente da salvare come skill: {{reason}}",
+    "createFromChat": "Crea skill da questa chat",
+    "proposalActivated": "Skill attivata",
+    "proposalRejected": "Proposta scartata"
   },
   "automations": {
     "title": "Automazioni",

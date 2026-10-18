@@ -682,6 +682,13 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        # Fork (nanobot/ext/skill_proposals.py): read proposed skills.
+        from nanobot.ext.skill_proposals import dispatch_skill_proposals_get
+
+        response = dispatch_skill_proposals_get(self, request, got)
+        if response is not None:
+            return response
+
         # API 404 (never serve SPA for /api/ routes)
         if got.startswith("/api/"):
             return _http_error(404, "API route not found")

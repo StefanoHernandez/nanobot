@@ -660,6 +660,16 @@ def _run_gateway(
                 logger.exception("Journal cron job failed")
             return None
 
+        # Fork (nanobot/ext/skill_proposals.py): skill scout. Never deliver it to a chat.
+        if job.name == "skill-scout":
+            from nanobot.ext.skill_proposals import run_scout_job
+
+            try:
+                await run_scout_job(agent, tz_name=config.agents.defaults.timezone)
+            except Exception:
+                logger.exception("Skill scout cron job failed")
+            return None
+
         # Heartbeat is a system job that checks HEARTBEAT.md for active tasks.
         if job.name == "heartbeat":
             heartbeat_file = config.workspace_path / "HEARTBEAT.md"
@@ -896,6 +906,20 @@ def _run_gateway(
     if load_settings(config.workspace_path)["enabled"]:
         sync_journal_job(cron, config.workspace_path, config.agents.defaults.timezone)
     bind_journal_turn(agent_turn(agent))
+
+    # Fork (nanobot/ext/skill_proposals.py): schedule the scout when enabled; bind turn runner.
+    from nanobot.ext.skill_proposals import (
+        agent_turn as skill_proposals_turn,
+    )
+    from nanobot.ext.skill_proposals import (
+        bind_skill_proposals_turn,
+        load_scout_settings,
+        sync_scout_job,
+    )
+
+    if load_scout_settings(config.workspace_path)["enabled"]:
+        sync_scout_job(cron, config.workspace_path, config.agents.defaults.timezone)
+    bind_skill_proposals_turn(skill_proposals_turn(agent))
 
     # Register Heartbeat system job (idempotent on restart)
     if hb_cfg.enabled:
