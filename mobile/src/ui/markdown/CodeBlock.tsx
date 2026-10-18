@@ -123,13 +123,7 @@ export function CodeBlock({
     );
   }
 
-  const messages = chatKey ? threadStore.getState().threads[chatKey]?.messages ?? [] : [];
-  const found = locateVersion(collectArtifacts(messages), { id: info.id, code, messageId });
-  const title = info.title ?? found?.artifact.title ?? info.lang;
-  const versions = found?.artifact.explicit && found.artifact.versions.length > 1 ? found.artifact.versions : undefined;
-  const versionBadge = versions && versions.length > 1 ? `v${(found?.index ?? 0) + 1}` : null;
-  const lineCount = code ? code.split("\n").length : 0;
-
+  // Checked before the thread-wide artifact lookup: that runs on every streaming delta otherwise.
   const streamingFromStore =
     chatKey && messageId
       ? !!threadStore.getState().threads[chatKey]?.messages?.find((m) => m.id === messageId)?.isStreaming
@@ -155,11 +149,18 @@ export function CodeBlock({
       >
         <ActivityIndicator size="small" color={th.colors.primary} />
         <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 14 }}>
-          {t("artifact.generating", { title, defaultValue: `Sto generando «${title}»…` })}
+          {t("artifact.generating", { title: info.title ?? info.lang, defaultValue: `Sto generando «${info.title ?? info.lang}»…` })}
         </Text>
       </View>
     );
   }
+
+  const messages = chatKey ? threadStore.getState().threads[chatKey]?.messages ?? [] : [];
+  const found = locateVersion(collectArtifacts(messages), { id: info.id, code, messageId });
+  const title = info.title ?? found?.artifact.title ?? info.lang;
+  const versions = found?.artifact.explicit && found.artifact.versions.length > 1 ? found.artifact.versions : undefined;
+  const versionBadge = versions && versions.length > 1 ? `v${(found?.index ?? 0) + 1}` : null;
+  const lineCount = code ? code.split("\n").length : 0;
 
   const lineCountText =
     lineCount === 1

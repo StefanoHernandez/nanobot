@@ -68,31 +68,13 @@ function failedRequest(status: number, code: string): Error {
 }
 
 async function postJournal(session: NanobotSession, path: string, body: unknown): Promise<unknown> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}${path}`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  let payload: unknown = null;
   try {
-    payload = await res.json();
-  } catch {
-    payload = null;
+    return await session.post<unknown>(path, body);
+  } catch (e) {
+    const status = (e as { status?: number }).status ?? 0;
+    const msg = e instanceof Error && e.message ? e.message : "journal failed";
+    throw failedRequest(status, msg);
   }
-  if (!res.ok) {
-    const code =
-      payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
-        ? (payload as { error: string }).error
-        : "journal failed";
-    throw failedRequest(res.status, code);
-  }
-  return payload;
 }
 
 export async function fetchJournal(session: NanobotSession): Promise<JournalIndex> {

@@ -1,3 +1,4 @@
+import { sessionPost } from "../sessionPost";
 import type { NanobotSession } from "../../src/core/session";
 import {
   exprToRecurrence,
@@ -10,6 +11,7 @@ import {
 const session = {
   baseUrl: "https://srv.test/",
   apiToken: () => "tok",
+  post: sessionPost,
   get: jest.fn(),
 } as unknown as NanobotSession;
 

@@ -15,7 +15,9 @@ export function SkillProposalRow({
   const th = useTheme();
 
   const isUpdate = !!item.updates;
-  const dateStr = item.date || item.created_at || "";
+  const rawDate = item.date || item.created_at || "";
+  const parsed = rawDate ? new Date(rawDate) : null;
+  const dateStr = parsed && !Number.isNaN(parsed.getTime()) ? parsed.toLocaleDateString() : rawDate;
 
   return (
     <Pressable

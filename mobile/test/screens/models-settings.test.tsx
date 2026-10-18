@@ -466,28 +466,17 @@ describe("models for tasks (fork: subagent and Dream presets)", () => {
       if (String(path).includes("/api/ext/journal")) return { enabled: true, hour: 21, model: null, days: ["2026-10-16"] };
       return {};
     });
+    const post = jest.fn(async () => ({ enabled: true, hour: 21, model: "b" }));
     sessionStore.setState({
       profile: { id: "p1", name: "Home", baseUrl: "https://x.ts.net" },
-      session: { get, mutate, baseUrl: "https://x.ts.net", apiToken: () => "tok" },
+      session: { get, mutate, post, baseUrl: "https://x.ts.net", apiToken: () => "tok" },
     } as never);
-    const fetchMock = jest.fn(async () => ({
-      ok: true,
-      json: async () => ({ enabled: true, hour: 21, model: "b" }),
-    }));
-    const previous = global.fetch;
-    global.fetch = fetchMock as unknown as typeof fetch;
     settingsStore.getState().setData(withTasks({}) as never);
-    try {
-      await show();
-      await fireEvent.press(await screen.findByText("Journal"));
-      await fireEvent.press(screen.getAllByText("b").at(-1)!);
-      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-      const call = fetchMock.mock.calls[0] as unknown as [string, { body?: string }];
-      expect(String(call[0])).toContain("/api/ext/journal/settings");
-      expect(JSON.parse(String(call[1].body))).toEqual({ enabled: true, hour: 21, model: "b" });
-    } finally {
-      global.fetch = previous;
-    }
+    await show();
+    await fireEvent.press(await screen.findByText("Journal"));
+    await fireEvent.press(screen.getAllByText("b").at(-1)!);
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post).toHaveBeenCalledWith("/api/ext/journal/settings", { enabled: true, hour: 21, model: "b" });
   });
 
   describe("default temperature preference", () => {

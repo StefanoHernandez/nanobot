@@ -65,6 +65,7 @@ export function SkillsScreen() {
       await saveScoutSettings(session, val);
     } catch {
       setScoutEnabled(!val);
+      toast.show(t("common.operationFailed"));
     }
   };
 

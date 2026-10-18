@@ -942,6 +942,7 @@ ${lightHead}
 }
 
 export type ThemeCssOptions = {
+  varsOnly?: boolean;
   bg?: string;
   fg?: string;
   card?: string;
@@ -965,7 +966,7 @@ export function buildThemeCss(isDark: boolean, options?: ThemeCssOptions): strin
   const radius = options?.radius ?? "12px";
   const font = options?.font ?? `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
 
-  return `:root {
+  const vars = `:root {
   --nb-bg: ${bg};
   --nb-fg: ${fg};
   --nb-card: ${card};
@@ -976,7 +977,10 @@ export function buildThemeCss(isDark: boolean, options?: ThemeCssOptions): strin
   --nb-radius: ${radius};
   --nb-font: ${font};
 }
-body {
+`;
+  // Paper viewers (docx/pptx/xlsx/pdf) get only the variables: element rules would restyle their tables.
+  if (options?.varsOnly) return vars;
+  return `${vars}body {
   margin: 0;
   padding: 16px;
   background-color: var(--nb-bg);
@@ -1217,6 +1221,7 @@ ${viewerCsp(cspAllowNetwork, cspAllowRemoteImages)}
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style id="nb-theme-base">
 ${buildThemeCss(isDark, {
+  varsOnly: kind !== "html" && kind !== "react",
   bg,
   fg,
   card,

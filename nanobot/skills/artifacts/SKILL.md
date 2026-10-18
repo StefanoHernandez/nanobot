@@ -21,7 +21,7 @@ Rules:
 - Prefer CSS theme variables (`--nb-bg`, `--nb-fg`, `--nb-card`, `--nb-muted`, `--nb-border`, `--nb-primary`, `--nb-primary-fg`, `--nb-radius`, `--nb-font`) and the `.nb-card` class over hard-coded colors so artifacts adapt to light and dark themes.
 - A revision is the full updated block with the same id. The preview versions the whole block, so a patch fragment is not a version.
 - The user can send "Correggi l'artefatto id" or "Modifica l'artefatto id" from the preview. Revise that id. Do not ask them to paste the code again when the block is already in the chat.
-- If that message contains `Stessa prima riga, non un artefatto nuovo: \`svg id=name\``, the next block must use that exact info line. Do not invent another id and do not add a second artifact.
+- If that message contains `Stessa prima riga, non un artefatto nuovo: \`svg id=name\`` (in English: `Same first line, not a new artifact: \`svg id=name\``), the next block must use that exact info line. Do not invent another id and do not add a second artifact.
 
 ## Theme and styling (HTML and React)
 

@@ -366,29 +366,14 @@ function failedRequest(status: number, code: string): Error {
   return err;
 }
 
-async function postKanban(session: NanobotSession, path: string, body: unknown): Promise<Response> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}${path}`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let code = "kanban failed";
-    try {
-      const data = (await res.json()) as { error?: unknown };
-      if (data && typeof data.error === "string" && data.error) code = data.error;
-    } catch {
-      // The body was not JSON. Keep the fallback code.
-    }
-    throw failedRequest(res.status, code);
+async function postKanban<T = unknown>(session: NanobotSession, path: string, body: unknown): Promise<T> {
+  try {
+    return await session.post<T>(path, body);
+  } catch (e) {
+    const status = (e as { status?: number }).status ?? 0;
+    const msg = e instanceof Error && e.message ? e.message : "kanban failed";
+    throw failedRequest(status, msg);
   }
-  return res;
 }
 
 export async function moveKanbanTask(session: NanobotSession, id: string, status: KanbanStatus): Promise<void> {
@@ -441,8 +426,7 @@ export async function createKanbanBoard(
   const body: Record<string, unknown> = { title: input.title };
   if (input.description !== undefined) body.description = input.description;
   if (input.max_concurrent !== undefined) body.max_concurrent = input.max_concurrent;
-  const res = await postKanban(session, "/api/ext/kanban/boards/create", body);
-  const data = (await res.json()) as { board?: { id?: unknown } };
+  const data = await postKanban<{ board?: { id?: unknown } }>(session, "/api/ext/kanban/boards/create", body);
   if (!data.board || typeof data.board.id !== "string" || !data.board.id) throw new Error("kanban failed");
   return data.board.id;
 }

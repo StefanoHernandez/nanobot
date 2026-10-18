@@ -1,3 +1,4 @@
+import { sessionPost } from "../sessionPost";
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -15,6 +16,7 @@ const mockGet = jest.fn();
 const session = {
   baseUrl: "https://srv.test",
   apiToken: () => "api-token-secret",
+  post: sessionPost,
   get: mockGet,
 } as unknown as NanobotSession;
 

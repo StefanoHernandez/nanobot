@@ -1,3 +1,4 @@
+import { sessionPost } from "../sessionPost";
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -77,6 +78,7 @@ describe("P-A: Projects API", () => {
   const fakeSession = {
     baseUrl: "https://nanobot.local",
     apiToken: () => "secret-token",
+    post: sessionPost,
     get: jest.fn(),
   } as any;
 
@@ -269,6 +271,7 @@ describe("P-A: ProjectsScreen", () => {
     fakeSession = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",
+      post: sessionPost,
       get: jest.fn().mockResolvedValue({ projects: [] }),
     };
     await i18n.changeLanguage("it");
@@ -389,6 +392,7 @@ describe("P-A: ProjectDetailScreen", () => {
     fakeSession = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",
+      post: sessionPost,
       get: jest.fn().mockImplementation(async (path: string) => {
         if (path.startsWith("/api/ext/projects/p1")) {
           return fakeDetail;
@@ -491,12 +495,14 @@ describe("P-A-fix1: Store & Race", () => {
     const fakeSessionA = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",
+      post: sessionPost,
       get: jest.fn().mockReturnValue(delayedPromiseA),
     } as any;
 
     const fakeSessionB = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",
+      post: sessionPost,
       get: jest.fn().mockResolvedValue({ projects: [] }),
     } as any;
 
@@ -534,6 +540,7 @@ describe("P-A-fix1: Store & Race", () => {
     const fakeSession = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",
+      post: sessionPost,
       get: jest.fn().mockResolvedValue({ projects: [] }),
     } as any;
 
@@ -636,6 +643,7 @@ describe("P-A-fix1: ProjectDetailScreen error & editor fixes", () => {
     fakeSession = {
       baseUrl: "https://nanobot.local",
       apiToken: () => "secret-token",
+      post: sessionPost,
       get: jest.fn().mockImplementation(async (path: string) => {
         if (path.startsWith("/api/ext/projects/p-missing")) {
           throw new Error("project_not_found");

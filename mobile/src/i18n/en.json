@@ -16,7 +16,8 @@
     "hide": "Hide",
     "edit": "Edit",
     "keep": "Keep",
-    "operationFailed": "Operation failed"
+    "operationFailed": "Operation failed",
+    "open": "Open"
   },
   "devices": {
     "revokeSelf": "This is this phone: you will be disconnected",

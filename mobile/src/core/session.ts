@@ -241,49 +241,33 @@ export class NanobotSession {
       .catch(() => {});
   }
 
-  async get<T>(path: string): Promise<T> {
+  get<T>(path: string, opts: { signal?: AbortSignal } = {}): Promise<T> {
+    return this.request<T>("GET", path, undefined, opts.signal);
+  }
+
+  post<T>(path: string, body?: unknown, opts: { signal?: AbortSignal } = {}): Promise<T> {
+    return this.request<T>("POST", path, body, opts.signal);
+  }
+
+  private async request<T>(method: "GET" | "POST", path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const doFetch = (token: string) =>
-      this.f(`${this.baseUrl}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+      this.f(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        // never carry the bearer token across a redirect, never send cookies
+        redirect: "error",
+        credentials: "omit",
+        signal,
+      });
     if (this.inflight) await this.inflight.catch(() => {}); // gate on an in-flight refresh
     const used = this.api;
     let res = await doFetch(used);
     if (res.status === 401) {
       // token already rotated by a concurrent refresh -> just retry with it
-      if (this.api === used || !this.api) await this.refresh();
-      res = await doFetch(this.api);
-      if (res.status === 401) {
-        this.setOverride("auth_error");
-        throw new Error("unauthorized");
-      }
-    }
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      let msg = text;
-      try {
-        const j = JSON.parse(text) as { error?: unknown };
-        if (typeof j?.error === "string") msg = j.error;
-      } catch {}
-      const err = new Error(msg || `HTTP ${res.status}`);
-      (err as Error & { status?: number }).status = res.status;
-      throw err;
-    }
-    return (await res.json()) as T;
-  }
-
-  async post<T>(path: string, body?: unknown): Promise<T> {
-    const doFetch = (token: string) =>
-      this.f(`${this.baseUrl}${path}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      });
-    if (this.inflight) await this.inflight.catch(() => {});
-    const used = this.api;
-    let res = await doFetch(used);
-    if (res.status === 401) {
       if (this.api === used || !this.api) await this.refresh();
       res = await doFetch(this.api);
       if (res.status === 401) {

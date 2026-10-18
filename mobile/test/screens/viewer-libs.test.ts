@@ -45,6 +45,7 @@ describe("viewerLibs", () => {
   test("reads library using fetch on web platform", async () => {
     Object.defineProperty(Platform, "OS", { value: "web", configurable: true });
     const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
       text: jest.fn().mockResolvedValue("/* pako web source */"),
     });
     global.fetch = mockFetch as unknown as typeof fetch;
@@ -58,6 +59,7 @@ describe("viewerLibs", () => {
   test("loadViewerLibs loads multiple libraries on web", async () => {
     Object.defineProperty(Platform, "OS", { value: "web", configurable: true });
     const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
       text: jest.fn().mockResolvedValue("/* lib content */"),
     });
     global.fetch = mockFetch as unknown as typeof fetch;

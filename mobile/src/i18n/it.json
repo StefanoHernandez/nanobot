@@ -16,7 +16,8 @@
     "hide": "Nascondi",
     "edit": "Modifica",
     "keep": "Mantieni",
-    "operationFailed": "Operazione non riuscita"
+    "operationFailed": "Operazione non riuscita",
+    "open": "Apri"
   },
   "devices": {
     "revokeSelf": "È questo telefono: verrai disconnesso",

@@ -112,6 +112,7 @@ export async function readViewerLib(name: ViewerLibName): Promise<string> {
     const uri = asset.uri;
     if (!uri) throw new Error(`viewer library unavailable: ${name}`);
     const res = await fetch(uri);
+    if (!res.ok) throw new Error(`viewer library unavailable: ${name}`);
     const text = await res.text();
     memory.set(name, text);
     return text;

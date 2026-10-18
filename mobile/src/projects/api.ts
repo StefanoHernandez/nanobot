@@ -88,26 +88,7 @@ async function parseError(res: Response): Promise<string> {
 }
 
 async function postJson<T>(session: NanobotSession, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${session.apiToken()}`,
-  };
-  if (body !== undefined) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const res = await fetch(`${session.baseUrl}${path}`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-
-  if (!res.ok) {
-    const code = await parseError(res);
-    throw new Error(code);
-  }
-  return (await res.json()) as T;
+  return session.post<T>(path, body);
 }
 
 export async function listProjects(session: NanobotSession): Promise<{ projects: Project[] }> {

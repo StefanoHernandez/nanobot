@@ -74,12 +74,16 @@ export async function fetchBackups(session: NanobotSession): Promise<BackupListP
 
 export async function createBackupRequest(
   session: NanobotSession,
-  _timeoutMs: number = CREATE_BACKUP_TIMEOUT_MS,
+  timeoutMs: number = CREATE_BACKUP_TIMEOUT_MS,
 ): Promise<{ backup: BackupItem }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    return await session.post<{ backup: BackupItem }>("/api/ext/backup/create", {});
+    return await session.post<{ backup: BackupItem }>("/api/ext/backup/create", {}, { signal: ctrl.signal });
   } catch (e) {
     wrapError(e);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

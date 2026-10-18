@@ -7,7 +7,16 @@ import { MemoryScreen } from "../../src/screens/ecosystem/memory/MemoryScreen";
 import type { MemoryPages } from "../../src/ecosystem/memory";
 
 const mockGet = jest.fn();
-const mockSession = { get: mockGet, baseUrl: "http://h", apiToken: () => "t" };
+const mockSession = {
+  get: mockGet,
+  // journal POSTs go through session.post; route them to global.fetch so tests can inspect the call
+  post: async (path: string, body?: unknown) => {
+    const res = await global.fetch(`http://h${path}`, { method: "POST", body: JSON.stringify(body) });
+    return res.json();
+  },
+  baseUrl: "http://h",
+  apiToken: () => "t",
+};
 
 jest.mock("../../src/state/sessionStore", () => ({
   useSession: () => ({ session: mockSession }),
