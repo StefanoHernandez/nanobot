@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 
@@ -103,10 +104,18 @@ export async function loadViewerLibs(names: readonly ViewerLibName[]): Promise<V
   return out;
 }
 
-async function readViewerLib(name: ViewerLibName): Promise<string> {
+export async function readViewerLib(name: ViewerLibName): Promise<string> {
   const hit = memory.get(name);
   if (hit != null && hit.length > 0) return hit;
   const asset = Asset.fromModule(MODULES[name]);
+  if (Platform.OS === "web") {
+    const uri = asset.uri;
+    if (!uri) throw new Error(`viewer library unavailable: ${name}`);
+    const res = await fetch(uri);
+    const text = await res.text();
+    memory.set(name, text);
+    return text;
+  }
   if (!asset.localUri) await asset.downloadAsync();
   const uri = asset.localUri;
   if (!uri) throw new Error(`viewer library unavailable: ${name}`);

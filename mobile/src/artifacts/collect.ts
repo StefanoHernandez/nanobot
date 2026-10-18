@@ -5,7 +5,7 @@ const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])$/;
 const FENCE_RE = /(?:^|\n)[ ]{0,3}```([^\n]*)\n([\s\S]*?)[ ]{0,3}```/g;
 const ATTR_RE = /([A-Za-z][\w-]*)=(?:"([^"]*)"|'([^']*)'|([^\s"']+))/g;
 /** Matches the line artifactFixText sends. The next fence of that kind continues the artifact. */
-const CLAIM_RE = /Stessa prima riga, non un artefatto nuovo: `([a-z]+) id=([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9]))`/;
+const CLAIM_RE = /`([a-z]+) id=([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9]))`/;
 
 export type FenceInfo = { lang: string; id?: string; title?: string };
 

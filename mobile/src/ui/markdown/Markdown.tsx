@@ -12,7 +12,7 @@ const openLink = (href: string) => {
   if (SAFE_LINK.test(href)) Linking.openURL(href).catch(() => {});
 };
 
-type Ctx = { th: Theme; base: number; chatKey?: string; messageId?: string };
+type Ctx = { th: Theme; base: number; chatKey?: string; messageId?: string; isStreaming?: boolean };
 
 function Inline({ tokens, ctx }: { tokens?: Token[]; ctx: Ctx }): React.ReactElement {
   const { th } = ctx;
@@ -70,7 +70,7 @@ function Blocks({ tokens, ctx, top }: { tokens: Token[]; ctx: Ctx; top?: boolean
           }
           case "code": {
             const c = t as Tokens.Code;
-            return <CodeBlock key={i} code={c.text} lang={c.lang} chatKey={ctx.chatKey} messageId={ctx.messageId} />;
+            return <CodeBlock key={i} code={c.text} lang={c.lang} chatKey={ctx.chatKey} messageId={ctx.messageId} isStreaming={ctx.isStreaming} />;
           }
           case "blockquote":
             return <View key={i} style={[styles.quote, { borderLeftColor: th.colors.border }]}><Blocks tokens={(t as Tokens.Blockquote).tokens} ctx={ctx} /></View>;
@@ -135,10 +135,10 @@ function MathSplit({ text, ctx }: { text: string; ctx: Ctx }) {
 }
 
 /** Assistant Markdown: GFM via marked's lexer, rendered to RN primitives. Block `$$..$$` goes to MathBlock. */
-export function Markdown({ text, fontSize = 15, chatKey, messageId }: { text: string; fontSize?: number; chatKey?: string; messageId?: string }) {
+export function Markdown({ text, fontSize = 15, chatKey, messageId, isStreaming }: { text: string; fontSize?: number; chatKey?: string; messageId?: string; isStreaming?: boolean }) {
   const th = useTheme();
   const tokens = useMemo(() => marked.lexer(text), [text]);
-  return <View><Blocks tokens={tokens} ctx={{ th, base: fontSize, chatKey, messageId }} top /></View>;
+  return <View><Blocks tokens={tokens} ctx={{ th, base: fontSize, chatKey, messageId, isStreaming }} top /></View>;
 }
 
 const styles = StyleSheet.create({

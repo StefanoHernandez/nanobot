@@ -18,9 +18,22 @@ Rules:
 - Use a new id for a different artifact.
 - The id is lowercase letters, digits and hyphens, 2 to 64 characters, and it cannot start or end with a hyphen. Put the title in double quotes.
 - Keep the artifact self-contained. No CDN scripts, no remote fonts, no secrets. Inline the styles and the data.
+- Prefer CSS theme variables (`--nb-bg`, `--nb-fg`, `--nb-card`, `--nb-muted`, `--nb-border`, `--nb-primary`, `--nb-primary-fg`, `--nb-radius`, `--nb-font`) and the `.nb-card` class over hard-coded colors so artifacts adapt to light and dark themes.
 - A revision is the full updated block with the same id. The preview versions the whole block, so a patch fragment is not a version.
 - The user can send "Correggi l'artefatto id" or "Modifica l'artefatto id" from the preview. Revise that id. Do not ask them to paste the code again when the block is already in the chat.
 - If that message contains `Stessa prima riga, non un artefatto nuovo: \`svg id=name\``, the next block must use that exact info line. Do not invent another id and do not add a second artifact.
+
+## Theme and styling (HTML and React)
+
+The preview shell injects CSS variables matching the app's theme (`--nb-bg`, `--nb-fg`, `--nb-card`, `--nb-muted`, `--nb-border`, `--nb-primary`, `--nb-primary-fg`, `--nb-radius`, `--nb-font`) and a `.nb-card` container class. Base elements (`body`, `button`, `input`, `select`, `table`, `a`, `code`) are pre-styled. Prefer these variables over hard-coded colors:
+
+```html id=summary-card title="Riepilogo"
+<div class="nb-card">
+  <h2 style="color: var(--nb-primary); margin-top: 0;">Riepilogo</h2>
+  <p style="color: var(--nb-fg);">Dati sincronizzati con il tema dell'app.</p>
+  <button>Aggiorna</button>
+</div>
+```
 
 ## Chart (Vega-Lite)
 

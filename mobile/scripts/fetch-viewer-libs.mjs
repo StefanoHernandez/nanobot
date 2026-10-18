@@ -43,6 +43,7 @@ const files = {
 for (const [name, url] of Object.entries(files)) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${res.status} ${url}`);
+  const buf = Buffer.from(await res.arrayBuffer());
   const text = buf.toString("utf8").replace(/\n?\/\/# sourceMappingURL=\S+/g, "");
   const out = Buffer.from(text);
   writeFileSync(new URL(name, outDir), out);

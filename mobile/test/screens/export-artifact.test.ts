@@ -47,3 +47,17 @@ test("print wraps a fragment and injects CSP into a full document", () => {
   expect(printDocument(full)).toContain("<head><meta http-equiv=\"Content-Security-Policy\"");
   expect(printDocument(full)).toContain("<body>già</body>");
 });
+
+test("printDocument injects theme CSS variables and base stylesheet for light and dark", () => {
+  const lightHtml = printDocument("<p>Test</p>", { isDark: false });
+  expect(lightHtml).toContain("--nb-bg:");
+  expect(lightHtml).toContain("--nb-fg:");
+  expect(lightHtml).toContain("--nb-card:");
+  expect(lightHtml).toContain("--nb-primary:");
+  expect(lightHtml).toContain(".nb-card");
+  expect(lightHtml).toContain("#f3f1f7"); // light background
+
+  const darkHtml = printDocument("<p>Test</p>", { isDark: true });
+  expect(darkHtml).toContain("--nb-bg:");
+  expect(darkHtml).toContain("#08070b"); // dark background
+});

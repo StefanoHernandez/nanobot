@@ -1,5 +1,5 @@
 import { Directory, File, Paths } from "expo-file-system";
-import { viewerCsp } from "./ArtifactWebView";
+import { buildThemeCss, viewerCsp } from "./ArtifactWebView";
 
 const PNG_PREFIX = "data:image/png;base64,";
 /** About 6 MB of PNG bytes. Larger snapshots are refused. */
@@ -39,6 +39,7 @@ function printCsp(scripts = true): string {
 
 export type PrintDocumentOptions = {
   scripts?: boolean;
+  isDark?: boolean;
 };
 
 /**
@@ -47,7 +48,9 @@ export type PrintDocumentOptions = {
  */
 export function printDocument(body: string, options?: PrintDocumentOptions): string {
   const scripts = options?.scripts ?? true;
+  const isDark = options?.isDark ?? false;
   const csp = printCsp(scripts);
+  const themeStyle = `<style id="nb-theme-base">${buildThemeCss(isDark)}</style>`;
 
   // Inject the CSP into the first real <head> only: parse with the first match of <head\b that comes before <body. Otherwise wrap.
   const headMatch = /<head\b[^>]*>/i.exec(body);
@@ -56,17 +59,17 @@ export function printDocument(body: string, options?: PrintDocumentOptions): str
 
   if (headBeforeBody) {
     const idx = headMatch.index + headMatch[0].length;
-    return body.slice(0, idx) + csp + body.slice(idx);
+    return body.slice(0, idx) + csp + themeStyle + body.slice(idx);
   }
   if (/<html\b[^>]*>/i.test(body)) {
     if (bodyMatch) {
-      return body.slice(0, bodyMatch.index) + `<head>${csp}</head>` + body.slice(bodyMatch.index);
+      return body.slice(0, bodyMatch.index) + `<head>${csp}${themeStyle}</head>` + body.slice(bodyMatch.index);
     }
-    return body.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${csp}</head>`);
+    return body.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${csp}${themeStyle}</head>`);
   }
   const trimmed = body.trimStart();
   const withoutDocType = trimmed.replace(/^<!doctype html[^>]*>/i, "").trimStart();
-  return `<!DOCTYPE html><html><head>${csp}<meta charset="utf-8"><style>body{margin:0}</style></head><body>${withoutDocType}</body></html>`;
+  return `<!DOCTYPE html><html><head>${csp}${themeStyle}<meta charset="utf-8"><style>body{margin:0}</style></head><body>${withoutDocType}</body></html>`;
 }
 
 const PREVIEW_NAME = /^preview\.(html|svg|mmd|vl|geojson|react)$/;

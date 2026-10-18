@@ -281,16 +281,18 @@ describe("P5-V1 Artifacts & Document Previews", () => {
     expect(await screen.findByTestId("light-preview")).toBeTruthy();
   });
 
-  test("Size routing: an 11 MB html opens as code with a 'Preview anyway' button", async () => {
+  test("Size routing: an 11 MB html shows too large message without reading", async () => {
+    const textFn = jest.fn().mockResolvedValue("<html><body>Large HTML</body></html>");
     mockFileFactory.mockReturnValue({
       uri: "file:///cache/media/page.html",
       size: 11 * 1024 * 1024,
-      text: jest.fn().mockResolvedValue("<html><body>Large HTML</body></html>"),
+      text: textFn,
     });
 
     await wrap(<FileViewer uri="file:///cache/media/page.html" name="page.html" />);
 
-    expect(await screen.findByText(/Preview anyway|Anteprima comunque/i)).toBeTruthy();
+    expect(await screen.findByText(/File too large|Troppo grande/i)).toBeTruthy();
+    expect(textFn).not.toHaveBeenCalled();
   });
 
   test("Size routing: a 500 MB pdf still uses the streamed PDF viewer", async () => {
@@ -810,8 +812,13 @@ test("Fix and ask send a short note to the source chat, never the artifact sourc
     expect(screen.queryByText("Preview not available")).toBeNull();
     (router.back as jest.Mock).mockClear();
     await fireEvent.press(screen.getByRole("button", { name: "Fix" }));
-    expect(sendMessage).toHaveBeenCalledWith("fix", expect.stringContaining("Correggi l'artefatto `sales-dashboard` (html)"), undefined, expect.any(Object));
-    expect(sendMessage.mock.calls[0][1]).toContain("Errore: Unexpected token (riga 2)");
+    expect(sendMessage).toHaveBeenCalledWith(
+      "fix",
+      expect.stringMatching(/Correggi l'artefatto `sales-dashboard` \(html\)|Fix the artifact `sales-dashboard` \(html\)/),
+      undefined,
+      expect.any(Object),
+    );
+    expect(sendMessage.mock.calls[0][1]).toMatch(/Errore: Unexpected token \(riga 2\)|Error: Unexpected token \(line 2\)/);
     expect(sendMessage.mock.calls[0][1]).not.toContain("SECRET SOURCE");
     expect(router.back).toHaveBeenCalled();
 
@@ -820,9 +827,11 @@ test("Fix and ask send a short note to the source chat, never the artifact sourc
       screen.getByLabelText("What should change?").props.onChangeText("titolo più grande");
     });
     await fireEvent.press(screen.getByRole("button", { name: "Ask for a change" }));
-    expect(sendMessage.mock.calls[0][1]).toContain("Modifica l'artefatto `sales-dashboard` (html)");
-    expect(sendMessage.mock.calls[0][1]).toContain("Stessa prima riga, non un artefatto nuovo: `html id=sales-dashboard`");
-    expect(sendMessage.mock.calls[0][1]).toContain("Richiesta: titolo più grande");
+    expect(sendMessage.mock.calls[0][1]).toMatch(
+      /Modifica l'artefatto `sales-dashboard` \(html\)|Modify the artifact `sales-dashboard` \(html\)/,
+    );
+    expect(sendMessage.mock.calls[0][1]).toContain("`html id=sales-dashboard`");
+    expect(sendMessage.mock.calls[0][1]).toMatch(/Richiesta: titolo più grande|Request: titolo più grande/);
     expect(sendMessage.mock.calls[0][1]).not.toContain("SECRET SOURCE");
   } finally {
     artifactStore.clear();
@@ -901,6 +910,25 @@ test("an HTML preview rotates, fits, and exports PDF", async () => {
   artifactStore.clear();
 });
 
+test("a chart preview enables Save PNG (canPng) and not Save PDF", async () => {
+  artifactStore.set(
+    JSON.stringify({
+      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      data: { values: [] },
+      mark: "bar",
+    }),
+    "preview.vl"
+  );
+  try {
+    const view = await wrap(<FileViewer uri="" name="preview.vl" />);
+    expect(screen.getByLabelText("Save PNG")).toBeTruthy();
+    expect(screen.queryByLabelText("Save PDF")).toBeNull();
+    await view.unmount();
+  } finally {
+    artifactStore.clear();
+  }
+});
+
 test("answer.md uses paginated reading view from artifactStore, not route params", async () => {
   const md = "## Alpha\n\nPage one text\n\n## Beta\n\nPage two text";
   artifactStore.set(md, "answer.md");
@@ -973,4 +1001,46 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
   for (const version of Object.values(CDN_VERSIONS)) {
     expect(pins).toContain(version);
   }
+});
+
+test("buildShellHtml contains CSS variables for light and dark", () => {
+  const light = buildShellHtml({ kind: "html", html: "<p>light</p>", isDark: false });
+  expect(light).toContain("--nb-bg: #f3f1f7;");
+  expect(light).toContain("--nb-fg: #1c1428;");
+  expect(light).toContain("--nb-card: #ffffff;");
+  expect(light).toContain("--nb-muted: #ebe7f2;");
+  expect(light).toContain("--nb-border: #1c142812;");
+  expect(light).toContain("--nb-primary: #3f2564;");
+  expect(light).toContain("--nb-primary-fg: #ffffff;");
+  expect(light).toContain("--nb-radius: 12px;");
+  expect(light).toContain("--nb-font: -apple-system");
+
+  const dark = buildShellHtml({ kind: "html", html: "<p>dark</p>", isDark: true });
+  expect(dark).toContain("--nb-bg: #08070b;");
+  expect(dark).toContain("--nb-fg: #f4f0f8;");
+  expect(dark).toContain("--nb-card: #131119;");
+  expect(dark).toContain("--nb-muted: #18151f;");
+  expect(dark).toContain("--nb-border: #ffffff14;");
+  expect(dark).toContain("--nb-primary: #cfb0ec;");
+  expect(dark).toContain("--nb-primary-fg: #1a1022;");
+});
+
+test("buildShellHtml puts base stylesheet before artifact's own styles", () => {
+  const userHtml = `<style>.my-custom-style { color: red; }</style><div class="my-custom-style">Custom</div>`;
+  const shell = buildShellHtml({ kind: "html", html: userHtml });
+  const baseSheetIndex = shell.indexOf('<style id="nb-theme-base">');
+  const userStyleIndex = shell.indexOf(".my-custom-style");
+  expect(baseSheetIndex).toBeGreaterThan(-1);
+  expect(userStyleIndex).toBeGreaterThan(-1);
+  expect(baseSheetIndex).toBeLessThan(userStyleIndex);
+  expect(shell).toContain(".nb-card {");
+});
+
+test("buildShellHtml chart includes exportPngScript and window.__vegaView", () => {
+  const spec = '{"data":{"values":[{"x":1}]},"mark":"bar"}';
+  const libs = { vega: "1", vegaLite: "1", vegaEmbed: "1" };
+  const shell = buildShellHtml({ kind: "chart", html: spec, libs });
+  expect(shell).toContain("window.__exportPng = function()");
+  expect(shell).toContain("window.__vegaView");
+  expect(shell).toContain('toImageURL("png")');
 });
