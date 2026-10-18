@@ -678,7 +678,7 @@ class GatewayHTTPHandler:
         # Fork (nanobot/ext/search.py): full-text search.
         from nanobot.ext.search import dispatch_search_get
 
-        response = await asyncio.to_thread(dispatch_search_get, self, request, got)
+        response = await dispatch_search_get(self, request, got)
         if response is not None:
             return response
 

@@ -10,8 +10,9 @@ from typing import Any
 from urllib.parse import quote
 
 from nanobot.agent.tools.base import Tool, ToolResult, tool_parameters
-from nanobot.agent.tools.context import ToolContext
+from nanobot.agent.tools.context import ToolContext, current_request_session_key
 from nanobot.agent.tools.schema import StringSchema, tool_parameters_schema
+from nanobot.agent.tools.sessions import _UNTRUSTED_NOTICE  # pyright: ignore[reportPrivateUsage]
 from nanobot.ext import search
 
 _DEFAULT_LIMIT = 20
@@ -72,6 +73,7 @@ class SearchHistoryTool(Tool):
 
         source_list = [s.strip() for s in sources.split(",") if s.strip()] if sources else None
         workspace = Path(self._ctx.workspace) if self._ctx and self._ctx.workspace else None
+        sessions_dir = getattr(self._ctx.sessions, "sessions_dir", None) if self._ctx and self._ctx.sessions else None
 
         results = await asyncio.to_thread(
             search.search,
@@ -79,13 +81,14 @@ class SearchHistoryTool(Tool):
             sources=source_list,
             limit=_DEFAULT_LIMIT,
             workspace=workspace,
+            sessions_dir=sessions_dir,
         )
 
-        if not results:
-            return "No results found."
-
+        curr_session = current_request_session_key()
         lines: list[str] = []
         for r in results:
+            if curr_session and r.get("source") == "chats" and r.get("session_key") == curr_session:
+                continue
             title = r.get("title") or "Untitled"
             date_val = r.get("date") or r.get("ts") or ""
             snippet = r.get("snippet") or r.get("excerpt") or ""
@@ -98,4 +101,7 @@ class SearchHistoryTool(Tool):
                 ref = r.get("ref") or ""
                 lines.append(f"- {title} [{ref}] ({date_val}): {snippet}")
 
-        return "\n".join(lines)
+        if not lines:
+            return "No results found."
+
+        return f"{_UNTRUSTED_NOTICE}\n\n" + "\n".join(lines)

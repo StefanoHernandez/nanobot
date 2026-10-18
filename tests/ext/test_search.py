@@ -27,8 +27,9 @@ class _Tokens:
 
 
 class _Router:
-    def __init__(self, workspace: Path, secret: str = MASTER) -> None:
+    def __init__(self, workspace: Path, session_manager: SessionManager | None = None, secret: str = MASTER) -> None:
         self.skills_workspace_path = str(workspace)
+        self.session_manager = session_manager
         self.config = SimpleNamespace(token_issue_secret="", token=secret)
         self.secret = secret
 
@@ -37,8 +38,8 @@ class _Router:
         return headers.get("Authorization") == f"Bearer {self.secret}"
 
 
-def _make_router(workspace: Path, secret: str = MASTER) -> _Router:
-    return _Router(workspace, secret)
+def _make_router(workspace: Path, session_manager: SessionManager | None = None, secret: str = MASTER) -> _Router:
+    return _Router(workspace, session_manager=session_manager, secret=secret)
 
 
 def _http_get(path: str, auth: bool = True) -> WsRequest:
@@ -57,7 +58,6 @@ def _init_env(tmp_path, monkeypatch):
 
     workspace = tmp_path / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setenv("NANOBOT_WORKSPACE", str(workspace))
 
     kanban_db = tmp_path / "ext_kanban.db"
     monkeypatch.setenv("NANOBOT_KANBAN_DB", str(kanban_db))
@@ -66,7 +66,6 @@ def _init_env(tmp_path, monkeypatch):
     sessions_root = tmp_path / "sessions"
     sessions_mgr = SessionManager(workspace, sessions_root=sessions_root)
     sessions_db = sessions_mgr._store.path
-    monkeypatch.setenv("NANOBOT_SESSIONS_DB", str(sessions_db))
 
     return SimpleNamespace(
         workspace=workspace,
@@ -95,7 +94,7 @@ def test_index_and_find_chat_message(tmp_path, monkeypatch):
     _add_message(env.sessions_mgr, "websocket:conv1", "user", "How do I configure the wireguard tunnel?")
     _add_message(env.sessions_mgr, "websocket:conv1", "assistant", "Use wg-quick up wg0 on the host.")
 
-    results = search.search("wireguard", workspace=env.workspace)
+    results = search.search("wireguard", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) >= 1
     hit = results[0]
     assert hit["source"] == "chats"
@@ -111,7 +110,7 @@ def test_index_and_find_journal_day(tmp_path, monkeypatch):
     day_file = journal_dir / "2026-10-18.md"
     day_file.write_text("# 2026-10-18\nToday we deployed the new solar power inverter firmware.", encoding="utf-8")
 
-    results = search.search("solar inverter", workspace=env.workspace)
+    results = search.search("solar inverter", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) == 1
     hit = results[0]
     assert hit["source"] == "journal"
@@ -136,7 +135,7 @@ def test_index_and_find_kanban_task(tmp_path, monkeypatch):
                VALUES ('run-1', 't-inverter-99', 'bot-1', 'kanban:run', 'done', 'Multimeter verified at 48.2V.', '[]', 1000, 2000)"""
         )
 
-    results = search.search("multimeter shunt", workspace=env.workspace)
+    results = search.search("multimeter shunt", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) == 1
     hit = results[0]
     assert hit["source"] == "kanban"
@@ -149,7 +148,7 @@ def test_ranking_puts_better_match_first(tmp_path, monkeypatch):
     _add_message(env.sessions_mgr, "websocket:c1", "user", "raspberry pi raspberry pi raspberry pi setup guide")
     _add_message(env.sessions_mgr, "websocket:c2", "user", "I like apples and one raspberry for dessert")
 
-    results = search.search("raspberry", workspace=env.workspace)
+    results = search.search("raspberry", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) >= 2
     assert results[0]["session_key"] == "websocket:c1"
     assert results[1]["session_key"] == "websocket:c2"
@@ -158,13 +157,13 @@ def test_ranking_puts_better_match_first(tmp_path, monkeypatch):
 def test_new_message_appears_after_refresh(tmp_path, monkeypatch):
     env = _init_env(tmp_path, monkeypatch)
     _add_message(env.sessions_mgr, "websocket:chat-a", "user", "Initial hello message")
-    assert len(search.search("telemetry", workspace=env.workspace)) == 0
+    assert len(search.search("telemetry", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)) == 0
 
     # Add message and force refresh
     _add_message(env.sessions_mgr, "websocket:chat-a", "assistant", "Realtime telemetry metrics are streaming.")
-    search.refresh(workspace=env.workspace, force=True)
+    search.refresh(workspace=env.workspace, force=True, sessions_dir=env.sessions_mgr.sessions_dir)
 
-    results = search.search("telemetry", workspace=env.workspace)
+    results = search.search("telemetry", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) == 1
     assert results[0]["session_key"] == "websocket:chat-a"
 
@@ -172,14 +171,14 @@ def test_new_message_appears_after_refresh(tmp_path, monkeypatch):
 def test_deleted_session_disappears(tmp_path, monkeypatch):
     env = _init_env(tmp_path, monkeypatch)
     _add_message(env.sessions_mgr, "websocket:chat-del", "user", "TopSecretLaserPlans must be destroyed")
-    results = search.search("TopSecretLaserPlans", workspace=env.workspace)
+    results = search.search("TopSecretLaserPlans", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) == 1
 
     # Delete session
     env.sessions_mgr.delete_session("websocket:chat-del")
-    search.refresh(workspace=env.workspace, force=True)
+    search.refresh(workspace=env.workspace, force=True, sessions_dir=env.sessions_mgr.sessions_dir)
 
-    results = search.search("TopSecretLaserPlans", workspace=env.workspace)
+    results = search.search("TopSecretLaserPlans", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) == 0
 
 
@@ -190,7 +189,7 @@ def test_internal_sessions_are_never_indexed(tmp_path, monkeypatch):
     _add_message(env.sessions_mgr, "journal:job-1", "assistant", "quantum journal generation")
     _add_message(env.sessions_mgr, "heartbeat", "user", "quantum heartbeat ping")
 
-    results = search.search("quantum", workspace=env.workspace)
+    results = search.search("quantum", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
     assert len(results) == 0
 
 
@@ -199,29 +198,109 @@ def test_fts_syntax_in_query_does_not_crash(tmp_path, monkeypatch):
     _add_message(env.sessions_mgr, "websocket:safe", "user", "Simple safe message")
 
     for bad_query in ['"', '""', "*", "NEAR", "NEAR/2", "AND", "OR", 'foo "bar* baz', ""]:
-        res = search.search(bad_query, workspace=env.workspace)
+        res = search.search(bad_query, workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
         assert isinstance(res, list)
 
 
-def test_http_search_route_and_auth(tmp_path, monkeypatch):
+def test_source_column_unindexed(tmp_path, monkeypatch):
+    env = _init_env(tmp_path, monkeypatch)
+    store = KanbanStore(env.kanban_db)
+    store.save_task({
+        "id": "t-birds-1",
+        "board_id": "main",
+        "title": "Build cedar birdhouse",
+        "description": "Construct wooden feeder in garden.",
+        "status": "ready",
+    })
+
+    # Searching for the literal word "kanban" should NOT match the row since 'source' is UNINDEXED
+    results = search.search("kanban", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
+    assert len(results) == 0
+
+    # Searching for actual content matches
+    results = search.search("birdhouse", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
+    assert len(results) == 1
+    assert results[0]["source"] == "kanban"
+
+
+def test_old_schema_version_rebuilds_index(tmp_path, monkeypatch):
+    import sqlite3
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_file = data_dir / "test_rebuild.db"
+
+    # Simulate old DB without schema_version
+    conn = sqlite3.connect(db_file)
+    conn.execute(
+        """CREATE VIRTUAL TABLE docs USING fts5(
+            source,
+            ref UNINDEXED,
+            title,
+            body,
+            ts UNINDEXED
+        )"""
+    )
+    conn.execute("CREATE TABLE sync_meta (key TEXT PRIMARY KEY, val TEXT NOT NULL)")
+    conn.execute("INSERT INTO sync_meta (key, val) VALUES ('schema_version', '1')")
+    conn.execute("CREATE TABLE sync_state (source TEXT NOT NULL, item_id TEXT NOT NULL, version TEXT NOT NULL, PRIMARY KEY (source, item_id))")
+    conn.execute("INSERT INTO sync_state VALUES ('chats', 'old-item', 'v1')")
+    conn.commit()
+    conn.close()
+
+    # Now call _init_db
+    conn2 = search._init_db(db_file)
+    val = conn2.execute("SELECT val FROM sync_meta WHERE key = 'schema_version'").fetchone()[0]
+    assert val == search.SCHEMA_VERSION
+    # sync_state should be empty because old index was dropped for rebuild
+    count = conn2.execute("SELECT COUNT(*) FROM sync_state").fetchone()[0]
+    assert count == 0
+    conn2.close()
+
+
+def test_refresh_error_logs_and_does_not_crash(tmp_path, monkeypatch):
+    env = _init_env(tmp_path, monkeypatch)
+    _add_message(env.sessions_mgr, "websocket:c-existing", "user", "UniqueExistingTerm")
+    search.refresh(workspace=env.workspace, force=True, sessions_dir=env.sessions_mgr.sessions_dir)
+
+    # Make _sync_journal raise an exception
+    def failing_sync(*args, **kwargs):
+        raise OSError("Permission denied test")
+
+    monkeypatch.setattr(search, "_sync_journal", failing_sync)
+
+    # search should not raise, refresh logs warning, returns existing index
+    results = search.search("UniqueExistingTerm", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
+    assert len(results) == 1
+
+
+def test_limit_capped_at_100(tmp_path, monkeypatch):
+    env = _init_env(tmp_path, monkeypatch)
+    # Even if limit=1000 is requested, max returned is <= 100
+    results = search.search("test", workspace=env.workspace, limit=1000, sessions_dir=env.sessions_mgr.sessions_dir)
+    assert isinstance(results, list)
+
+
+@pytest.mark.asyncio
+async def test_http_search_route_and_auth(tmp_path, monkeypatch):
     env = _init_env(tmp_path, monkeypatch)
     _add_message(env.sessions_mgr, "websocket:http-chat", "user", "Searching via HTTP endpoint test")
 
-    router = _make_router(env.workspace)
+    router = _make_router(env.workspace, session_manager=env.sessions_mgr)
 
     # 401 without auth
     req_no_auth = _http_get("/api/ext/search?q=endpoint", auth=False)
-    resp = search.dispatch_search_get(router, req_no_auth, "/api/ext/search")
+    resp = await search.dispatch_search_get(router, req_no_auth, "/api/ext/search")
     assert resp is not None
     assert resp.status_code == 401
 
     # Non-matching path returns None
     req_other = _http_get("/api/ext/other", auth=True)
-    assert search.dispatch_search_get(router, req_other, "/api/ext/other") is None
+    assert await search.dispatch_search_get(router, req_other, "/api/ext/other") is None
 
     # 200 with auth
     req_ok = _http_get("/api/ext/search?q=endpoint", auth=True)
-    resp_ok = search.dispatch_search_get(router, req_ok, "/api/ext/search")
+    resp_ok = await search.dispatch_search_get(router, req_ok, "/api/ext/search")
     assert resp_ok is not None
     assert resp_ok.status_code == 200
     data = json.loads(resp_ok.body.decode("utf-8"))
@@ -234,13 +313,23 @@ def test_http_search_route_and_auth(tmp_path, monkeypatch):
 async def test_agent_tool_search_history(tmp_path, monkeypatch):
     env = _init_env(tmp_path, monkeypatch)
     _add_message(env.sessions_mgr, "websocket:agent-test", "user", "How to bake sourdough bread")
+    _add_message(env.sessions_mgr, "websocket:agent-current", "user", "I also like sourdough pancakes")
 
     from nanobot.agent.tools.search_history import SearchHistoryTool
+    from nanobot.agent.tools.sessions import _UNTRUSTED_NOTICE
 
     ctx = ToolContext(config=ToolsConfig(), workspace=str(env.workspace), sessions=env.sessions_mgr)
     tool = SearchHistoryTool.create(ctx)
     assert tool.name == "search_history"
     assert "search_sessions" in tool.description
 
+    # Exclude current session
+    monkeypatch.setattr(
+        "nanobot.agent.tools.search_history.current_request_session_key",
+        lambda: "websocket:agent-current",
+    )
+
     output = await tool.execute(query="sourdough")
-    assert "websocket:agent-test" in output or "sourdough" in output
+    assert _UNTRUSTED_NOTICE in output
+    assert "websocket:agent-test" in output
+    assert "websocket:agent-current" not in output

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -33,6 +34,11 @@ MODELS_DEV_PROVIDER_MAP: dict[str, str] = {
 }
 
 CACHE_TTL_SECONDS: float = 24 * 3600.0
+FAILURE_CACHE_TTL_SECONDS: float = 10 * 60.0
+
+# Time (and cache file) of the last failed models.dev fetch; avoids a 10 s wait on every call while offline.
+_last_failure_time: float | None = None
+_last_failure_path: Path | None = None
 
 
 def _cache_file_path() -> Path:
@@ -48,12 +54,29 @@ def _as_dict(val: object) -> dict[str, Any] | None:
     return None
 
 
+def _write_cache_atomically(cache_path: Path, data: dict[str, Any]) -> None:
+    """Write the cache through a temp file + os.replace; the temp file never outlives a failure."""
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=cache_path.parent, delete=False
+        ) as tmp:
+            tmp_name = tmp.name
+            tmp.write(json.dumps(data))
+        os.replace(tmp_name, cache_path)
+    except BaseException:
+        if tmp_name is not None:
+            Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
 def models_dev_catalog(http_get: Any) -> dict[str, Any]:
     """Fetch https://models.dev/api.json and cache it in memory and on disk for 24 h.
 
     On network error, uses the stale file if there is one, otherwise {}; never raises.
     """
-    global _memory_cache
+    global _memory_cache, _last_failure_time, _last_failure_path
     now = time.time()
     cache_path = _cache_file_path()
 
@@ -76,27 +99,34 @@ def models_dev_catalog(http_get: Any) -> dict[str, Any]:
         except Exception:
             pass
 
-    # 3. Refresh from models.dev
-    try:
-        response: Any = http_get(
-            "https://models.dev/api.json",
-            headers={"Accept": "application/json"},
-            timeout=10.0,
-        )
-        if hasattr(response, "raise_for_status"):
-            response.raise_for_status()
-        raw_body: object = response.json() if hasattr(response, "json") else json.loads(str(getattr(response, "text", "{}")))
-        data = _as_dict(raw_body)
-        if data is not None:
-            _memory_cache = (now, cache_path, data)
-            try:
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(json.dumps(data), encoding="utf-8")
-            except Exception:
-                pass
-            return data
-    except Exception:
-        pass
+    # 3. Refresh from models.dev, unless a recent attempt failed
+    recently_failed = (
+        _last_failure_time is not None
+        and _last_failure_path == cache_path
+        and now - _last_failure_time < FAILURE_CACHE_TTL_SECONDS
+    )
+    if not recently_failed:
+        try:
+            response: Any = http_get(
+                "https://models.dev/api.json",
+                headers={"Accept": "application/json"},
+                timeout=10.0,
+            )
+            if hasattr(response, "raise_for_status"):
+                response.raise_for_status()
+            raw_body: object = response.json() if hasattr(response, "json") else json.loads(str(getattr(response, "text", "{}")))
+            data = _as_dict(raw_body)
+            if data:
+                _last_failure_time = None
+                _memory_cache = (now, cache_path, data)
+                try:
+                    _write_cache_atomically(cache_path, data)
+                except Exception:
+                    pass
+                return data
+            _last_failure_time, _last_failure_path = now, cache_path
+        except Exception:
+            _last_failure_time, _last_failure_path = now, cache_path
 
     # 4. On network/fetch error, fall back to stale cache file if present
     if cache_path.is_file():

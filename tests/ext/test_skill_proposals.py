@@ -11,11 +11,19 @@ from websockets.datastructures import Headers
 from websockets.http11 import Request as WsRequest
 
 from nanobot.agent.skills import SkillsLoader
+from nanobot.bus.events import OutboundMessage
 from nanobot.cron.service import CronService
 from nanobot.ext import skill_proposals
 from nanobot.session.manager import SessionManager
 
 MASTER = "master-token"
+
+
+@pytest.fixture(autouse=True)
+def _reset_runner():
+    skill_proposals.bind_skill_proposals_turn(None)
+    yield
+    skill_proposals.bind_skill_proposals_turn(None)
 
 
 class _Tokens:
@@ -146,16 +154,88 @@ def test_activate_without_privilege_returns_403(tmp_path: Path, monkeypatch: pyt
         source="chat",
     )
 
-    # Monkeypatch privileged_request to return False
-    monkeypatch.setattr(skill_proposals, "privileged_request", lambda conn, headers: False)
+    # Prove load_config is never called during activate even without timezone passed
+    def forbid_load_config():
+        raise AssertionError("load_config was unexpectedly called")
+
+    monkeypatch.setattr("nanobot.config.loader.load_config", forbid_load_config)
 
     handler = skill_proposals.skill_proposals_post_handler(
         MASTER, _Tokens(), lambda r: None, workspace=workspace, sessions=sessions
     )
-    req = _MockAiohttpRequest("/api/ext/skills/proposals/remote-skill/activate", remote="192.168.1.50")
+    # Remote non-loopback IP without device token: natural unprivileged request without monkeypatching
+    req = _MockAiohttpRequest(
+        "/api/ext/skills/proposals/remote-skill/activate",
+        remote="192.168.1.50",
+        headers={"Host": "192.168.1.50:8000"},
+    )
     import asyncio
     resp = asyncio.run(handler(req))
     assert resp.status == 403
+    assert json.loads(resp.text) == {"error": "full_power_required"}
+
+
+def test_activate_local_browser_succeeds_without_monkeypatch(tmp_path: Path):
+    workspace, sessions = _sessions(tmp_path)
+    skill_proposals.write_proposal(
+        workspace,
+        name="local-skill",
+        summary="A local proposal",
+        reason="Local test",
+        content="content",
+        source="chat",
+    )
+    handler = skill_proposals.skill_proposals_post_handler(
+        MASTER, _Tokens(), lambda r: None, workspace=workspace, sessions=sessions
+    )
+    req = _MockAiohttpRequest(
+        "/api/ext/skills/proposals/local-skill/activate",
+        remote="127.0.0.1",
+        headers={"Host": "localhost"},
+    )
+    import asyncio
+    resp = asyncio.run(handler(req))
+    assert resp.status == 200
+    assert json.loads(resp.text)["ok"] is True
+    assert (workspace / "skills" / "local-skill" / "SKILL.md").exists()
+
+
+def test_activate_full_power_device_succeeds_without_monkeypatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    workspace, sessions = _sessions(tmp_path)
+    skill_proposals.write_proposal(
+        workspace,
+        name="device-skill",
+        summary="A device proposal",
+        reason="Device test",
+        content="content",
+        source="chat",
+    )
+    from nanobot.ext import devices
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    monkeypatch.setenv("NANOBOT_DEVICES_FILE", str(tmp_path / "devices.json"))
+    monkeypatch.setattr(devices, "_DEVICE_TOKENS", {})
+    code, _ = devices.create_pairing_code()
+    _, device_id, _ = devices.claim_pairing_code(code, "phone")
+    devices.set_full_power(device_id, True)
+    store = GatewayTokenStore()
+    api_token = store.issue_api_token(300)
+    devices.remember_device_tokens(device_id, store, api_token)
+
+    handler = skill_proposals.skill_proposals_post_handler(
+        MASTER, store, lambda r: None, workspace=workspace, sessions=sessions
+    )
+    # Remote IP with the gateway token minted for the full-power device
+    req = _MockAiohttpRequest(
+        "/api/ext/skills/proposals/device-skill/activate",
+        remote="192.168.1.75",
+        headers={"Host": "192.168.1.75:8000", "Authorization": f"Bearer {api_token}"},
+    )
+    import asyncio
+    resp = asyncio.run(handler(req))
+    assert resp.status == 200
+    assert json.loads(resp.text)["ok"] is True
+    assert (workspace / "skills" / "device-skill" / "SKILL.md").exists()
 
 
 def test_reject_deletes_proposal(tmp_path: Path):
@@ -311,3 +391,127 @@ async def test_routes_dispatch_get_and_post(tmp_path: Path):
     res_scout_get = skill_proposals.dispatch_skill_proposals_get(router, _get("/api/ext/skills/scout"), "/api/ext/skills/scout")
     assert res_scout_get is not None and res_scout_get.status_code == 200
     assert json.loads(res_scout_get.body.decode("utf-8")) == {"enabled": True}
+
+
+def test_get_without_auth_returns_401(tmp_path: Path):
+    workspace, _ = _sessions(tmp_path)
+    for path in ("/api/ext/skills/proposals", "/api/ext/skills/scout"):
+        res = skill_proposals.dispatch_skill_proposals_get(_router(workspace), _get(path, auth=False), path)
+        assert res is not None and res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_post_body_over_the_limit_returns_413(tmp_path: Path):
+    workspace, sessions = _sessions(tmp_path)
+    handler = skill_proposals.skill_proposals_post_handler(
+        MASTER, _Tokens(), lambda r: None, workspace=workspace, sessions=sessions, timezone="UTC"
+    )
+    req = _MockAiohttpRequest("/api/ext/skills/scout", {"enabled": True, "pad": "x" * (1024 * 1024)})
+    resp = await handler(req)
+    assert resp.status == 413
+    assert json.loads(resp.text) == {"error": "body_too_large"}
+    assert not skill_proposals.scout_settings_path(workspace).exists()
+
+
+async def _propose(handler, session_key: str):
+    return await handler(_MockAiohttpRequest("/api/ext/skills/propose", {"session_key": session_key}))
+
+
+@pytest.mark.asyncio
+async def test_propose_unknown_session_returns_404_and_creates_nothing(tmp_path: Path):
+    workspace, sessions = _sessions(tmp_path)
+    handler = skill_proposals.skill_proposals_post_handler(
+        MASTER, _Tokens(), lambda r: None, workspace=workspace, sessions=sessions, timezone="UTC"
+    )
+    resp = await _propose(handler, "websocket:nope")
+    assert resp.status == 404
+    assert json.loads(resp.text) == {"error": "session_not_found"}
+    assert await sessions.state.read("websocket:nope") is None
+    assert not any(row.get("key") == "websocket:nope" for row in await sessions.state.list_sessions())
+
+
+def _failed_turn():
+    async def turn(prompt: str, tools=None, session_key=None):
+        return OutboundMessage(
+            channel="cli", chat_id="x", content="provider exploded", metadata={"_stop_reason": "error"}
+        )
+
+    return turn
+
+
+@pytest.mark.asyncio
+async def test_propose_with_failed_turn_returns_502(tmp_path: Path):
+    workspace, sessions = _sessions(tmp_path)
+    chat = sessions.get_or_create("websocket:chat")
+    chat.messages.append({"role": "user", "content": "do the thing", "timestamp": "2026-10-18T10:00:00"})
+    sessions.save(chat)
+    skill_proposals.bind_skill_proposals_turn(_failed_turn())
+    handler = skill_proposals.skill_proposals_post_handler(
+        MASTER, _Tokens(), lambda r: None, workspace=workspace, sessions=sessions, timezone="UTC"
+    )
+    resp = await _propose(handler, "websocket:chat")
+    assert resp.status == 502
+    assert json.loads(resp.text) == {"error": "turn_failed"}
+
+
+@pytest.mark.asyncio
+async def test_scout_failed_turn_does_not_advance_the_cursor(tmp_path: Path):
+    workspace, sessions = _sessions(tmp_path)
+    history_file = workspace / "memory" / "history.jsonl"
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    history_file.write_text(
+        json.dumps({"cursor": 7, "timestamp": "2026-10-18 20:00", "content": "did step 1"}) + "\n",
+        encoding="utf-8",
+    )
+    skill_proposals.save_scout_settings(workspace, {"enabled": True})
+    agent = SimpleNamespace(sessions=sessions, context=SimpleNamespace(memory=SimpleNamespace(workspace=workspace)))
+    cursor_file = skill_proposals.cursor_file_path(workspace)
+
+    skill_proposals.bind_skill_proposals_turn(_failed_turn())
+    await skill_proposals.run_scout_job(agent)
+    assert not cursor_file.exists()
+
+    async def ok_turn(prompt: str, tools=None, session_key=None):
+        return OutboundMessage(channel="cli", chat_id="x", content="nothing to propose")
+
+    skill_proposals.bind_skill_proposals_turn(ok_turn)
+    await skill_proposals.run_scout_job(agent)
+    assert cursor_file.read_text(encoding="utf-8").strip() == "7"
+
+
+def test_proposal_named_like_a_builtin_skill_sets_updates(tmp_path: Path):
+    workspace, _ = _sessions(tmp_path)
+    builtin = next(
+        s["name"] for s in SkillsLoader(workspace).list_skills(filter_unavailable=False) if s["source"] == "builtin"
+    )
+    meta = skill_proposals.write_proposal(
+        workspace, name=builtin, summary="s", reason="r", content="c", source="chat"
+    )
+    assert meta["updates"] == builtin
+    fresh = skill_proposals.write_proposal(workspace, name="brand-new-skill", summary="s", reason="r", content="c", source="chat")
+    assert "updates" not in fresh
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("content", "x" * (64 * 1024 + 1), "content_too_large"),
+        ("summary", "x" * 301, "summary_too_long"),
+        ("reason", "x" * 501, "reason_too_long"),
+    ],
+)
+def test_write_proposal_rejects_oversized_fields(tmp_path: Path, field: str, value: str, code: str):
+    workspace, _ = _sessions(tmp_path)
+    fields = {"summary": "s", "reason": "r", "content": "c", field: value}
+    with pytest.raises(skill_proposals.SkillProposalError) as exc:
+        skill_proposals.write_proposal(workspace, name="big-skill", source="chat", **fields)
+    assert (exc.value.status, exc.value.code) == (400, code)
+    assert not (workspace / "skills-proposed" / "big-skill").exists()
+
+
+def test_write_proposal_accepts_fields_at_the_caps(tmp_path: Path):
+    workspace, _ = _sessions(tmp_path)
+    skill_proposals.write_proposal(
+        workspace, name="max-skill", summary="x" * 300, reason="r" * 500, content="c" * (64 * 1024), source="chat"
+    )
+    assert (workspace / "skills-proposed" / "max-skill" / "SKILL.md").exists()

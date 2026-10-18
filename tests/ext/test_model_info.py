@@ -21,6 +21,11 @@ def isolated_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return cache_path
 
 
+@pytest.fixture(autouse=True)
+def reset_failure_time(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(mi, "_last_failure_time", None)
+
+
 def make_fake_catalog() -> dict[str, Any]:
     return {
         "opencode-go": {
@@ -215,3 +220,107 @@ def test_unsupported_provider_models_payload(monkeypatch: pytest.MonkeyPatch):
     # For unknown unsupported provider
     result_unknown = mi.unsupported_provider_models_payload("unsupported_other", base_payload, http_get=fake_http_get)
     assert result_unknown is None
+
+
+def test_failed_fetch_is_not_retried_for_ten_minutes(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+
+    def failing_http_get(url: str, **kwargs):
+        calls.append(url)
+        raise RuntimeError("offline")
+
+    current_time = 5000000.0
+    monkeypatch.setattr(mi.time, "time", lambda: current_time)
+
+    assert mi.models_dev_catalog(failing_http_get) == {}
+    assert len(calls) == 1
+
+    current_time += 9 * 60.0
+    assert mi.models_dev_catalog(failing_http_get) == {}
+    assert len(calls) == 1  # still inside the failure window: no network
+
+    current_time += 2 * 60.0
+    assert mi.models_dev_catalog(failing_http_get) == {}
+    assert len(calls) == 2  # window over: tries again
+
+
+def test_a_success_after_a_failure_clears_the_failure_window(monkeypatch: pytest.MonkeyPatch):
+    catalog = make_fake_catalog()
+    responses: list[Any] = [RuntimeError("offline"), FakeResponse(catalog)]
+
+    def http_get(url: str, **kwargs):
+        item = responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    current_time = 6000000.0
+    monkeypatch.setattr(mi.time, "time", lambda: current_time)
+    assert mi.models_dev_catalog(http_get) == {}
+    current_time += 11 * 60.0
+    assert mi.models_dev_catalog(http_get) == catalog
+    assert mi._last_failure_time is None
+
+
+def test_empty_catalog_is_not_cached(isolated_cache: Path, monkeypatch: pytest.MonkeyPatch):
+    fake_http_get = Mock(return_value=FakeResponse({}))
+    current_time = 7000000.0
+    monkeypatch.setattr(mi.time, "time", lambda: current_time)
+
+    assert mi.models_dev_catalog(fake_http_get) == {}
+    assert not isolated_cache.exists()
+    assert mi._memory_cache is None
+
+    # The empty answer counts as a failure: no new request for 10 minutes, then it asks again.
+    assert mi.models_dev_catalog(fake_http_get) == {}
+    assert fake_http_get.call_count == 1
+    current_time += 11 * 60.0
+    mi.models_dev_catalog(fake_http_get)
+    assert fake_http_get.call_count == 2
+
+
+def test_cache_is_written_atomically_through_a_temp_file(isolated_cache: Path, monkeypatch: pytest.MonkeyPatch):
+    catalog = make_fake_catalog()
+    replaced: list[tuple[str, str]] = []
+    real_replace = os.replace
+
+    def spy_replace(src: Any, dst: Any) -> None:
+        assert Path(src).parent == isolated_cache.parent
+        assert Path(src) != isolated_cache
+        assert not isolated_cache.exists()  # the final path only appears with the rename
+        replaced.append((str(src), str(dst)))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(mi.os, "replace", spy_replace)
+    assert mi.models_dev_catalog(lambda url, **kw: FakeResponse(catalog)) == catalog
+
+    assert replaced == [(replaced[0][0], str(isolated_cache))]
+    assert json.loads(isolated_cache.read_text(encoding="utf-8")) == catalog
+    assert list(isolated_cache.parent.iterdir()) == [isolated_cache]
+
+
+def test_failed_atomic_write_removes_the_temp_file(isolated_cache: Path, monkeypatch: pytest.MonkeyPatch):
+    catalog = make_fake_catalog()
+
+    def failing_replace(src: Any, dst: Any) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(mi.os, "replace", failing_replace)
+    assert mi.models_dev_catalog(lambda url, **kw: FakeResponse(catalog)) == catalog
+
+    assert not isolated_cache.exists()
+    assert list(isolated_cache.parent.iterdir()) == []
+
+
+def test_failure_window_belongs_to_its_cache_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    catalog = make_fake_catalog()
+    monkeypatch.setattr(mi.time, "time", lambda: 8000000.0)
+
+    def failing_http_get(url: str, **kwargs):
+        raise RuntimeError("offline")
+
+    assert mi.models_dev_catalog(failing_http_get) == {}
+
+    other_cache = tmp_path / "other" / "models-dev.json"
+    monkeypatch.setattr(mi, "_cache_file_path", lambda: other_cache)
+    assert mi.models_dev_catalog(lambda url, **kw: FakeResponse(catalog)) == catalog
