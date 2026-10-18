@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { useMemory } from "../../../ecosystem/memory";
@@ -33,11 +33,33 @@ export function MemoryScreen() {
   const th = useTheme();
   const { session } = useSession();
   const { pages, loading, error, refresh } = useMemory();
-  const [tab, setTab] = useState<MemoryTab>("user");
+  const params = useLocalSearchParams<{ tab?: string; date?: string }>();
+  const initialTab: MemoryTab =
+    params.tab && ["user", "memory", "soul", "journal"].includes(params.tab)
+      ? (params.tab as MemoryTab)
+      : params.date
+      ? "journal"
+      : "user";
+  const [tab, setTab] = useState<MemoryTab>(initialTab);
   const [journal, setJournal] = useState<JournalIndex | null>(null);
   const [dayText, setDayText] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  useEffect(() => {
+    if (params.tab && ["user", "memory", "soul", "journal"].includes(params.tab)) {
+      setTab(params.tab as MemoryTab);
+    } else if (params.date) {
+      setTab("journal");
+    }
+  }, [params.tab, params.date]);
+
+  useEffect(() => {
+    if (!session || !params.date) return;
+    void fetchJournalDay(session, params.date)
+      .then((pageDay) => setDayText(pageDay.text))
+      .catch(() => {});
+  }, [session, params.date]);
 
   const loadJournal = useCallback(async () => {
     if (!session) return;

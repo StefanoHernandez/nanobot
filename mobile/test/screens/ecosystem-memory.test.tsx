@@ -22,9 +22,12 @@ jest.mock("../../src/state/sessionStore", () => ({
   useSession: () => ({ session: mockSession }),
 }));
 
+let mockParams: { tab?: string; date?: string } = {};
+
 jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn() },
   useNavigation: () => ({ addListener: jest.fn(() => () => {}) }),
+  useLocalSearchParams: () => mockParams,
 }));
 
 const memoryFixture: MemoryPages = {
@@ -59,6 +62,7 @@ const renderScreen = () =>
 describe("Ecosystem memory screen", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockParams = {};
     await i18n.changeLanguage("en");
     mockGet.mockResolvedValue(memoryFixture);
   });
@@ -195,5 +199,33 @@ describe("Ecosystem memory screen", () => {
       fireEvent.press(await view.findByText("2026-10-16"));
     });
     expect(await view.findByText("Decided two disks.")).toBeTruthy();
+  });
+
+  test("route params tab=journal opens the journal tab", async () => {
+    mockParams = { tab: "journal" };
+    mockGet.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal")) {
+        return { enabled: true, hour: 21, days: ["2026-10-18"] };
+      }
+      return memoryFixture;
+    });
+    const view = await renderScreen();
+    expect(await view.findByText("Automatic journal")).toBeTruthy();
+  });
+
+  test("route params tab=journal and date opens journal and loads day content", async () => {
+    mockParams = { tab: "journal", date: "2026-10-18" };
+    mockGet.mockImplementation(async (path: string) => {
+      if (String(path).includes("/api/ext/journal/day")) {
+        return { date: "2026-10-18", text: "Deployed solar inverter firmware." };
+      }
+      if (String(path).includes("/api/ext/journal")) {
+        return { enabled: true, hour: 21, days: ["2026-10-18"] };
+      }
+      return memoryFixture;
+    });
+    const view = await renderScreen();
+    expect(await view.findByText("Automatic journal")).toBeTruthy();
+    expect(await view.findByText("Deployed solar inverter firmware.")).toBeTruthy();
   });
 });

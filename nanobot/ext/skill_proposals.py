@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import shutil
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import unquote
 
@@ -20,7 +20,15 @@ from nanobot.agent.tools.base import Tool, ToolResult
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.cron.service import CronService
 from nanobot.cron.types import CronJob, CronPayload, CronSchedule
-from nanobot.ext.devices import admin_authorized, privileged_request
+from nanobot.ext.devices import (
+    DeviceError,
+    admin_authorized,
+    require_privileged,
+    router_admin_authorized,
+)
+from nanobot.ext.devices import (
+    read_json as devices_read_json,
+)
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.manager import SessionManager
 from nanobot.webui.http_utils import http_error, http_json_response
@@ -30,6 +38,9 @@ PROPOSALS_DIR_NAME = "skills-proposed"
 SKILLS_DIR_NAME = "skills"
 MAX_NAME_LENGTH = 64
 CHAR_CAP = 24_000
+MAX_CONTENT_BYTES = 64 * 1024
+MAX_SUMMARY_CHARS = 300
+MAX_REASON_CHARS = 500
 _NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _Turn = Callable[..., Awaitable[Any]]
 _runner: _Turn | None = None
@@ -173,11 +184,21 @@ def write_proposal(
 ) -> dict[str, Any]:
     if not is_valid_proposal_name(name):
         raise SkillProposalError(400, "invalid_name")
+    if len(summary.strip()) > MAX_SUMMARY_CHARS:
+        raise SkillProposalError(400, "summary_too_long")
+    if len(reason.strip()) > MAX_REASON_CHARS:
+        raise SkillProposalError(400, "reason_too_long")
+    if len(content.encode("utf-8")) > MAX_CONTENT_BYTES:
+        raise SkillProposalError(400, "content_too_large")
     p_dir = proposal_path(workspace, name)
     p_dir.mkdir(parents=True, exist_ok=True)
     (p_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
     active_file = active_skills_dir(workspace) / name / "SKILL.md"
+    from nanobot.agent.skills import SkillsLoader
+    loader = SkillsLoader(workspace)
+    builtin_names = {s["name"] for s in loader.list_skills(filter_unavailable=False) if s.get("source") == "builtin"}
+
     now_iso = datetime.now(timezone.utc).isoformat()
     meta: dict[str, Any] = {
         "name": name,
@@ -189,7 +210,7 @@ def write_proposal(
     }
     if session_key:
         meta["session_key"] = session_key
-    if active_file.exists():
+    if active_file.exists() or name in builtin_names:
         meta["updates"] = name
     (p_dir / "proposal.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return meta
@@ -269,7 +290,8 @@ class WriteProposalTool(Tool):
         if not is_valid_proposal_name(name):
             return ToolResult.error(f"Invalid skill name '{name}'. Must be hyphen-case lowercase and <= 64 chars.")
         try:
-            meta = write_proposal(
+            meta = await asyncio.to_thread(
+                write_proposal,
                 self.workspace,
                 name=name,
                 summary=summary,
@@ -353,7 +375,9 @@ async def propose_from_chat(
     sessions: SessionManager,
     session_key: str,
 ) -> dict[str, Any]:
-    session = await sessions.state.get(session_key)
+    session = await sessions.state.read(session_key)
+    if session is None:
+        raise SkillProposalError(404, "session_not_found")
     if not session.messages:
         return {"proposal": None, "reason": "No messages in this chat"}
 
@@ -400,6 +424,9 @@ async def propose_from_chat(
     if runner is not None:
         turn_key = f"skillprop:{datetime.now():%Y%m%d-%H%M%S}"
         result = await runner(prompt, tools=registry, session_key=turn_key)
+        meta = cast(dict[str, Any] | None, getattr(result, "metadata", None))
+        if isinstance(meta, dict) and meta.get("_stop_reason") == "error":
+            raise SkillProposalError(502, "turn_failed")
         reason_text = ""
         if isinstance(result, str):
             reason_text = result
@@ -412,14 +439,13 @@ async def propose_from_chat(
     return {"proposal": None, "reason": "Proposal turn runner not available"}
 
 
-async def run_scout_job(agent: Any, *, tz_name: str | None = None) -> None:
-    workspace = Path(agent.context.memory.workspace)
+def _read_scout_job_data(workspace: Path) -> tuple[bool, int, list[dict[str, Any]], int]:
     if not load_scout_settings(workspace)["enabled"]:
-        return
+        return False, 0, [], 0
 
     history_file = workspace / "memory" / "history.jsonl"
     if not history_file.exists():
-        return
+        return True, 0, [], 0
 
     cursor_file = cursor_file_path(workspace)
     stored_cursor = 0
@@ -448,9 +474,21 @@ async def run_scout_job(agent: Any, *, tz_name: str | None = None) -> None:
                     if c > max_seen_cursor:
                         max_seen_cursor = c
     except OSError:
-        return
+        return True, stored_cursor, [], stored_cursor
 
-    if not new_entries:
+    return True, stored_cursor, new_entries, max_seen_cursor
+
+
+def _write_scout_cursor(workspace: Path, cursor: int) -> None:
+    c_file = cursor_file_path(workspace)
+    c_file.parent.mkdir(parents=True, exist_ok=True)
+    c_file.write_text(str(cursor), encoding="utf-8")
+
+
+async def run_scout_job(agent: Any, *, tz_name: str | None = None) -> None:
+    workspace = Path(agent.context.memory.workspace)
+    enabled, _stored, new_entries, max_seen_cursor = await asyncio.to_thread(_read_scout_job_data, workspace)
+    if not enabled or not new_entries:
         return
 
     texts = [f"[{e.get('timestamp')}] {e.get('content')}" for e in new_entries if e.get("content")]
@@ -478,19 +516,13 @@ async def run_scout_job(agent: Any, *, tz_name: str | None = None) -> None:
 
     runner = _runner or agent_turn(agent)
     turn_key = f"skillprop:scout:{datetime.now():%Y%m%d-%H%M%S}"
-    await runner(prompt, tools=registry, session_key=turn_key)
+    result = await runner(prompt, tools=registry, session_key=turn_key)
 
-    cursor_file.parent.mkdir(parents=True, exist_ok=True)
-    cursor_file.write_text(str(max_seen_cursor), encoding="utf-8")
+    meta = cast(dict[str, Any] | None, getattr(result, "metadata", None))
+    if isinstance(meta, dict) and meta.get("_stop_reason") == "error":
+        return
 
-
-def _authorized(router: Any, request: WsRequest) -> bool:
-    tokens = getattr(router, "tokens", None)
-    if tokens is not None and hasattr(tokens, "check_api_token"):
-        return bool(tokens.check_api_token(request))
-    if hasattr(router, "check_api_token"):
-        return bool(router.check_api_token(request))
-    return False
+    await asyncio.to_thread(_write_scout_cursor, workspace, max_seen_cursor)
 
 
 def _workspace(router: Any) -> Path:
@@ -505,7 +537,8 @@ def _workspace(router: Any) -> Path:
 def dispatch_skill_proposals_get(router: Any, request: WsRequest, got: str) -> Response | None:
     if got != PREFIX and not got.startswith(PREFIX + "/"):
         return None
-    if not _authorized(router, request):
+    secret = router.config.token_issue_secret.strip() or router.config.token.strip()
+    if not router_admin_authorized(secret, router, request):
         return http_error(401, "Unauthorized")
     workspace = _workspace(router)
 
@@ -556,19 +589,6 @@ def skill_proposals_post_handler(
     return handler
 
 
-async def _read_json(request: web.BaseRequest) -> dict[str, Any]:
-    raw = await request.content.read()
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-    except ValueError:
-        raise SkillProposalError(400, "invalid_json") from None
-    if not isinstance(data, dict):
-        raise SkillProposalError(400, "invalid_json")
-    return cast(dict[str, Any], data)
-
-
 async def _handle_post(
     secret: str,
     tokens: Any,
@@ -583,23 +603,24 @@ async def _handle_post(
         return web.json_response({"error": "method_not_allowed"}, status=405)
     if not admin_authorized(secret, tokens, request):
         return web.json_response({"error": "unauthorized"}, status=401)
-    if workspace is None or timezone is None:
+    if workspace is None:
         from nanobot.config.loader import load_config
-        config = load_config()
-        workspace = workspace or config.workspace_path
-        timezone = timezone or config.agents.defaults.timezone
+        workspace = load_config().workspace_path
 
     path = request.path
 
     try:
-        body = await _read_json(request)
+        body = await devices_read_json(request)
 
         if path == PREFIX + "/scout":
             enabled = body.get("enabled")
             if not isinstance(enabled, bool):
                 return web.json_response({"error": "invalid_settings"}, status=400)
-            saved = save_scout_settings(workspace, {"enabled": enabled})
+            saved = await asyncio.to_thread(save_scout_settings, workspace, {"enabled": enabled})
             if cron is not None:
+                if timezone is None:
+                    from nanobot.config.loader import load_config
+                    timezone = load_config().agents.defaults.timezone
                 sync_scout_job(cron, workspace, timezone)
             return web.json_response(saved)
 
@@ -621,25 +642,19 @@ async def _handle_post(
                 return web.json_response({"error": "invalid_name"}, status=400)
 
             if action == "activate":
-                conn = None
-                transport = getattr(request, "transport", None)
-                if transport is not None and hasattr(transport, "get_protocol"):
-                    try:
-                        conn = getattr(transport, "get_protocol")()
-                    except Exception:
-                        pass
-                if conn is None and hasattr(request, "remote"):
-                    conn = SimpleNamespace(remote_address=(request.remote, 0))
-                if not privileged_request(conn, request.headers):
-                    return web.json_response({"error": "forbidden"}, status=403)
-                res = activate_proposal(workspace, name)
+                priv_err = require_privileged(request)
+                if priv_err is not None:
+                    return priv_err
+                res = await asyncio.to_thread(activate_proposal, workspace, name)
                 return web.json_response(res)
 
             if action == "reject":
-                res = reject_proposal(workspace, name)
+                res = await asyncio.to_thread(reject_proposal, workspace, name)
                 return web.json_response(res)
 
     except SkillProposalError as exc:
+        return web.json_response({"error": exc.code}, status=exc.status)
+    except DeviceError as exc:
         return web.json_response({"error": exc.code}, status=exc.status)
 
     return web.json_response({"error": "not_found"}, status=404)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -21,9 +22,9 @@ from nanobot.ext.devices import router_admin_authorized
 from nanobot.ext.kanban import kanban_db_path
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.keys import is_internal_session
-from nanobot.session.location import SessionLocation
 from nanobot.webui.http_utils import http_error, http_json_response
 
+SCHEMA_VERSION = "2"
 PREFIX = "/api/ext/search"
 REFRESH_INTERVAL_SECONDS = 30.0
 _DATE_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
@@ -72,8 +73,25 @@ def _init_db(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, timeout=10.0)
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute(
+        """CREATE TABLE IF NOT EXISTS sync_meta (
+            key TEXT PRIMARY KEY,
+            val TEXT NOT NULL
+        )"""
+    )
+    row = conn.execute("SELECT val FROM sync_meta WHERE key = 'schema_version'").fetchone()
+    if row is None or row[0] != SCHEMA_VERSION:
+        conn.execute("DROP TABLE IF EXISTS docs")
+        conn.execute("DROP TABLE IF EXISTS sync_state")
+        conn.execute(
+            "INSERT INTO sync_meta (key, val) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET val = excluded.val",
+            (SCHEMA_VERSION,),
+        )
+        conn.execute("DELETE FROM sync_meta WHERE key = 'last_sync'")
+        conn.commit()
+
+    conn.execute(
         """CREATE VIRTUAL TABLE IF NOT EXISTS docs USING fts5(
-            source,
+            source UNINDEXED,
             ref UNINDEXED,
             title,
             body,
@@ -87,12 +105,6 @@ def _init_db(db_path: Path) -> sqlite3.Connection:
             item_id TEXT NOT NULL,
             version TEXT NOT NULL,
             PRIMARY KEY (source, item_id)
-        )"""
-    )
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS sync_meta (
-            key TEXT PRIMARY KEY,
-            val TEXT NOT NULL
         )"""
     )
     return conn
@@ -115,39 +127,25 @@ def _extract_message_text(record: dict[str, Any]) -> str:
     return "\n".join(parts).strip()
 
 
-def _resolve_workspace(workspace: Path | str | None = None) -> Path:
+def _resolve_workspace(workspace: Path | str | None = None) -> Path | None:
     if workspace is not None:
         return Path(workspace).expanduser().resolve()
-    raw = os.environ.get("NANOBOT_WORKSPACE", "").strip()
-    if raw:
-        return Path(raw).expanduser().resolve()
     try:
         from nanobot.config.loader import load_config
         return load_config().workspace_path.expanduser().resolve()
     except Exception:
-        return Path.cwd().resolve()
+        return None
 
 
-def _resolve_sessions_db(workspace: Path) -> Path | None:
-    raw = os.environ.get("NANOBOT_SESSIONS_DB", "").strip()
-    if raw:
-        path = Path(raw).expanduser()
-        if path.is_file():
-            return path
-    raw_dir = os.environ.get("NANOBOT_SESSIONS_DIR", "").strip()
-    if raw_dir:
-        path = Path(raw_dir).expanduser() / "sessions.sqlite3"
-        if path.is_file():
-            return path
-    try:
-        candidate = SessionLocation(workspace).sessions_dir / "sessions.sqlite3"
-        if candidate.is_file():
-            return candidate
-    except Exception:
-        pass
-    fallback = workspace / "sessions" / "sessions.sqlite3"
-    if fallback.is_file():
-        return fallback
+def _resolve_sessions_db(sessions_dir: Path | None) -> Path | None:
+    if sessions_dir is None:
+        return None
+    candidate = Path(sessions_dir).expanduser()
+    if candidate.is_file():
+        return candidate
+    db_file = candidate / "sessions.sqlite3"
+    if db_file.is_file():
+        return db_file
     return None
 
 
@@ -175,6 +173,7 @@ def refresh(
     *,
     force: bool = False,
     db_path: Path | None = None,
+    sessions_dir: Path | None = None,
 ) -> None:
     """Incrementally synchronize search index from chats, journal, and kanban."""
     if not check_fts5_available():
@@ -196,8 +195,9 @@ def refresh(
                     pass
 
         ws = _resolve_workspace(workspace)
-        _sync_chats(conn, ws)
-        _sync_journal(conn, ws)
+        _sync_chats(conn, sessions_dir)
+        if ws is not None:
+            _sync_journal(conn, ws)
         _sync_kanban(conn)
 
         conn.execute(
@@ -205,16 +205,18 @@ def refresh(
             (str(now),),
         )
         conn.commit()
+    except Exception as exc:
+        logger.warning("Search refresh failed: {}", exc)
     finally:
         conn.close()
 
 
-def _sync_chats(search_conn: sqlite3.Connection, workspace: Path) -> None:
-    sessions_db = _resolve_sessions_db(workspace)
+def _sync_chats(search_conn: sqlite3.Connection, sessions_dir: Path | None) -> None:
+    sessions_db = _resolve_sessions_db(sessions_dir)
     if not sessions_db or not sessions_db.is_file():
         return
 
-    uri = f"file:{sessions_db}?mode=ro"
+    uri = sessions_db.resolve().as_uri() + "?mode=ro"
     try:
         s_conn = sqlite3.connect(uri, uri=True, timeout=5.0)
     except Exception as exc:
@@ -365,7 +367,7 @@ def _sync_kanban(search_conn: sqlite3.Connection) -> None:
     if not k_path.is_file():
         return
 
-    uri = f"file:{k_path}?mode=ro"
+    uri = k_path.resolve().as_uri() + "?mode=ro"
     try:
         k_conn = sqlite3.connect(uri, uri=True, timeout=5.0)
     except Exception as exc:
@@ -441,6 +443,7 @@ def search(
     limit: int = 20,
     workspace: Path | None = None,
     db_path: Path | None = None,
+    sessions_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Search documents across indexed sources using BM25 and highlighted snippets."""
     if not check_fts5_available():
@@ -455,13 +458,17 @@ def search(
         return []
 
     # Refresh if needed
-    refresh(workspace=workspace, db_path=db_path)
+    try:
+        refresh(workspace=workspace, db_path=db_path, sessions_dir=sessions_dir)
+    except Exception as exc:
+        logger.warning("Search refresh failed: {}", exc)
 
     path = db_path or search_db_path()
     if not path.is_file():
         return []
 
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0)
+    uri = path.resolve().as_uri() + "?mode=ro"
+    conn = sqlite3.connect(uri, uri=True, timeout=5.0)
     try:
         sql = (
             "SELECT source, ref, title, ts, "
@@ -479,7 +486,8 @@ def search(
                 params.extend(source_list)
 
         sql += " ORDER BY rank ASC LIMIT ?"
-        params.append(max(1, limit))
+        limit = min(max(1, limit), 100)
+        params.append(limit)
 
         rows = conn.execute(sql, params).fetchall()
         results: list[dict[str, Any]] = []
@@ -517,7 +525,7 @@ def search(
         conn.close()
 
 
-def dispatch_search_get(router: Any, request: WsRequest, got: str) -> Response | None:
+async def dispatch_search_get(router: Any, request: WsRequest, got: str) -> Response | None:
     """Handle GET /api/ext/search route."""
     if got != PREFIX:
         return None
@@ -532,9 +540,20 @@ def dispatch_search_get(router: Any, request: WsRequest, got: str) -> Response |
     sources = [s.strip() for s in sources_param.split(",") if s.strip()] if sources_param else None
     limit_param = (query_params.get("limit") or ["20"])[0]
     limit = int(limit_param) if limit_param.isdigit() else 20
+    limit = min(max(1, limit), 100)
 
     workspace = Path(router.skills_workspace_path) if hasattr(router, "skills_workspace_path") else None
-    results = search(q, sources=sources, limit=limit, workspace=workspace)
+    session_manager = getattr(router, "session_manager", None)
+    sessions_dir = getattr(session_manager, "sessions_dir", None) if session_manager else None
+
+    results = await asyncio.to_thread(
+        search,
+        q,
+        sources=sources,
+        limit=limit,
+        workspace=workspace,
+        sessions_dir=sessions_dir,
+    )
 
     return http_json_response(
         {"results": results, "query": q},
