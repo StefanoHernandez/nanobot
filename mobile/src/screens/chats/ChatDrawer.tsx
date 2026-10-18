@@ -46,7 +46,7 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   const t = useT();
   const th = useTheme();
   const insets = useSafeAreaInsets();
-  const { profile, state: conn } = useSession();
+  const { state: conn } = useSession();
   const chats = useChats((s) => s.chats); // subscribes the list; search() reads the same store
   const loading = useChats((s) => s.loading);
   const refresh = useChats((s) => s.refresh);
@@ -131,7 +131,7 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
       <View style={styles.header}>
         <BotFace state={conn === "open" ? "idle" : "offline"} size={30} />
         <Text numberOfLines={1} accessibilityRole="header" style={{ flex: 1, color: th.colors.foreground, fontFamily: th.font.display, fontSize: 20 }}>
-          {profile?.name ?? "nanobot"}
+          nanobot
         </Text>
         <StatusDot />
         <IconButton icon="puzzle-outline" accessibilityLabel={t("ecosystem.title")} onPress={() => router.push("/ecosystem")} />
