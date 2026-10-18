@@ -128,7 +128,9 @@ async def _read_json(request: web.BaseRequest) -> dict[str, Any]:
     content_length = getattr(request, "content_length", None)
     if content_length is not None and content_length > MAX_JSON_BODY_BYTES:
         raise AutomationError(413, "body_too_large")
-    raw = await request.content.read(MAX_JSON_BODY_BYTES + 1)
+    from nanobot.ext.devices import read_body_capped
+
+    raw = await read_body_capped(request)
     if len(raw) > MAX_JSON_BODY_BYTES:
         raise AutomationError(413, "body_too_large")
     if not raw:

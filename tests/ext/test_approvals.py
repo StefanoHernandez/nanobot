@@ -111,9 +111,11 @@ def _post(
     raw = json.dumps(body).encode("utf-8")
 
     class _Content:
+        _left = [raw]  # one body, then EOF
+
         @staticmethod
         async def read(_limit: int) -> bytes:
-            return raw
+            return _Content._left.pop() if _Content._left else b""
 
     headers = {"Content-Type": "application/json"}
     if host:

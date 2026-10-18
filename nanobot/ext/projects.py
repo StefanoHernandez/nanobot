@@ -386,7 +386,9 @@ def _serve_file(store: ProjectStore, project_id: str, rel: str, request: WsReque
 async def _read_json(request: web.BaseRequest) -> dict[str, Any]:
     if request.content_length is not None and request.content_length > MAX_JSON_BODY_BYTES:
         raise ProjectError(413, "body_too_large")
-    raw = await request.content.read(MAX_JSON_BODY_BYTES + 1)
+    from nanobot.ext.devices import read_body_capped
+
+    raw = await read_body_capped(request)
     if len(raw) > MAX_JSON_BODY_BYTES:
         raise ProjectError(413, "body_too_large")
     if not raw:

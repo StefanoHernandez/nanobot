@@ -259,9 +259,11 @@ def test_mentions_hop_limit(store_path):
 
 def _move_request(body: bytes, *, auth: str | None = MASTER):
     class _Content:
+        _left = [body]  # one body, then EOF
+
         @staticmethod
         async def read(_limit: int) -> bytes:
-            return body
+            return _Content._left.pop() if _Content._left else b""
 
     headers = {"Content-Type": "application/json"}
     if auth is not None:

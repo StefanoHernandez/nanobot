@@ -267,9 +267,11 @@ def _post(path: str, payload: dict):
     raw = _body(payload)
 
     class _Content:
+        _left = [raw]  # one body, then EOF
+
         @staticmethod
         async def read(_limit: int = 0) -> bytes:
-            return raw
+            return _Content._left.pop() if _Content._left else b""
 
     return SimpleNamespace(
         method="POST",

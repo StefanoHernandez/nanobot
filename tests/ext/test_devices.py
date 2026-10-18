@@ -67,9 +67,11 @@ def test_claim_works_once_second_is_unauthorized(devices_path):
 
 def _claim_request(body: bytes):
     class _Content:
+        _left = [body]  # one body, then EOF
+
         @staticmethod
         async def read(_limit: int) -> bytes:
-            return body
+            return _Content._left.pop() if _Content._left else b""
 
     return SimpleNamespace(
         method="POST",
@@ -185,9 +187,11 @@ def _post(path: str, body: dict, auth: str):
     raw = json.dumps(body).encode("utf-8")
 
     class _Content:
+        _left = [raw]  # one body, then EOF
+
         @staticmethod
         async def read(_limit: int) -> bytes:
-            return raw
+            return _Content._left.pop() if _Content._left else b""
 
     return SimpleNamespace(
         method="POST",
@@ -281,9 +285,11 @@ def _web(path: str, body: dict, *, origin: str = "http://gw.test:8765", cookie: 
     raw = json.dumps(body).encode("utf-8")
 
     class _Content:
+        _left = [raw]  # one body, then EOF
+
         @staticmethod
         async def read(_limit: int) -> bytes:
-            return raw
+            return _Content._left.pop() if _Content._left else b""
 
     headers = {"Content-Type": "application/json", "Host": "gw.test:8765", "Origin": origin}
     if cookie is not None:
@@ -491,3 +497,15 @@ async def test_revoke_route_requires_privileged(devices_path):
     assert allowed_local.status == 200
     assert json.loads(allowed_local.text) == {"ok": True}
 
+
+
+async def test_read_json_reads_a_body_split_in_chunks() -> None:
+    chunks = [b'{"name": ', b'"phone"}']
+
+    class _Content:
+        @staticmethod
+        async def read(_limit: int) -> bytes:
+            return chunks.pop(0) if chunks else b""
+
+    request = SimpleNamespace(content_length=None, content=_Content)
+    assert await dev.read_json(request) == {"name": "phone"}  # type: ignore[arg-type]

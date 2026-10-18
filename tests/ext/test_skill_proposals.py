@@ -68,7 +68,8 @@ class _MockAiohttpRequest:
                 self._data = data
 
             async def read(self, n: int = -1):
-                return self._data
+                data, self._data = self._data, b""
+                return data
 
         self.content = _Content(self._body)
 

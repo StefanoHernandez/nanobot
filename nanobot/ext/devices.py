@@ -517,10 +517,21 @@ def devices_post_handler(
     return handler
 
 
+async def read_body_capped(request: web.BaseRequest, cap: int = MAX_JSON_BODY_BYTES) -> bytes:
+    """Read the body up to cap + 1 bytes (longer means too large).
+
+    StreamReader.read(n) returns what is buffered, not the whole body: loop until EOF.
+    """
+    raw = b""
+    while len(raw) <= cap and (chunk := await request.content.read(cap + 1 - len(raw))):
+        raw += chunk
+    return raw
+
+
 async def read_json(request: web.BaseRequest) -> dict[str, Any]:
     if request.content_length is not None and request.content_length > MAX_JSON_BODY_BYTES:
         raise DeviceError(413, "body_too_large")
-    raw = await request.content.read(MAX_JSON_BODY_BYTES + 1)
+    raw = await read_body_capped(request)
     if len(raw) > MAX_JSON_BODY_BYTES:
         raise DeviceError(413, "body_too_large")
     if not raw:
