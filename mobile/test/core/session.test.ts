@@ -61,6 +61,15 @@ test("3 concurrent 401s -> exactly one extra bootstrap, all retried", async () =
   s.stop();
 });
 
+test("post on 401 refreshes token and succeeds on retry", async () => {
+  const { s, boots } = setup([401]);
+  await s.start();
+  const r = await s.post<{ tok: string }>("/api/action", { foo: "bar" });
+  expect(boots()).toBe(2);
+  expect(r).toEqual({ tok: "Bearer api2" });
+  s.stop();
+});
+
 test("second 401 after refresh -> rejects and auth_error", async () => {
   const { s } = setup([401, 401]);
   await s.start();

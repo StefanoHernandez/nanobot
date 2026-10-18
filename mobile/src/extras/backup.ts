@@ -57,62 +57,29 @@ export function backupErrorKey(err: unknown): string {
   return "common.operationFailed";
 }
 
-async function parseError(res: Response): Promise<Error & { status?: number; code?: string }> {
-  let code = "";
-  try {
-    const body = (await res.json()) as { error?: unknown };
-    if (typeof body?.error === "string") code = body.error;
-  } catch {
-    // ignore JSON parse failure
+function wrapError(err: any): never {
+  if (err && typeof err === "object") {
+    err.code = err.code ?? err.message;
   }
-  const err = new Error(code || `HTTP ${res.status}`) as Error & { status?: number; code?: string };
-  err.status = res.status;
-  err.code = code;
-  return err;
+  throw err;
 }
 
 export async function fetchBackups(session: NanobotSession): Promise<BackupListPayload> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/backup`, {
-    method: "GET",
-    redirect: "error",
-    credentials: "omit",
-    headers: { Authorization: `Bearer ${session.apiToken()}` },
-  });
-  if (!res.ok) {
-    throw await parseError(res);
+  try {
+    return await session.get<BackupListPayload>("/api/ext/backup");
+  } catch (e) {
+    wrapError(e);
   }
-  return (await res.json()) as BackupListPayload;
 }
 
 export async function createBackupRequest(
   session: NanobotSession,
-  timeoutMs: number = CREATE_BACKUP_TIMEOUT_MS,
+  _timeoutMs: number = CREATE_BACKUP_TIMEOUT_MS,
 ): Promise<{ backup: BackupItem }> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-  if (timer && typeof (timer as any).unref === "function") {
-    (timer as any).unref();
-  }
   try {
-    const res = await fetch(`${root}/api/ext/backup/create`, {
-      method: "POST",
-      redirect: "error",
-      credentials: "omit",
-      headers: {
-        Authorization: `Bearer ${session.apiToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({}),
-      ...(ctrl ? { signal: ctrl.signal } : {}),
-    });
-    if (!res.ok) {
-      throw await parseError(res);
-    }
-    return (await res.json()) as { backup: BackupItem };
-  } finally {
-    if (timer) clearTimeout(timer);
+    return await session.post<{ backup: BackupItem }>("/api/ext/backup/create", {});
+  } catch (e) {
+    wrapError(e);
   }
 }
 
@@ -120,63 +87,33 @@ export async function deleteBackupRequest(
   session: NanobotSession,
   name: string,
 ): Promise<{ ok: boolean }> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/backup/delete`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) {
-    throw await parseError(res);
+  try {
+    return await session.post<{ ok: boolean }>("/api/ext/backup/delete", { name });
+  } catch (e) {
+    wrapError(e);
   }
-  return (await res.json()) as { ok: boolean };
 }
 
 export async function restoreBackupRequest(
   session: NanobotSession,
   name: string,
 ): Promise<RestoreBackupResponse> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/backup/restore`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ name, confirm: true }),
-  });
-  if (!res.ok) {
-    throw await parseError(res);
+  try {
+    return await session.post<RestoreBackupResponse>("/api/ext/backup/restore", { name, confirm: true });
+  } catch (e) {
+    wrapError(e);
   }
-  return (await res.json()) as RestoreBackupResponse;
 }
 
 export async function saveBackupSettingsRequest(
   session: NanobotSession,
   dir: string,
 ): Promise<{ ok: boolean; dir?: string }> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/backup/settings`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ dir }),
-  });
-  if (!res.ok) {
-    throw await parseError(res);
+  try {
+    return await session.post<{ ok: boolean; dir?: string }>("/api/ext/backup/settings", { dir });
+  } catch (e) {
+    wrapError(e);
   }
-  return (await res.json()) as { ok: boolean; dir?: string };
 }
 
 let generation = 0;

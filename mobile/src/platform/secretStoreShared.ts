@@ -6,28 +6,10 @@ export interface SecretStore {
   del(key: string): Promise<void>;
 }
 
-type WebStorage = {
+type WebKvStorage = {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
-};
-
-export function browserSecretStore(storage: WebStorage): SecretStore {
-  const prefix = "nanobot.secret.";
-  return {
-    async get(key) {
-      return storage.getItem(prefix + key);
-    },
-    async set(key, value) {
-      storage.setItem(prefix + key, value);
-    },
-    async del(key) {
-      storage.removeItem(prefix + key);
-    },
-  };
-}
-
-type WebKvStorage = WebStorage & {
   length: number;
   key(index: number): string | null;
 };

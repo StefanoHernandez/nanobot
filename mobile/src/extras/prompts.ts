@@ -57,20 +57,8 @@ export async function listPrompts(
   session: NanobotSession,
   projectId?: string | null,
 ): Promise<PromptItem[]> {
-  const root = session.baseUrl.replace(/\/+$/, "");
   const query = projectId ? `?project=${encodeURIComponent(projectId)}` : "";
-  const res = await fetch(`${root}/api/ext/prompts${query}`, {
-    method: "GET",
-    redirect: "error",
-    credentials: "omit",
-    headers: { Authorization: `Bearer ${session.apiToken()}` },
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
-  const data = (await res.json()) as { prompts: PromptItem[] };
+  const data = await session.get<{ prompts: PromptItem[] }>(`/api/ext/prompts${query}`);
   return data.prompts ?? [];
 }
 
@@ -78,52 +66,22 @@ export async function savePrompt(
   session: NanobotSession,
   prompt: SavePromptPayload,
 ): Promise<PromptItem> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/prompts/save`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(prompt),
-  });
-  if (!res.ok) {
-    let code = `HTTP ${res.status}`;
-    try {
-      const data = await res.json();
-      if (data?.error) code = data.error;
-    } catch {}
-    const err = new Error(code);
-    (err as any).status = res.status;
-    (err as any).code = code;
+  try {
+    const data = await session.post<{ prompt: PromptItem }>("/api/ext/prompts/save", prompt);
+    return data.prompt;
+  } catch (err: any) {
+    if (err && typeof err === "object") {
+      err.code = err.code ?? err.message;
+    }
     throw err;
   }
-  const data = (await res.json()) as { prompt: PromptItem };
-  return data.prompt;
 }
 
 export async function deletePrompt(
   session: NanobotSession,
   id: string,
 ): Promise<boolean> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/prompts/delete`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ id }),
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
+  await session.post("/api/ext/prompts/delete", { id });
   return true;
 }
 
@@ -131,22 +89,7 @@ export async function markUsed(
   session: NanobotSession,
   id: string,
 ): Promise<boolean> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/prompts/used`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ id }),
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
+  await session.post("/api/ext/prompts/used", { id });
   return true;
 }
 

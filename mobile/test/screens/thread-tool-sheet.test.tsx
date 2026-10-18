@@ -236,7 +236,81 @@ describe("ActivityRow and ToolActivitySheet", () => {
     });
   });
 
+  test("FX-B: a failing trace-detail fetch is called once and shows error with Riprova action", async () => {
+    const KEY = "websocket:test";
+    const detailRef = "turn:1:msg:m1";
+
+    const mockGet = jest.fn(async () => {
+      throw new Error("network trace error");
+    });
+
+    sessionStore.setState({
+      session: {
+        get: mockGet,
+        baseUrl: "https://test.local",
+      } as any,
+      state: "open" as never,
+      profile: { id: "p1", name: "Test", baseUrl: "https://test.local", hasSecret: true },
+    });
+
+    const messages: UIMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        kind: "trace",
+        createdAt: 1000,
+        content: "",
+        traceDetail: {
+          ref: detailRef,
+          bytes: 8192,
+          traceCount: 1,
+        },
+        toolEvents: [
+          {
+            call_id: "c-oversized",
+            name: "exec",
+            arguments: { command: "cat huge.log" },
+            phase: "end",
+          },
+        ],
+      },
+    ];
+
+    const r = await renderWithProviders(
+      <ActivityRow messages={messages} live={false} chatKey={KEY} />
+    );
+
+    // Open sheet
+    await act(async () => {
+      fireEvent.press(r.getByTestId("activity-row-line"));
+    });
+
+    // Tap row
+    await act(async () => {
+      fireEvent.press(r.getByTestId("tool-call-row-c-oversized"));
+    });
+
+    // Wait for error to show
+    await waitFor(() => {
+      expect(r.getByText("network trace error")).toBeTruthy();
+    });
+
+    // Crucial check: fetch is called only once, not looping forever
+    expect(mockGet).toHaveBeenCalledTimes(1);
+
+    // Riprova action exists and pressing it triggers fetch again
+    const retryBtn = r.getByText(i18n.t("common.retry"));
+    expect(retryBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(retryBtn);
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(2);
+  });
+
   test("A live update adds a row and changes 'In corso' to 'Eseguito'", async () => {
+
     const initialMessages: UIMessage[] = [
       {
         id: "m1",

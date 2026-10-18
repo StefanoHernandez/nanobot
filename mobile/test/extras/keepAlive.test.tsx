@@ -89,6 +89,22 @@ describe("NT-D: keepAlive wiring", () => {
     stopWiring();
   });
 
+  test("stops the service on auth_error", async () => {
+    prefs.setBackgroundConnection(true);
+    sessionStore.setState({ state: "open" });
+    const stopWiring = startKeepAliveWiring();
+
+    expect(keepAlive.start).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      sessionStore.setState({ state: "auth_error" });
+    });
+
+    expect(keepAlive.stop).toHaveBeenCalledTimes(1);
+
+    stopWiring();
+  });
+
   test("stops the service when the pref is turned off", async () => {
     prefs.setBackgroundConnection(true);
     sessionStore.setState({ state: "open" });

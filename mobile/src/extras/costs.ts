@@ -89,42 +89,14 @@ let generation = 0;
 let onCostsScreen = false;
 
 export async function fetchCosts(session: NanobotSession, days: number = 30): Promise<CostsPayload> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/costs?days=${days}`, {
-    method: "GET",
-    redirect: "error",
-    credentials: "omit",
-    headers: { Authorization: `Bearer ${session.apiToken()}` },
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
-  return (await res.json()) as CostsPayload;
+  return await session.get<CostsPayload>(`/api/ext/costs?days=${days}`);
 }
 
 export async function saveCostSettings(
   session: NanobotSession,
   partial: CostSettingsPayload,
 ): Promise<{ ok: boolean }> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/costs/settings`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(partial),
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
-  return (await res.json()) as { ok: boolean };
+  return await session.post<{ ok: boolean }>("/api/ext/costs/settings", partial);
 }
 
 /** One local notification per day per kind, only when a cap is set and the costs screen is not in front. */

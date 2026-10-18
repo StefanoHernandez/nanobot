@@ -13,7 +13,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { UIMessage } from "@/lib/types";
 import { useT } from "../../i18n";
 import { useSession } from "../../state/sessionStore";
-import { IconButton, Sheet, toast } from "../../ui/components";
+import { Button, IconButton, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { FileEditList } from "./FileEditList";
 import {
@@ -317,7 +317,7 @@ function ToolDetailView({
 
   // Check if we need to fetch oversized traceDetail
   const hasResultOrError = call.result !== undefined || call.error !== undefined;
-  const needsFetch = !hasResultOrError && !!call.detailRef && fetchedResult === null && !detailLoading;
+  const needsFetch = !hasResultOrError && !!call.detailRef && fetchedResult === null && !detailLoading && detailError === null;
 
   useEffect(() => {
     if (!needsFetch || !call.detailRef) return;
@@ -617,15 +617,22 @@ function ToolDetailView({
               <ActivityIndicator size="small" color={th.colors.primary} />
             </View>
           ) : detailError ? (
-            <Text
-              style={{
-                color: th.colors.destructive,
-                fontFamily: th.font.regular,
-                fontSize: 13,
-              }}
-            >
-              {detailError}
-            </Text>
+            <View style={{ gap: 8, alignItems: "flex-start" }}>
+              <Text
+                style={{
+                  color: th.colors.destructive,
+                  fontFamily: th.font.regular,
+                  fontSize: 13,
+                }}
+              >
+                {detailError}
+              </Text>
+              <Button
+                title={t("common.retry")}
+                variant="secondary"
+                onPress={() => setDetailError(null)}
+              />
+            </View>
           ) : rawResultText ? (
             <View
               style={{
