@@ -320,3 +320,45 @@ async def test_cron_unavailable(tmp_path):
     assert resp.status == 503
     data = json.loads(resp.text)
     assert data["error"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_create_automation_body_too_large(tmp_path):
+    workspace, sessions = _sessions(tmp_path)
+    cron = CronService(tmp_path / "cron" / "jobs.json")
+
+    handler = automations.automations_post_handler(
+        MASTER, _Tokens(), _fallback, cron=cron, sessions=sessions
+    )
+
+    raw = b"x" * (automations.MAX_JSON_BODY_BYTES + 10)
+
+    class _BigContent:
+        @staticmethod
+        async def read(limit: int = 0) -> bytes:
+            if limit and limit < len(raw):
+                return raw[:limit]
+            return raw
+
+    req = SimpleNamespace(
+        method="POST",
+        path="/api/ext/automations/create",
+        headers={"Authorization": f"Bearer {MASTER}"},
+        content_length=len(raw),
+        content=_BigContent(),
+    )
+    resp = await handler(req)
+    assert resp.status == 413
+    assert json.loads(resp.text) == {"error": "body_too_large"}
+
+    # Also test when content_length is None but streamed content exceeds limit
+    req2 = SimpleNamespace(
+        method="POST",
+        path="/api/ext/automations/create",
+        headers={"Authorization": f"Bearer {MASTER}"},
+        content_length=None,
+        content=_BigContent(),
+    )
+    resp2 = await handler(req2)
+    assert resp2.status == 413
+    assert json.loads(resp2.text) == {"error": "body_too_large"}

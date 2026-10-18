@@ -29,7 +29,13 @@ from websockets.http11 import Response
 
 from nanobot.agent.tools.base import ToolResult
 from nanobot.agent.tools.context import current_request_session_key
-from nanobot.ext.devices import DeviceError, admin_authorized, read_json, router_admin_authorized
+from nanobot.ext.devices import (
+    DeviceError,
+    admin_authorized,
+    read_json,
+    require_privileged,
+    router_admin_authorized,
+)
 from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/approvals"
@@ -222,12 +228,16 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
             GATE.decide(request_id, allow, always)
             return web.json_response({"ok": True})
         if request.path == PREFIX + "/settings":
+            if (denial := require_privileged(request)) is not None:
+                return denial
             enabled = body.get("enabled")
             if not isinstance(enabled, bool):
                 return web.json_response({"error": "invalid_body"}, status=400)
             GATE.set_enabled(enabled)
             return web.json_response({"ok": True, "enabled": enabled})
         if request.path == PREFIX + "/forget":
+            if (denial := require_privileged(request)) is not None:
+                return denial
             session_key = body.get("session_key")
             if not isinstance(session_key, str) or not session_key:
                 return web.json_response({"error": "invalid_body"}, status=400)

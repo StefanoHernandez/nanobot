@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from loguru import logger
 
@@ -48,6 +48,36 @@ def kanban_turn_message(session_key: str, content: str) -> InboundMessage:
     )
 
 
+def is_failed_turn(reply: Any) -> bool:
+    if reply is None:
+        return True
+    if hasattr(reply, "finish_reason") and getattr(reply, "finish_reason") == "error":
+        return True
+    if hasattr(reply, "stop_reason") and getattr(reply, "stop_reason") == "error":
+        return True
+    if hasattr(reply, "error") and getattr(reply, "error"):
+        return True
+    if isinstance(reply, dict):
+        d = cast(dict[str, Any], reply)
+        if (
+            d.get("finish_reason") == "error"
+            or d.get("stop_reason") == "error"
+            or bool(d.get("error"))
+        ):
+            return True
+    if isinstance(reply, str):
+        text = reply.strip()
+        if (
+            text.startswith("Error calling ")
+            or text.startswith("Error: ")
+            or text.startswith("Sorry, I encountered an error")
+            or text.startswith("Account in arrears")
+            or text == _TURN_FAILURE
+        ):
+            return True
+    return False
+
+
 async def dispatch_once(
     store: KanbanStore,
     run_turn: Callable[[str, str], Awaitable[str]],
@@ -63,6 +93,9 @@ async def dispatch_once(
         try:
             reply = await asyncio.wait_for(run_turn(session_key, content), TURN_TIMEOUT_S)
         except Exception:
+            _fail_running_task(store, task_id)
+            return
+        if is_failed_turn(reply):
             _fail_running_task(store, task_id)
             return
         try:
@@ -87,6 +120,9 @@ async def dispatch_once(
     try:
         reply = await asyncio.wait_for(run_turn(session_key, content), TURN_TIMEOUT_S)
     except Exception:
+        _fail_wake(store, wake, bot_id, board_id)
+        return
+    if is_failed_turn(reply):
         _fail_wake(store, wake, bot_id, board_id)
         return
 

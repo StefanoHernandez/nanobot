@@ -384,3 +384,46 @@ async def test_run_journal_job_writes_the_turn_and_does_not_deliver(tmp_path):
     assert not (workspace / "memory" / "journal" / f"{monkey_day.isoformat()}.md").exists()
     text = (workspace / "memory" / "journal" / f"{yesterday.isoformat()}.md").read_text(encoding="utf-8")
     assert "Diario breve." in text
+
+
+@pytest.mark.asyncio
+async def test_journal_routes_body_too_large(tmp_path):
+    workspace, sessions = _sessions(tmp_path)
+    cron = CronService(tmp_path / "cron" / "jobs.json")
+    handler = journal.journal_post_handler(
+        MASTER, _Tokens(), _fallback, cron=cron, workspace=workspace, sessions=sessions, timezone="UTC"
+    )
+
+    raw = b"x" * (journal.MAX_JSON_BODY_BYTES + 10)
+
+    class _BigContent:
+        @staticmethod
+        async def read(limit: int = 0) -> bytes:
+            if limit and limit < len(raw):
+                return raw[:limit]
+            return raw
+
+    for route in ("/api/ext/journal/settings", "/api/ext/journal/run"):
+        # 1. content_length header exceeds limit
+        req = SimpleNamespace(
+            method="POST",
+            path=route,
+            headers={"Authorization": f"Bearer {MASTER}"},
+            content_length=len(raw),
+            content=_BigContent(),
+        )
+        resp = await handler(req)
+        assert resp.status == 413
+        assert json.loads(resp.text) == {"error": "body_too_large"}
+
+        # 2. content_length is None, streamed content exceeds limit
+        req2 = SimpleNamespace(
+            method="POST",
+            path=route,
+            headers={"Authorization": f"Bearer {MASTER}"},
+            content_length=None,
+            content=_BigContent(),
+        )
+        resp2 = await handler(req2)
+        assert resp2.status == 413
+        assert json.loads(resp2.text) == {"error": "body_too_large"}

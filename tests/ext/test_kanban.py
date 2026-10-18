@@ -517,3 +517,98 @@ def test_events_route_bad_since(store_path):
     assert resp is not None
     assert resp.status_code == 400
     assert _events_json(resp) == {"error": "invalid_since"}
+
+
+def test_move_task_to_done_promotes_ready_children(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Board")
+    store.create_bot(bot_id="coder", name="Coder")
+    store.save_task({
+        "id": "parent",
+        "board_id": "main",
+        "title": "parent",
+        "description": "parent desc",
+        "status": "running",
+        "assignee_bot_id": "coder",
+    })
+    store.save_task({
+        "id": "child",
+        "board_id": "main",
+        "title": "child",
+        "description": "child desc",
+        "status": "todo",
+        "assignee_bot_id": "coder",
+    })
+    store.add_dependency("parent", "child")
+
+    assert store.get_task_detail("child")["task"]["status"] == "todo"
+    store.move_task("parent", "done")
+    assert store.get_task_detail("child")["task"]["status"] == "ready"
+
+
+def test_runs_closed_on_request_review_block_and_verdict(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Board")
+    store.create_bot(bot_id="coder", name="Coder")
+    store.create_bot(bot_id="reviewer", name="Reviewer")
+
+    # 1. request_review closes open run
+    store.save_task({
+        "id": "t1",
+        "board_id": "main",
+        "title": "Task 1",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+        "reviewer_bot_id": "reviewer",
+    })
+    claimed = store.claim_next_ready_task()
+    assert claimed is not None and claimed["task_id"] == "t1"
+    detail = store.get_task_detail("t1")
+    assert len(detail["runs"]) == 1
+    assert detail["runs"][0]["status"] == "running"
+    assert detail["runs"][0]["finished_at_ms"] is None
+
+    store.request_review("t1", summary="Ready for review", artifacts=["file1.py"])
+    detail = store.get_task_detail("t1")
+    assert detail["task"]["status"] == "review"
+    assert len(detail["runs"]) == 1
+    run1 = detail["runs"][0]
+    assert run1["status"] == "review"
+    assert run1["finished_at_ms"] is not None
+    assert run1["summary"] == "Ready for review"
+    assert "file1.py" in run1["artifacts_json"]
+
+    # 2. Reviewer claims review task, then rejects via review_verdict(approved=False)
+    claimed_rev = store.claim_next_ready_task()
+    assert claimed_rev is not None and claimed_rev["task_id"] == "t1"
+    assert claimed_rev["bot_id"] == "reviewer"
+    detail = store.get_task_detail("t1")
+    assert len(detail["runs"]) == 2
+    assert detail["runs"][1]["status"] == "running"
+    assert detail["runs"][1]["finished_at_ms"] is None
+
+    store.review_verdict("t1", approved=False, feedback="Please fix lints")
+    detail = store.get_task_detail("t1")
+    assert detail["task"]["status"] == "ready"
+    assert len(detail["runs"]) == 2
+    run2 = detail["runs"][1]
+    assert run2["status"] == "rejected"
+    assert run2["finished_at_ms"] is not None
+    assert run2["summary"] == "Please fix lints"
+
+    # 3. block_task closes open run
+    claimed2 = store.claim_next_ready_task()
+    assert claimed2 is not None and claimed2["task_id"] == "t1"
+    detail = store.get_task_detail("t1")
+    assert len(detail["runs"]) == 3
+    assert detail["runs"][2]["status"] == "running"
+
+    store.block_task("t1", reason="Need API key")
+    detail = store.get_task_detail("t1")
+    assert detail["task"]["status"] == "blocked"
+    assert len(detail["runs"]) == 3
+    run3 = detail["runs"][2]
+    assert run3["status"] == "blocked"
+    assert run3["finished_at_ms"] is not None
+    assert run3["error"] == "Need API key"
+
