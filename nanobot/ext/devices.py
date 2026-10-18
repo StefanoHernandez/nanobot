@@ -477,6 +477,14 @@ def require_privileged(request: Any) -> web.Response | None:
     return None
 
 
+def caller_device_id(request: Any, path: Path | None = None) -> str | None:
+    raw = _auth_token(request.headers)
+    if raw:
+        with _DEVICE_TOKENS_LOCK:
+            if raw in _DEVICE_TOKENS:
+                return _DEVICE_TOKENS[raw]
+    return live_device_id(request.headers, path=path)
+
 
 def router_admin_authorized(secret: str, router: Any, request: WsRequest) -> bool:
     if secret and issue_route_secret_matches(request.headers, secret):
@@ -662,14 +670,17 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
             set_full_power(device_id.strip(), enabled)
             return web.json_response({"ok": True})
         if path == PREFIX + "/revoke":
-            if (denial := require_privileged(request)) is not None:
-                return denial
             body = await read_json(request)
             device_id = body.get("id")
             if not isinstance(device_id, str) or not device_id.strip():
                 return web.json_response({"error": "invalid_id"}, status=400)
-            revoke_device(device_id.strip())
-            drop_device_tokens(device_id.strip(), tokens)
+            target_id = device_id.strip()
+            caller_id = caller_device_id(request)
+            if caller_id != target_id:
+                if (denial := require_privileged(request)) is not None:
+                    return denial
+            revoke_device(target_id)
+            drop_device_tokens(target_id, tokens)
             return web.json_response({"ok": True})
     except DeviceError as exc:
         return web.json_response({"error": exc.code}, status=exc.status)

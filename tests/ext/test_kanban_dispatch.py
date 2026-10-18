@@ -200,27 +200,37 @@ def test_running_task_is_requeued_after_restart(store_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("error_reply", [
-    "Error calling LLM: Connection timed out",
-    "Error calling Anthropic: Rate limit reached",
-    "Sorry, I encountered an error calling the AI model.",
-    "Error: RuntimeError: crashed",
-])
-async def test_llm_error_text_fails_running_task(store_path, error_reply):
+async def test_text_starting_with_error_does_not_fail_task(store_path):
     store = _store(store_path)
     _board(store)
     _bot(store, "coder")
     _task(store, "t1", assignee="coder")
 
     async def run_turn(_session_key: str, _content: str) -> str:
-        return error_reply
+        return "Error: I found the issue in line 42 and fixed it."
+
+    await dispatch.dispatch_once(store, run_turn, now_ms=0)
+
+    task = store.get_task_detail("t1")["task"]
+    assert task["status"] == "done"
+    assert task["summary"] == "Error: I found the issue in line 42 and fixed it."
+
+
+@pytest.mark.asyncio
+async def test_kanban_turn_failed_exception_fails_task(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "t1", assignee="coder")
+
+    async def run_turn(_session_key: str, _content: str) -> str:
+        raise dispatch.KanbanTurnFailed("turn stopped with error")
 
     await dispatch.dispatch_once(store, run_turn, now_ms=0)
 
     task = store.get_task_detail("t1")["task"]
     assert task["status"] == "ready"
     assert task["retries"] == 1
-    assert task["status"] != "done"
 
 
 def test_request_review_and_block_task_close_open_runs(store_path):
@@ -297,3 +307,130 @@ def test_review_task_claimed_for_reviewer_and_verdict(store_path):
     t1_done = store.get_task_detail("t1")["task"]
     assert t1_done["status"] == "done"
 
+
+@pytest.mark.asyncio
+async def test_reviewer_replies_in_text_closes_run_counts_retry_and_reclaims(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _bot(store, "reviewer")
+
+    store.save_task({
+        "id": "t1",
+        "board_id": "main",
+        "title": "t1",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+        "reviewer_bot_id": "reviewer",
+        "max_retries": 3,
+    })
+
+    # Coder claims and requests review
+    claimed_coder = store.claim_next_ready_task(0)
+    assert claimed_coder is not None
+    store.request_review("t1", "initial draft")
+
+    # Reviewer turn: reviewer replies in text without calling verdict
+    received_content = ""
+
+    async def run_review_turn(_session_key: str, content: str) -> str:
+        nonlocal received_content
+        received_content = content
+        return "I reviewed the code in text, looks fine."
+
+    await dispatch.dispatch_once(store, run_review_turn, now_ms=100)
+
+    # Review footer was sent to reviewer
+    assert dispatch._REVIEW_FOOTER in received_content
+
+    # Task is still in review, run closed as failed, retry counted
+    detail = store.get_task_detail("t1")
+    assert detail["task"]["status"] == "review"
+    assert detail["task"]["retries"] == 1
+    assert len(detail["runs"]) == 2
+    rev_run = detail["runs"][1]
+    assert rev_run["status"] == "failed"
+    assert rev_run["finished_at_ms"] is not None
+
+    # Reviewer claims the task again (re-claimed)
+    claimed_again = store.claim_next_ready_task(200)
+    assert claimed_again is not None
+    assert claimed_again["bot_id"] == "reviewer"
+
+
+@pytest.mark.asyncio
+async def test_reviewer_replies_in_text_after_max_retries_blocks_task(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _bot(store, "reviewer")
+
+    store.save_task({
+        "id": "t1",
+        "board_id": "main",
+        "title": "t1",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+        "reviewer_bot_id": "reviewer",
+        "max_retries": 1,
+    })
+
+    store.claim_next_ready_task(0)
+    store.request_review("t1", "initial draft")
+
+    async def run_review_turn(_session_key: str, _content: str) -> str:
+        return "Plain text reply"
+
+    await dispatch.dispatch_once(store, run_review_turn, now_ms=100)
+
+    detail = store.get_task_detail("t1")
+    assert detail["task"]["status"] == "blocked"
+    assert "Max retries (1) exceeded" in detail["task"]["blocked_reason"]
+    assert detail["runs"][-1]["status"] == "failed"
+    assert detail["runs"][-1]["finished_at_ms"] is not None
+
+
+@pytest.mark.parametrize("stop_reason", ["error", "tool_error"])
+def test_turn_text_or_raise_fails_on_error_stop_reason(stop_reason):
+    from types import SimpleNamespace
+
+    response = SimpleNamespace(content="I failed", metadata={"_stop_reason": stop_reason})
+    with pytest.raises(dispatch.KanbanTurnFailed):
+        dispatch.turn_text_or_raise(response)
+
+
+def test_turn_text_or_raise_returns_the_reply_text():
+    from types import SimpleNamespace
+
+    response = SimpleNamespace(content="Success", metadata={"_stop_reason": "end_turn"})
+    assert dispatch.turn_text_or_raise(response) == "Success"
+    assert dispatch.turn_text_or_raise(None) == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("approved", "status"), [(True, "done"), (False, "ready")])
+async def test_reviewer_verdict_in_turn_still_works(store_path, approved, status):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _bot(store, "reviewer")
+    store.save_task({
+        "id": "t1",
+        "board_id": "main",
+        "title": "t1",
+        "status": "ready",
+        "assignee_bot_id": "coder",
+        "reviewer_bot_id": "reviewer",
+    })
+    assert store.claim_next_ready_task(0) is not None
+    store.request_review("t1", "draft")
+
+    async def run_review_turn(_session_key: str, _content: str) -> str:
+        store.review_verdict("t1", approved=approved, feedback="more tests")
+        return "verdict given"
+
+    await dispatch.dispatch_once(store, run_review_turn, now_ms=100)
+
+    task = store.get_task_detail("t1")["task"]
+    assert task["status"] == status
+    assert task["retries"] == 0

@@ -570,6 +570,13 @@ class KanbanStore:
         if not isinstance(parent_ids_raw, list):
             raise KanbanError(400, "invalid_parent_ids")
         parent_ids = cast(list[Any], parent_ids_raw)
+        assignee = _optional_bot(body.get("assignee_bot_id"))
+        reviewer = _optional_bot(body.get("reviewer_bot_id"))
+        if assignee and reviewer and assignee == reviewer:
+            raise KanbanError(400, "reviewer_is_assignee")
+        max_retries = _bounded_int(
+            body.get("max_retries"), default=2, low=0, high=20, code="invalid_retries"
+        )
         with self._lock, self._connect() as conn:
             self._board_or_404(conn, board_id)
             count = conn.execute(
@@ -585,8 +592,8 @@ class KanbanStore:
                 INSERT INTO tasks (
                     id, board_id, title, description, status, priority,
                     assignee_bot_id, reviewer_bot_id, workspace_mode, recurrence_expr,
-                    scheduled_at_ms, created_at_ms, updated_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    scheduled_at_ms, max_retries, created_at_ms, updated_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     new_id,
@@ -595,11 +602,12 @@ class KanbanStore:
                     description,
                     status,
                     priority,
-                    _optional_bot(body.get("assignee_bot_id")),
-                    _optional_bot(body.get("reviewer_bot_id")),
+                    assignee,
+                    reviewer,
                     workspace_mode,
                     _recurrence(body.get("recurrence_expr")),
                     scheduled,
+                    max_retries,
                     now,
                     now,
                 ),
@@ -615,7 +623,7 @@ class KanbanStore:
         if not isinstance(task_id, str) or not _validate_optional_id(task_id):
             raise KanbanError(400, "invalid_id")
         with self._lock, self._connect() as conn:
-            self._task_or_404(conn, task_id)
+            existing = self._task_or_404(conn, task_id)
             fields: dict[str, Any] = {}
             if "title" in body:
                 title = _validate_no_control(
@@ -643,6 +651,10 @@ class KanbanStore:
             for key in ("assignee_bot_id", "reviewer_bot_id"):
                 if key in body:
                     fields[key] = _optional_bot(body[key])
+            target_assignee = fields["assignee_bot_id"] if "assignee_bot_id" in fields else existing["assignee_bot_id"]
+            target_reviewer = fields["reviewer_bot_id"] if "reviewer_bot_id" in fields else existing["reviewer_bot_id"]
+            if target_assignee and target_reviewer and target_assignee == target_reviewer:
+                raise KanbanError(400, "reviewer_is_assignee")
             if "recurrence_expr" in body:
                 fields["recurrence_expr"] = _recurrence(body["recurrence_expr"])
             if "scheduled_at_ms" in body:
@@ -685,13 +697,15 @@ class KanbanStore:
         if status not in STATUSES:
             raise KanbanError(400, "invalid_status")
         with self._lock, self._connect() as conn:
-            self._task_or_404(conn, task_id)
-            conn.execute(
-                "UPDATE tasks SET status = ?, updated_at_ms = ? WHERE id = ?",
-                (status, _now_ms(), task_id),
-            )
-            if status == "done":
-                self._promote_ready_children(conn, task_id)
+            task = self._task_or_404(conn, task_id)
+            if task["status"] != status:
+                self._finish_open_run(conn, task_id, status="cancelled")
+                conn.execute(
+                    "UPDATE tasks SET status = ?, updated_at_ms = ? WHERE id = ?",
+                    (status, _now_ms(), task_id),
+                )
+                if status == "done":
+                    self._promote_ready_children(conn, task_id)
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _task_public(row)
 
@@ -824,6 +838,9 @@ class KanbanStore:
             f"Description: {task['description']}",
         ]
         if task["status"] == "review":
+            lines.append(
+                "You are reviewing this task. Review the summary and artifacts, then call the kanban tool with action verdict (approved and feedback)."
+            )
             if task["summary"]:
                 lines.append(f"Summary for review: {task['summary']}")
             arts = _loads_artifacts(task["artifacts_json"])
@@ -891,6 +908,7 @@ class KanbanStore:
                     (
                         status = 'review'
                         AND reviewer_bot_id IS NOT NULL
+                        AND (assignee_bot_id IS NULL OR reviewer_bot_id != assignee_bot_id)
                         AND NOT EXISTS (
                             SELECT 1 FROM task_runs r
                             WHERE r.task_id = tasks.id AND r.status = 'running' AND r.finished_at_ms IS NULL
@@ -905,6 +923,8 @@ class KanbanStore:
                 if board_running[board_id] >= board_max:
                     break
                 is_review = (task["status"] == "review")
+                if is_review and task["reviewer_bot_id"] and task["assignee_bot_id"] and task["reviewer_bot_id"] == task["assignee_bot_id"]:
+                    continue
                 bot_id = str(task["reviewer_bot_id"] if is_review else task["assignee_bot_id"])
                 bot = conn.execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
                 if bot is None:
@@ -957,6 +977,7 @@ class KanbanStore:
                     "board_id": task["board_id"],
                     "bot_id": bot_id,
                     "session_key": session_key,
+                    "is_review": is_review,
                     "runtime_context": RuntimeContextBlock(source="kanban", content=content),
                 }
         return None
@@ -1124,6 +1145,7 @@ class KanbanStore:
         now = _now_ms()
         with self._lock, self._connect() as conn:
             task = self._task_or_404(conn, task_id)
+            self._finish_open_run(conn, task_id, status="failed", error=error)
             if transient:
                 conn.execute(
                     "UPDATE tasks SET status = 'ready', updated_at_ms = ? WHERE id = ?",
@@ -1142,12 +1164,55 @@ class KanbanStore:
                         """,
                         (reason, retries, now, task_id),
                     )
-                    self._finish_open_run(conn, task_id, status="failed", error=error)
                 else:
                     conn.execute(
                         "UPDATE tasks SET status = 'ready', retries = ?, updated_at_ms = ? WHERE id = ?",
                         (retries, now, task_id),
                     )
+            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        return _task_public(row)
+
+    def record_review_failure(self, task_id: str, reviewer_bot_id: str, error: str) -> dict[str, Any] | None:
+        """If task is in review with an open run for reviewer_bot_id, fail the run and count a retry."""
+        error = _validate_prose(error, max_len=MAX_DESCRIPTION, code="invalid_error")
+        now = _now_ms()
+        with self._lock, self._connect() as conn:
+            task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+            if task is None or task["status"] != "review":
+                return None
+            open_run = conn.execute(
+                """
+                SELECT id FROM task_runs
+                WHERE task_id = ? AND bot_id = ? AND status = 'running' AND finished_at_ms IS NULL
+                """,
+                (task_id, reviewer_bot_id),
+            ).fetchone()
+            if open_run is None:
+                return None
+            conn.execute(
+                """
+                UPDATE task_runs SET status = 'failed', finished_at_ms = ?, error = ?
+                WHERE id = ?
+                """,
+                (now, error, open_run["id"]),
+            )
+            retries = int(task["retries"]) + 1
+            max_retries = int(task["max_retries"])
+            if retries >= max_retries:
+                reason = f"Max retries ({max_retries}) exceeded: {error}"
+                conn.execute(
+                    """
+                    UPDATE tasks SET status = 'blocked', blocked_reason = ?,
+                        retries = ?, updated_at_ms = ?
+                    WHERE id = ?
+                    """,
+                    (reason, retries, now, task_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE tasks SET retries = ?, updated_at_ms = ? WHERE id = ?",
+                    (retries, now, task_id),
+                )
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _task_public(row)
 
@@ -1314,12 +1379,21 @@ class KanbanStore:
         return False
 
     def recover_interrupted(self) -> list[str]:
-        """After a gateway restart, no turn is running: count each 'running' task as a failed attempt."""
+        """After a gateway restart, no turn is running: count each 'running' or open 'review' task as a failed attempt."""
         with self._lock, self._connect() as conn:
-            ids = [str(r["id"]) for r in conn.execute("SELECT id FROM tasks WHERE status = 'running'").fetchall()]
-        for task_id in ids:
+            running_ids = [str(r["id"]) for r in conn.execute("SELECT id FROM tasks WHERE status = 'running'").fetchall()]
+            review_rows = conn.execute(
+                """
+                SELECT DISTINCT t.id, r.bot_id FROM tasks t
+                JOIN task_runs r ON r.task_id = t.id
+                WHERE t.status = 'review' AND r.status = 'running' AND r.finished_at_ms IS NULL
+                """
+            ).fetchall()
+        for task_id in running_ids:
             self.record_failure(task_id, "interrupted by a gateway restart")
-        return ids
+        for row in review_rows:
+            self.record_review_failure(str(row["id"]), str(row["bot_id"]), "interrupted by a gateway restart")
+        return list(dict.fromkeys(running_ids + [str(r["id"]) for r in review_rows]))
 
     def board_snapshot(self, board_id: str) -> dict[str, Any]:
         with self._lock, self._connect() as conn:

@@ -1001,13 +1001,18 @@ def _run_gateway(
             await cron.start()
 
             async def _run_kanban_dispatch() -> None:
-                from nanobot.ext.kanban_dispatch import kanban_dispatch_loop, kanban_turn_message
+                # Fork: a turn that stopped with an error fails the kanban task
+                from nanobot.ext.kanban_dispatch import (
+                    kanban_dispatch_loop,
+                    kanban_turn_message,
+                    turn_text_or_raise,
+                )
 
                 async def _kanban_run_turn(session_key: str, content: str) -> str:
                     response = await agent.submit_local_trigger_turn(
                         kanban_turn_message(session_key, content),
                     )
-                    return response.content if response else ""
+                    return turn_text_or_raise(response)
 
                 await kanban_dispatch_loop(
                     _kanban_run_turn,

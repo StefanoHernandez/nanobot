@@ -13,8 +13,16 @@ from nanobot.bus.events import InboundMessage
 from nanobot.ext.kanban import KanbanStore, kanban_db_path
 from nanobot.triggers.local_session_turns import LOCAL_TRIGGER_META
 
+
+class KanbanTurnFailed(Exception):  # noqa: N818
+    """Raised when a kanban turn stops with an error stop reason."""
+
+
 _TASK_FOOTER = (
     "Reply with the outcome. You may call the kanban tool (action complete, request_review or block)."
+)
+_REVIEW_FOOTER = (
+    "Reply with your review verdict using the kanban tool (action verdict, approved, feedback)."
 )
 _WAKE_PREFIX = "Board message for you:\n"
 _WAKE_FAILURE_MESSAGE = "I couldn't reply to this message."
@@ -65,17 +73,26 @@ def is_failed_turn(reply: Any) -> bool:
             or bool(d.get("error"))
         ):
             return True
-    if isinstance(reply, str):
-        text = reply.strip()
-        if (
-            text.startswith("Error calling ")
-            or text.startswith("Error: ")
-            or text.startswith("Sorry, I encountered an error")
-            or text.startswith("Account in arrears")
-            or text == _TURN_FAILURE
-        ):
-            return True
     return False
+
+
+def turn_text_or_raise(response: Any) -> str:
+    """Return the turn's reply text, or raise KanbanTurnFailed if it stopped with an error."""
+    if response is None:
+        return ""
+    stop_reason = response.metadata.get("_stop_reason")
+    if stop_reason in {"error", "tool_error"}:
+        raise KanbanTurnFailed(f"turn stopped with {stop_reason}")
+    return response.content
+
+
+def _fail_claimed_turn(
+    store: KanbanStore, task_id: str, bot_id: str, is_review: bool, error: str = _TURN_FAILURE
+) -> None:
+    if is_review:
+        store.record_review_failure(task_id, bot_id, error)
+    else:
+        _fail_running_task(store, task_id)
 
 
 async def dispatch_once(
@@ -87,23 +104,28 @@ async def dispatch_once(
     claimed = store.claim_next_ready_task(now_ms)
     if claimed is not None:
         task_id = str(claimed["task_id"])
+        bot_id = str(claimed["bot_id"])
         session_key = str(claimed["session_key"])
+        is_review = bool(claimed.get("is_review"))
         ctx = claimed["runtime_context"]
-        content = f"{ctx.content}\n{_TASK_FOOTER}"
+        footer = _REVIEW_FOOTER if is_review else _TASK_FOOTER
+        content = f"{ctx.content}\n{footer}"
         try:
             reply = await asyncio.wait_for(run_turn(session_key, content), TURN_TIMEOUT_S)
         except Exception:
-            _fail_running_task(store, task_id)
+            _fail_claimed_turn(store, task_id, bot_id, is_review)
             return
         if is_failed_turn(reply):
-            _fail_running_task(store, task_id)
+            _fail_claimed_turn(store, task_id, bot_id, is_review)
             return
         try:
             task = store.get_task_detail(task_id)["task"]
             if task["status"] == "running":
                 store.complete_task(task_id, _safe_prose(reply, 8000, fallback="done"), [])
+            elif task["status"] == "review":
+                store.record_review_failure(task_id, bot_id, "reviewer completed turn without verdict")
         except Exception:
-            _fail_running_task(store, task_id)
+            _fail_claimed_turn(store, task_id, bot_id, is_review)
         return
 
     wake = store.take_wake()
