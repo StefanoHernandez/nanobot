@@ -469,6 +469,15 @@ def privileged_request(connection: Any, headers: Any, path: Path | None = None) 
     return any(d["id"] == device_id and d["full_power"] for d in state["devices"])
 
 
+def require_privileged(request: Any) -> web.Response | None:
+    remote = getattr(request, "remote", None) or ""
+    connection = SimpleNamespace(remote_address=(remote, 0))
+    if not privileged_request(connection, request.headers):
+        return web.json_response({"error": "full_power_required"}, status=403)
+    return None
+
+
+
 def router_admin_authorized(secret: str, router: Any, request: WsRequest) -> bool:
     if secret and issue_route_secret_matches(request.headers, secret):
         return True
@@ -642,6 +651,8 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
             set_full_power(device_id.strip(), enabled)
             return web.json_response({"ok": True})
         if path == PREFIX + "/revoke":
+            if (denial := require_privileged(request)) is not None:
+                return denial
             body = await read_json(request)
             device_id = body.get("id")
             if not isinstance(device_id, str) or not device_id.strip():

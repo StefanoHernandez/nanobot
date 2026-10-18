@@ -216,7 +216,10 @@ async def test_revoke_drops_the_phone_tokens_at_once(devices_path):
     dev.remember_device_tokens(device_id, store, ws, api)
 
     handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
-    resp = await handler(_post("/revoke", {"id": device_id}, MASTER))
+    req = _post("/revoke", {"id": device_id}, MASTER)
+    req.remote = "127.0.0.1"
+    req.headers["Host"] = "127.0.0.1:8765"
+    resp = await handler(req)
     assert resp.status == 200
     assert api not in store.api_tokens and ws not in store.issued_tokens
     assert dev.live_device_id({"Authorization": f"Bearer {device_token}"}) is None
@@ -264,7 +267,10 @@ async def test_revoke_closes_the_phone_open_websocket(devices_path):
     assert endpoint.consume_issued_token(laptop, other_ws)  # not a device token: untracked
 
     handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
-    assert (await handler(_post("/revoke", {"id": device_id}, MASTER))).status == 200
+    req = _post("/revoke", {"id": device_id}, MASTER)
+    req.remote = "127.0.0.1"
+    req.headers["Host"] = "127.0.0.1:8765"
+    assert (await handler(req)).status == 200
     for _ in range(5):  # close is scheduled thread-safely onto the loop
         await asyncio.sleep(0)
     assert phone.closed == (dev.REVOKED_CLOSE_CODE, "device revoked")
@@ -441,3 +447,47 @@ def test_device_list_says_whether_the_caller_has_full_power(devices_path, monkey
     assert _json(dev.dispatch_devices_get(_router(), _get(dev.PREFIX, auth=API), dev.PREFIX))["self"]["full_power"]
     master = _json(dev.dispatch_devices_get(_router(), _get(dev.PREFIX), dev.PREFIX))
     assert master["self"] == {"id": None, "full_power": False}
+
+
+@pytest.mark.asyncio
+async def test_revoke_route_requires_privileged(devices_path):
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    store = GatewayTokenStore()
+    _, plain_id = _paired_phone(devices_path)
+    plain_api = store.issue_api_token(300)
+    dev.remember_device_tokens(plain_id, store, plain_api)
+
+    _, fp_id = _paired_phone(devices_path)
+    fp_api = store.issue_api_token(300)
+    dev.remember_device_tokens(fp_id, store, fp_api)
+    dev.set_full_power(fp_id, True)
+
+    _, target_id = _paired_phone(devices_path)
+    handler = dev.devices_post_handler(MASTER, store, fallback=_fail_fallback)
+
+    # 1) Plain device token -> 403 full_power_required
+    req_plain = _post("/revoke", {"id": target_id}, plain_api)
+    req_plain.remote = "100.64.0.5"
+    req_plain.headers["Host"] = "nanobot.remote:8765"
+    denied = await handler(req_plain)
+    assert denied.status == 403
+    assert json.loads(denied.text) == {"error": "full_power_required"}
+
+    # 2) Full-power device token -> 200 ok
+    req_fp = _post("/revoke", {"id": target_id}, fp_api)
+    req_fp.remote = "100.64.0.6"
+    req_fp.headers["Host"] = "nanobot.remote:8765"
+    allowed_fp = await handler(req_fp)
+    assert allowed_fp.status == 200
+    assert json.loads(allowed_fp.text) == {"ok": True}
+
+    # 3) Local browser -> 200 ok
+    _, target2_id = _paired_phone(devices_path)
+    req_local = _post("/revoke", {"id": target2_id}, MASTER)
+    req_local.remote = "127.0.0.1"
+    req_local.headers["Host"] = "127.0.0.1:8765"
+    allowed_local = await handler(req_local)
+    assert allowed_local.status == 200
+    assert json.loads(allowed_local.text) == {"ok": True}
+

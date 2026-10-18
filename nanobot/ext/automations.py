@@ -23,6 +23,7 @@ from nanobot.webui.ws_http import (
 )
 
 PREFIX = "/api/ext/automations"
+MAX_JSON_BODY_BYTES = 1024 * 1024
 
 
 class AutomationError(Exception):
@@ -124,7 +125,12 @@ async def create_automation(
 
 
 async def _read_json(request: web.BaseRequest) -> dict[str, Any]:
-    raw = await request.content.read()
+    content_length = getattr(request, "content_length", None)
+    if content_length is not None and content_length > MAX_JSON_BODY_BYTES:
+        raise AutomationError(413, "body_too_large")
+    raw = await request.content.read(MAX_JSON_BODY_BYTES + 1)
+    if len(raw) > MAX_JSON_BODY_BYTES:
+        raise AutomationError(413, "body_too_large")
     if not raw:
         return {}
     try:

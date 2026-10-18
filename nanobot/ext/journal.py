@@ -27,6 +27,7 @@ from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/journal"
 CHAR_CAP = 24_000
+MAX_JSON_BODY_BYTES = 1024 * 1024
 _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _Turn = Callable[[str], Awaitable[str]]
 _runner: _Turn | None = None
@@ -499,7 +500,12 @@ def journal_post_handler(
 
 
 async def _read_json(request: web.BaseRequest) -> dict[str, Any]:
-    raw = await request.content.read()
+    content_length = getattr(request, "content_length", None)
+    if content_length is not None and content_length > MAX_JSON_BODY_BYTES:
+        raise JournalError(413, "body_too_large")
+    raw = await request.content.read(MAX_JSON_BODY_BYTES + 1)
+    if len(raw) > MAX_JSON_BODY_BYTES:
+        raise JournalError(413, "body_too_large")
     if not raw:
         return {}
     try:

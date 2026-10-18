@@ -690,6 +690,8 @@ class KanbanStore:
                 "UPDATE tasks SET status = ?, updated_at_ms = ? WHERE id = ?",
                 (status, _now_ms(), task_id),
             )
+            if status == "done":
+                self._promote_ready_children(conn, task_id)
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _task_public(row)
 
@@ -821,6 +823,12 @@ class KanbanStore:
             f"Task: {task['title']}",
             f"Description: {task['description']}",
         ]
+        if task["status"] == "review":
+            if task["summary"]:
+                lines.append(f"Summary for review: {task['summary']}")
+            arts = _loads_artifacts(task["artifacts_json"])
+            if arts:
+                lines.append(f"Artifacts for review: {', '.join(arts)}")
         if task["review_feedback"]:
             lines.append(f"Review feedback: {task['review_feedback']}")
         parents = conn.execute(
@@ -852,20 +860,43 @@ class KanbanStore:
             board_max = int(board["max_concurrent"])
             if board_id not in board_running:
                 running = conn.execute(
-                    "SELECT COUNT(*) FROM tasks WHERE board_id = ? AND status = 'running'",
+                    """
+                    SELECT COUNT(*) FROM tasks
+                    WHERE board_id = ? AND (
+                        status = 'running' OR (
+                            status = 'review' AND EXISTS (
+                                SELECT 1 FROM task_runs r
+                                WHERE r.task_id = tasks.id AND r.status = 'running' AND r.finished_at_ms IS NULL
+                            )
+                        )
+                    )
+                    """,
                     (board_id,),
                 ).fetchone()[0]
                 board_running[board_id] = int(running)
             ready_rows = conn.execute(
                 """
                 SELECT * FROM tasks
-                WHERE board_id = ? AND status = 'ready'
-                  AND assignee_bot_id IS NOT NULL
-                  AND (scheduled_at_ms IS NULL OR scheduled_at_ms <= ?)
-                  AND NOT EXISTS (
-                      SELECT 1 FROM task_links l JOIN tasks p ON p.id = l.parent_id
-                      WHERE l.child_id = tasks.id AND p.status != 'done'
-                  )
+                WHERE board_id = ? AND (
+                    (
+                        status = 'ready'
+                        AND assignee_bot_id IS NOT NULL
+                        AND (scheduled_at_ms IS NULL OR scheduled_at_ms <= ?)
+                        AND NOT EXISTS (
+                            SELECT 1 FROM task_links l JOIN tasks p ON p.id = l.parent_id
+                            WHERE l.child_id = tasks.id AND p.status != 'done'
+                        )
+                    )
+                    OR
+                    (
+                        status = 'review'
+                        AND reviewer_bot_id IS NOT NULL
+                        AND NOT EXISTS (
+                            SELECT 1 FROM task_runs r
+                            WHERE r.task_id = tasks.id AND r.status = 'running' AND r.finished_at_ms IS NULL
+                        )
+                    )
+                )
                 ORDER BY created_at_ms
                 """,
                 (board_id, now),
@@ -873,14 +904,18 @@ class KanbanStore:
             for task in ready_rows:
                 if board_running[board_id] >= board_max:
                     break
-                bot_id = str(task["assignee_bot_id"])
+                is_review = (task["status"] == "review")
+                bot_id = str(task["reviewer_bot_id"] if is_review else task["assignee_bot_id"])
                 bot = conn.execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
                 if bot is None:
                     continue
                 bot_max = int(bot["max_concurrent"])
                 if bot_id not in bot_running:
                     bot_running[bot_id] = conn.execute(
-                        "SELECT COUNT(*) FROM tasks WHERE assignee_bot_id = ? AND status = 'running'",
+                        """
+                        SELECT COUNT(*) FROM task_runs
+                        WHERE bot_id = ? AND status = 'running' AND finished_at_ms IS NULL
+                        """,
                         (bot_id,),
                     ).fetchone()[0]
                 if bot_running[bot_id] >= bot_max:
@@ -904,10 +939,16 @@ class KanbanStore:
                         """,
                         (run_id, task["id"], bot_id, session_key, now),
                     )
-                conn.execute(
-                    "UPDATE tasks SET status = 'running', updated_at_ms = ? WHERE id = ?",
-                    (now, task["id"]),
-                )
+                if not is_review:
+                    conn.execute(
+                        "UPDATE tasks SET status = 'running', updated_at_ms = ? WHERE id = ?",
+                        (now, task["id"]),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE tasks SET updated_at_ms = ? WHERE id = ?",
+                        (now, task["id"]),
+                    )
                 board_running[board_id] += 1
                 bot_running[bot_id] += 1
                 content = self._build_context_content(conn, task, bot)
@@ -1015,6 +1056,7 @@ class KanbanStore:
         now = _now_ms()
         with self._lock, self._connect() as conn:
             self._task_or_404(conn, task_id)
+            self._finish_open_run(conn, task_id, summary=summary, artifacts=arts, status="review")
             conn.execute(
                 """
                 UPDATE tasks SET status = 'review', summary = ?, artifacts_json = ?,
@@ -1040,6 +1082,7 @@ class KanbanStore:
             return self.complete_task(task_id, summary, arts)
         now = _now_ms()
         with self._lock, self._connect() as conn:
+            self._finish_open_run(conn, task_id, summary=feedback, status="rejected")
             conn.execute(
                 """
                 UPDATE tasks SET status = 'ready', review_feedback = ?, updated_at_ms = ?
@@ -1065,6 +1108,7 @@ class KanbanStore:
         now = _now_ms()
         with self._lock, self._connect() as conn:
             self._task_or_404(conn, task_id)
+            self._finish_open_run(conn, task_id, error=reason, status="blocked")
             conn.execute(
                 """
                 UPDATE tasks SET status = 'blocked', blocked_reason = ?, updated_at_ms = ?

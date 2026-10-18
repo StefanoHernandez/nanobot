@@ -28,7 +28,13 @@ from loguru import logger
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
-from nanobot.ext.devices import DeviceError, admin_authorized, read_json, router_admin_authorized
+from nanobot.ext.devices import (
+    DeviceError,
+    admin_authorized,
+    read_json,
+    require_privileged,
+    router_admin_authorized,
+)
 from nanobot.webui.http_utils import http_error, http_json_response
 
 PREFIX = "/api/ext/backup"
@@ -321,14 +327,20 @@ async def _handle_post(secret: str, tokens: Any, request: web.BaseRequest) -> we
     try:
         body = await read_json(request)
         if request.path == PREFIX + "/settings":
+            if (denial := require_privileged(request)) is not None:
+                return denial
             saved = await asyncio.to_thread(validate_and_save_backup_dir, body.get("dir"))
             return web.json_response({"ok": True, "dir": str(saved)})
         if request.path == PREFIX + "/create":
             return web.json_response({"backup": await asyncio.to_thread(create_backup)})
         if request.path == PREFIX + "/delete":
+            if (denial := require_privileged(request)) is not None:
+                return denial
             await asyncio.to_thread(delete_backup, body.get("name"))
             return web.json_response({"ok": True})
         if request.path == PREFIX + "/restore":
+            if (denial := require_privileged(request)) is not None:
+                return denial
             if body.get("confirm") is not True:
                 return web.json_response({"error": "confirm_required"}, status=400)
             return web.json_response(await asyncio.to_thread(restore_backup, body.get("name")))

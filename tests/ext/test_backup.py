@@ -106,19 +106,35 @@ def test_names_are_validated(home):
             bk.delete_backup(bad)
 
 
-def _post(path, body, auth):
+def _post(
+    path: str,
+    body: dict,
+    auth: str | None = None,
+    *,
+    remote: str = "127.0.0.1",
+    host: str = "127.0.0.1:8765",
+):
     raw = json.dumps(body).encode("utf-8")
 
     class _Content:
         @staticmethod
-        async def read(_limit: int) -> bytes:
+        async def read(_limit: int = 0) -> bytes:
             return raw
 
     headers = {"Content-Type": "application/json"}
+    if host:
+        headers["Host"] = host
     if auth:
         headers["Authorization"] = f"Bearer {auth}"
-    return SimpleNamespace(method="POST", path=bk.PREFIX + path, headers=headers,
-                           content_length=len(raw), content=_Content())
+    return SimpleNamespace(
+        method="POST",
+        path=bk.PREFIX + path,
+        headers=headers,
+        content_length=len(raw),
+        content=_Content(),
+        remote=remote,
+    )
+
 
 
 class _Tokens:
@@ -210,4 +226,74 @@ def test_max_backups_still_prunes_in_new_dir(home, tmp_path, monkeypatch):
     assert [b["name"] for b in items] == [
         "nanobot-20260101-000003.tar.gz", "nanobot-20260101-000002.tar.gz"]
     assert len(list(new_dir.glob("nanobot-*.tar.gz"))) == 2
+
+
+@pytest.mark.asyncio
+async def test_backup_privileged_routes(home, tmp_path, monkeypatch):
+    from nanobot.ext import devices as dev
+    from nanobot.webui.gateway_tokens import GatewayTokenStore
+
+    devices_path = tmp_path / "devices.json"
+    monkeypatch.setenv("NANOBOT_DEVICES_FILE", str(devices_path))
+
+    store = GatewayTokenStore()
+    code, _ = dev.create_pairing_code(devices_path)
+    _, plain_id, _ = dev.claim_pairing_code(code, "plain-phone", devices_path)
+    plain_api = store.issue_api_token(300)
+    dev.remember_device_tokens(plain_id, store, plain_api)
+
+    code2, _ = dev.create_pairing_code(devices_path)
+    _, fp_id, _ = dev.claim_pairing_code(code2, "fp-phone", devices_path)
+    fp_api = store.issue_api_token(300)
+    dev.remember_device_tokens(fp_id, store, fp_api)
+    dev.set_full_power(fp_id, True, devices_path)
+
+    handler = bk.backup_post_handler("master", store, _fallback)
+
+    # /create stays open to any authorized device (plain device token succeeds)
+    create_req = _post("/create", {}, plain_api, remote="100.64.0.1", host="nanobot.remote:8765")
+    created = await handler(create_req)
+    assert created.status == 200
+    assert "name" in json.loads(created.text)["backup"]
+
+    target_dir = tmp_path / "custom_backups"
+
+    # --- /settings ---
+    denied = await handler(_post("/settings", {"dir": str(target_dir)}, plain_api, remote="100.64.0.1", host="nanobot.remote:8765"))
+    assert denied.status == 403 and json.loads(denied.text) == {"error": "full_power_required"}
+    allowed_fp = await handler(_post("/settings", {"dir": str(target_dir)}, fp_api, remote="100.64.0.2", host="nanobot.remote:8765"))
+    assert allowed_fp.status == 200
+    allowed_local = await handler(_post("/settings", {"dir": str(target_dir)}, "master", remote="127.0.0.1", host="127.0.0.1:8765"))
+    assert allowed_local.status == 200
+
+    stamps = iter([f"20260101-00000{i}" for i in range(10)])
+    monkeypatch.setattr(bk.time, "strftime", lambda _fmt: next(stamps))
+
+    # Create archives in target_dir for restore and delete tests
+    b1 = "nanobot-20260101-000001.tar.gz"
+    b2 = "nanobot-20260101-000002.tar.gz"
+    b3 = "nanobot-20260101-000003.tar.gz"
+    members = [("config.json", b"{}"), ("backup.json", json.dumps({"dir": str(target_dir)}).encode())]
+    _write_archive(target_dir / b1, members)
+    _write_archive(target_dir / b2, members)
+    _write_archive(target_dir / b3, members)
+
+    # --- /restore ---
+    denied = await handler(_post("/restore", {"name": b1, "confirm": True}, plain_api, remote="100.64.0.1", host="nanobot.remote:8765"))
+    assert denied.status == 403 and json.loads(denied.text) == {"error": "full_power_required"}
+    allowed_fp = await handler(_post("/restore", {"name": b1, "confirm": True}, fp_api, remote="100.64.0.2", host="nanobot.remote:8765"))
+    assert allowed_fp.status == 200
+    allowed_local = await handler(_post("/restore", {"name": b1, "confirm": True}, "master", remote="127.0.0.1", host="127.0.0.1:8765"))
+    assert allowed_local.status == 200
+
+    # --- /delete ---
+    denied = await handler(_post("/delete", {"name": b2}, plain_api, remote="100.64.0.1", host="nanobot.remote:8765"))
+    assert denied.status == 403 and json.loads(denied.text) == {"error": "full_power_required"}
+    allowed_fp = await handler(_post("/delete", {"name": b2}, fp_api, remote="100.64.0.2", host="nanobot.remote:8765"))
+    assert allowed_fp.status == 200
+    allowed_local = await handler(_post("/delete", {"name": b3}, "master", remote="127.0.0.1", host="127.0.0.1:8765"))
+    assert allowed_local.status == 200
+
+
+
 
