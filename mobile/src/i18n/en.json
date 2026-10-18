@@ -1041,7 +1041,18 @@
     "delete": "Delete skill",
     "deleteConfirm": "Delete {{name}}? The skill's files will be deleted from the server.",
     "deleteNeedsFullPower": "A browser on the server or full power for this device is required",
-    "installNeedsFullPower": "A browser on the server or full power for this device is required"
+    "installNeedsFullPower": "A browser on the server or full power for this device is required",
+    "proposalsTitle": "Proposed by bot",
+    "proposalBadge": "Proposal",
+    "updateBadge": "Update",
+    "activate": "Activate",
+    "reject": "Dismiss",
+    "scoutSwitch": "Propose skills every night",
+    "proposalCreated": "Proposal created: {{name}}",
+    "nothingToSave": "Nothing to save as skill: {{reason}}",
+    "createFromChat": "Create skill from this chat",
+    "proposalActivated": "Skill activated",
+    "proposalRejected": "Proposal dismissed"
   },
   "automations": {
     "title": "Automations",

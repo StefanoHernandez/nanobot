@@ -745,6 +745,16 @@ class WebSocketChannel(BaseChannel):
             cron=self.gateway.cron_service,
             sessions=self.gateway.session_manager,
         )
+        # Fork (nanobot/ext/skill_proposals.py): manage and propose skills.
+        from nanobot.ext.skill_proposals import skill_proposals_post_handler
+
+        chain = skill_proposals_post_handler(
+            secret,
+            self.gateway.tokens,
+            chain,
+            cron=self.gateway.cron_service,
+            sessions=self.gateway.session_manager,
+        )
         bridge = BinaryHTTPBridge(chain)
 
         async def prune_uploads() -> None:
