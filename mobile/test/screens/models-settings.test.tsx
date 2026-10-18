@@ -312,6 +312,62 @@ test("typing an exact id fills the context window", async () => {
   expect(screen.getAllByText("Set by the model").length).toBeGreaterThan(0);
 });
 
+test("new preset shows default context hint while untouched and fills OpenCode context from catalog", async () => {
+  settingsStore.getState().setData(base({
+    providers: [provider({ name: "opencode_go", label: "OpenCode Go", model_catalog: "remote" })],
+  }) as never);
+  get.mockResolvedValue({
+    status: "available",
+    models: [{ id: "glm-5.3", context_window: 1000000, reasoning_efforts: ["low", "high", "max"] }],
+  });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  expect(screen.getByLabelText("Context window").props.value).toBe("200000");
+  expect(screen.getAllByText("Default value: check the model context").length).toBeGreaterThan(0);
+
+  // Type OpenCode model glm-5.3: context window fills from catalog and hint changes
+  await fireEvent.changeText(screen.getByLabelText("Model"), "glm-5.3");
+  expect(screen.getByLabelText("Context window").props.value).toBe("1000000");
+  expect(screen.getAllByText("Set by the model").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Default value: check the model context")).toBeNull();
+});
+
+test("new preset keeps 200000 default hint when model has no catalog context, and clears on manual edit", async () => {
+  settingsStore.getState().setData(base({
+    providers: [provider({ name: "opencode_go", label: "OpenCode Go", model_catalog: "remote" })],
+  }) as never);
+  get.mockResolvedValue({
+    status: "available",
+    models: [{ id: "custom-no-ctx" }],
+  });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalled());
+  await fireEvent.changeText(screen.getByLabelText("Model"), "custom-no-ctx");
+  expect(screen.getByLabelText("Context window").props.value).toBe("200000");
+  expect(screen.getAllByText("Default value: check the model context").length).toBeGreaterThan(0);
+
+  // Manual edit clears the default hint
+  await fireEvent.changeText(screen.getByLabelText("Context window"), "150000");
+  expect(screen.queryByText("Default value: check the model context")).toBeNull();
+  expect(screen.queryByText("Set by the model")).toBeNull();
+});
+
+test("anthropic provider is accepted as catalogued despite model_catalog unsupported", async () => {
+  settingsStore.getState().setData(base({
+    providers: [provider({ name: "anthropic", label: "Anthropic", model_catalog: "unsupported", configured: true })],
+  }) as never);
+  get.mockResolvedValue({
+    status: "available",
+    models: [{ id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5", context_window: 200000 }],
+  });
+  await show();
+  await fireEvent.press(screen.getByText("Add model"));
+  await waitFor(() => expect(get).toHaveBeenCalledWith("/api/settings/provider-models?provider=anthropic"));
+  expect(screen.getByText("Choose from list")).toBeTruthy();
+});
+
 test("an effort the new model does not have is reset", async () => {
   settingsStore.getState().setData(base({
     model_presets: [preset("b", { reasoning_effort: "high" })],

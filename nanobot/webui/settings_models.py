@@ -564,6 +564,11 @@ def provider_models_payload(
         "fetched_at": time.time(),
     }
     if catalog_kind == "unsupported":
+        # Fork (nanobot/ext/model_info.py): models.dev catalog fallback for unsupported providers.
+        from nanobot.ext.model_info import unsupported_provider_models_payload
+        fallback = unsupported_provider_models_payload(spec.name, base_payload, http_get=http_get)
+        if fallback is not None:
+            return fallback
         return {
             **base_payload,
             "status": "unsupported",
@@ -658,6 +663,9 @@ def provider_models_payload(
         )
         response.raise_for_status()
         rows = _extract_model_rows(response.json())
+        # Fork (nanobot/ext/model_info.py): enrich models with context window and reasoning efforts from models.dev.
+        from nanobot.ext.model_info import enrich_provider_rows
+        rows = enrich_provider_rows(spec.name, rows, http_get=http_get)
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status in {401, 403}:
