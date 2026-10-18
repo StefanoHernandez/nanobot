@@ -83,6 +83,20 @@ test("a modify note versions the previous svg even when the reply forgets the id
   expect(artifacts[0].versions.map((v) => v.code)).toEqual(["<svg>1</svg>", "<svg>2</svg>"]);
 });
 
+test("an English modify note also versions the previous svg and continues the artifact", () => {
+  const englishClaim = "Modify the artifact svg.\nSame first line, not a new artifact: `svg id=svg-en123456`.\nRequest: make it bigger";
+  const artifacts = collectArtifacts([
+    msg("m1", "```svg\n<svg>first</svg>\n```"),
+    msg("m2", englishClaim),
+    msg("m3", "Sure."),
+    msg("m4", "```svg\n<svg>second</svg>\n```"),
+  ]);
+  expect(artifacts).toHaveLength(1);
+  expect(artifacts[0].id).toBe("svg-en123456");
+  expect(artifacts[0].explicit).toBe(true);
+  expect(artifacts[0].versions.map((v) => v.code)).toEqual(["<svg>first</svg>", "<svg>second</svg>"]);
+});
+
 test("a modify note does not pull in a different kind", () => {
   const artifacts = collectArtifacts([
     msg("m1", "```html\n<p>1</p>\n```"),

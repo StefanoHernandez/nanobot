@@ -75,3 +75,56 @@ test("30KB code block is rendered without highlighting", async () => {
   expect(screen.queryByText("const")).toBeNull();
   expect(screen.getByText(/const x = 1;/, { exact: false })).toBeTruthy();
 });
+
+test("CodeBlock renders card for previewable artifacts with open button and line count", async () => {
+  await wrap(<CodeBlock code={"<h1>Hello</h1>\n<p>World</p>"} lang="html title=TestPage" />);
+  expect(screen.getByTestId("artifact-card")).toBeTruthy();
+  expect(screen.getByText("TestPage")).toBeTruthy();
+  expect(screen.getByText("2 righe")).toBeTruthy();
+  expect(screen.getByText("Apri anteprima")).toBeTruthy();
+  // Code view is hidden by default
+  expect(screen.queryByLabelText("Copia codice")).toBeNull();
+
+  // Press "Mostra codice" toggle
+  await fireEvent.press(screen.getByText("Mostra codice"));
+  expect(screen.getByText("Nascondi codice")).toBeTruthy();
+  expect(screen.getByLabelText("Copia codice")).toBeTruthy();
+
+  // Press "Nascondi codice"
+  await fireEvent.press(screen.getByText("Nascondi codice"));
+  expect(screen.queryByLabelText("Copia codice")).toBeNull();
+});
+
+test("CodeBlock renders streaming indicator when isStreaming is true", async () => {
+  await wrap(<CodeBlock code={"<h1>Streaming</h1>"} lang="html title=StreamingDoc" isStreaming={true} />);
+  expect(screen.getByTestId("artifact-streaming")).toBeTruthy();
+  expect(screen.getByText("Sto generando «StreamingDoc»…")).toBeTruthy();
+  expect(screen.queryByTestId("artifact-card")).toBeNull();
+});
+
+test("Non-previewable code block renders standard code block without preview card", async () => {
+  await wrap(<CodeBlock code={"echo 'hello'"} lang="bash" />);
+  expect(screen.queryByTestId("artifact-card")).toBeNull();
+  expect(screen.queryByText("Apri anteprima")).toBeNull();
+  expect(screen.getByLabelText("Copia codice")).toBeTruthy();
+});
+
+test("CodeBlock supports English copy when active", async () => {
+  await act(async () => {
+    await i18n.changeLanguage("en");
+  });
+  try {
+    await wrap(<CodeBlock code={"<h1>Hello</h1>"} lang="html title=EnglishDoc" />);
+    expect(screen.getByText("Open preview")).toBeTruthy();
+    expect(screen.getByText("Show code")).toBeTruthy();
+    expect(screen.getByText("1 line")).toBeTruthy();
+
+    await wrap(<CodeBlock code={"<h1>Streaming</h1>"} lang="html title=EnglishDoc" isStreaming={true} />);
+    expect(screen.getByText("Generating «EnglishDoc»…")).toBeTruthy();
+  } finally {
+    await act(async () => {
+      await i18n.changeLanguage("it");
+    });
+  }
+});
+

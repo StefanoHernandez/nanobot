@@ -4,6 +4,7 @@ import { PreviewHost, type PreviewHandle } from "./PreviewHost";
 import { File } from "expo-file-system";
 import * as FileSystemLegacy from "expo-file-system/legacy";
 import { useT } from "../../i18n";
+import { darkTheme, lightTheme } from "../../ui/theme";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Dialog } from "../../ui/components";
 import {
@@ -129,6 +130,12 @@ export type BuildShellHtmlOptions = {
   /** Diagram accent colour (theme chartInput): Mermaid lines and shapes. */
   accent?: string;
   border?: string;
+  card?: string;
+  muted?: string;
+  primary?: string;
+  primaryFg?: string;
+  radius?: string;
+  font?: string;
   fileSize?: number;
   isLightPreview?: boolean;
   /** This render only. Confirmed in the viewer; never stored. */
@@ -459,7 +466,8 @@ function chartRenderScript({
         var themeConfig = ${themeConfig};
         var opts = { actions: false, renderer: "svg", config: themeConfig };
         ${tooltipLine}
-        return vegaEmbed(container, spec, opts).then(function() {
+        return vegaEmbed(container, spec, opts).then(function(res) {
+          window.__vegaView = res && res.view;
           postReady();
         }).catch(function(e) {
           postError(e);
@@ -933,14 +941,123 @@ ${lightHead}
 </html>`;
 }
 
+export type ThemeCssOptions = {
+  bg?: string;
+  fg?: string;
+  card?: string;
+  muted?: string;
+  border?: string;
+  primary?: string;
+  primaryFg?: string;
+  radius?: string;
+  font?: string;
+};
+
+export function buildThemeCss(isDark: boolean, options?: ThemeCssOptions): string {
+  const colors = isDark ? darkTheme.colors : lightTheme.colors;
+  const bg = options?.bg ?? colors.background;
+  const fg = options?.fg ?? colors.foreground;
+  const card = options?.card ?? colors.card;
+  const muted = options?.muted ?? colors.muted;
+  const border = options?.border ?? colors.border;
+  const primary = options?.primary ?? colors.primary;
+  const primaryFg = options?.primaryFg ?? colors.primaryForeground;
+  const radius = options?.radius ?? "12px";
+  const font = options?.font ?? `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+
+  return `:root {
+  --nb-bg: ${bg};
+  --nb-fg: ${fg};
+  --nb-card: ${card};
+  --nb-muted: ${muted};
+  --nb-border: ${border};
+  --nb-primary: ${primary};
+  --nb-primary-fg: ${primaryFg};
+  --nb-radius: ${radius};
+  --nb-font: ${font};
+}
+body {
+  margin: 0;
+  padding: 16px;
+  background-color: var(--nb-bg);
+  color: var(--nb-fg);
+  font-family: var(--nb-font);
+  line-height: 1.5;
+}
+button {
+  background-color: var(--nb-primary);
+  color: var(--nb-primary-fg);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--nb-radius);
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:active {
+  opacity: 0.85;
+}
+input, select {
+  background-color: var(--nb-card);
+  color: var(--nb-fg);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--nb-radius);
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th, td {
+  border: 1px solid var(--nb-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+th {
+  background-color: var(--nb-muted);
+  font-weight: 600;
+}
+a {
+  color: var(--nb-primary);
+  text-decoration: underline;
+}
+code {
+  font-family: monospace;
+  background-color: var(--nb-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.nb-card {
+  background-color: var(--nb-card);
+  color: var(--nb-fg);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--nb-radius);
+  padding: 16px;
+  margin: 12px 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}`;
+}
+
 export function buildShellHtml({
   kind,
   html = "",
   isDark: themeDark = false,
-  bg: themeBg = "#ffffff",
-  fg: themeFg = "#000000",
-  accent = "#2f3389",
-  border: themeBorder = "#d3d7f3",
+  bg: themeBg,
+  fg: themeFg,
+  accent: themeAccent,
+  border: themeBorder,
+  card: themeCard,
+  muted: themeMuted,
+  primary: themePrimary,
+  primaryFg: themePrimaryFg,
+  radius: themeRadius,
+  font: themeFont,
   fileSize = 0,
   isLightPreview = false,
   network = false,
@@ -950,9 +1067,17 @@ export function buildShellHtml({
   // Documents are paper. HTML, SVG and Mermaid keep the app theme.
   const documentPaper = kind === "pdf" || kind === "docx" || kind === "pptx" || kind === "xlsx";
   const isDark = documentPaper ? false : themeDark;
-  const bg = documentPaper ? "#ffffff" : themeBg;
-  const fg = documentPaper ? "#1c1c1c" : themeFg;
-  const border = documentPaper ? "#dddddd" : themeBorder;
+  const defaultColors = isDark ? darkTheme.colors : lightTheme.colors;
+  const bg = documentPaper ? "#ffffff" : (themeBg ?? defaultColors.background);
+  const fg = documentPaper ? "#1c1c1c" : (themeFg ?? defaultColors.foreground);
+  const accent = themeAccent ?? (documentPaper ? "#2f3389" : defaultColors.chartInput);
+  const border = documentPaper ? "#dddddd" : (themeBorder ?? defaultColors.border);
+  const card = documentPaper ? "#ffffff" : (themeCard ?? defaultColors.card);
+  const muted = documentPaper ? "#f2f2f2" : (themeMuted ?? defaultColors.muted);
+  const primary = documentPaper ? "#2f3389" : (themePrimary ?? defaultColors.primary);
+  const primaryFg = documentPaper ? "#ffffff" : (themePrimaryFg ?? defaultColors.primaryForeground);
+  const radius = themeRadius ?? "12px";
+  const font = themeFont ?? `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
   const loadingLabel = i18n.loading || "Caricamento...";
   const progressTpl = i18n.loadingProgress || "Caricamento {{loaded}}/{{total}} MB";
   const showMoreRowsLabel = i18n.showMoreRows || "Mostra altre righe";
@@ -1028,6 +1153,13 @@ export function buildShellHtml({
   const exportPngScript = `<script>
     window.__exportPng = function() {
       try {
+        if (window.__vegaView && typeof window.__vegaView.toImageURL === "function") {
+          window.__vegaView.toImageURL("png").then(function(dataUrl) {
+            if (!dataUrl || dataUrl.length > 8000000 || !canPost()) return;
+            postHost({ type: "png", dataUrl: dataUrl });
+          }).catch(function() {});
+          return;
+        }
         var svg = document.querySelector("svg");
         if (!svg || !canPost()) return;
         if (!svg.getAttribute("xmlns")) svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -1083,6 +1215,19 @@ export function buildShellHtml({
 ${viewerCsp(cspAllowNetwork, cspAllowRemoteImages)}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<style id="nb-theme-base">
+${buildThemeCss(isDark, {
+  bg,
+  fg,
+  card,
+  muted,
+  border,
+  primary,
+  primaryFg,
+  radius,
+  font,
+})}
+</style>
 <style>
   html, body {
     margin: 0;
@@ -1303,6 +1448,7 @@ ${commonHead}
 ${commonHead}
 <body>
   <div id="container" style="padding:16px;"></div>
+  ${exportPngScript}
   ${inlineScript(libs?.vega)}
   ${inlineScript(libs?.vegaLite)}
   ${inlineScript(libs?.vegaEmbed)}`;
@@ -1889,17 +2035,22 @@ export function ArtifactWebView({
       kind,
       html,
       isDark: th.scheme === "dark",
-      bg: th.colors.popover,
-      fg: th.colors.popoverForeground,
-      accent: th.colors.chartInput,
+      bg: th.colors.background,
+      fg: th.colors.foreground,
+      card: th.colors.card,
+      muted: th.colors.muted,
       border: th.colors.border,
+      primary: th.colors.primary,
+      primaryFg: th.colors.primaryForeground,
+      radius: `${th.radius.sm}px`,
+      accent: th.colors.chartInput,
       fileSize: resolvedSize,
       isLightPreview: activeLightPreview,
       network,
       i18n: shellI18n,
       libs,
     });
-  }, [libs, kind, html, th.scheme, th.colors.popover, th.colors.popoverForeground, th.colors.chartInput, th.colors.border, resolvedSize, activeLightPreview, network, shellI18n]);
+  }, [libs, kind, html, th.scheme, th.colors.background, th.colors.foreground, th.colors.card, th.colors.muted, th.colors.primary, th.colors.primaryForeground, th.colors.chartInput, th.colors.border, th.radius.sm, resolvedSize, activeLightPreview, network, shellI18n]);
 
   // Track shell version and reset isFirstLoadRef whenever shellHtml changes
   const prevShellHtmlRef = useRef<string | null>(null);
@@ -1926,19 +2077,26 @@ export function ArtifactWebView({
     webViewRef.current?.injectJavaScript(`window.__setHtmlFit&&window.__setHtmlFit(${fit ? "true" : "false"});true;`);
   }, [fit, kind]);
 
+  const [isReady, setIsReady] = useState(false);
+  const pendingPngRef = useRef<number | null>(null);
   const exportedTicket = useRef(0);
   useLayoutEffect(() => {
     if (!pngTicket || exportedTicket.current === pngTicket) return;
     const view = webViewRef.current;
     if (!view) return;
+    if (kind === "chart" && !isReadyRef.current) {
+      pendingPngRef.current = pngTicket;
+      return;
+    }
     exportedTicket.current = pngTicket;
     view.injectJavaScript("window.__exportPng&&window.__exportPng();true;");
-  }, [pngTicket, shellHtml]);
+  }, [pngTicket, shellHtml, kind, isReady]);
 
   // Inactivity timeout runs on mount and when shellHtml changes. Never restarts after ready.
   useEffect(() => {
     if (!shellHtml) return;
     isReadyRef.current = false;
+    setIsReady(false);
     resetInactivityTimeout();
     return () => {
       if (timeoutRef.current) {
@@ -1976,11 +2134,17 @@ export function ArtifactWebView({
 
     if (data.type === "ready") {
       isReadyRef.current = true;
+      setIsReady(true);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
       setLoading(false);
+      if (pendingPngRef.current && exportedTicket.current !== pendingPngRef.current) {
+        exportedTicket.current = pendingPngRef.current;
+        pendingPngRef.current = null;
+        webViewRef.current?.injectJavaScript("window.__exportPng&&window.__exportPng();true;");
+      }
       if (kind === "html") {
         webViewRef.current?.injectJavaScript(`window.__setHtmlFit&&window.__setHtmlFit(${fitRef.current ? "true" : "false"});true;`);
       }

@@ -1,3 +1,5 @@
+import { i18n } from "../i18n";
+
 export type ArtifactFixInput = {
   id?: string;
   kind: string;
@@ -8,6 +10,7 @@ export type ArtifactFixInput = {
   line?: number;
   /** User's change request. When set, this is "Chiedi modifica", not "Correggi". */
   request?: string;
+  lang?: "it" | "en";
 };
 
 const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -21,21 +24,55 @@ export function freshArtifactId(kind: string): string {
 }
 
 /** The line the preview sends so the next block stays the same artifact. */
-export function artifactClaimLine(kind: string, id: string): string {
+export function artifactClaimLine(kind: string, id: string, lang?: "it" | "en"): string {
+  const isEn = (lang ?? (i18n.language?.startsWith("en") ? "en" : "it")) === "en";
+  if (isEn) {
+    return `Same first line, not a new artifact: \`${kind} id=${id}\`.`;
+  }
   return `Stessa prima riga, non un artefatto nuovo: \`${kind} id=${id}\`.`;
 }
 
-/** Italian note sent back to the chat. Never includes the artifact source. */
-export function artifactFixText(input: ArtifactFixInput): string {
+/** Note sent back to the chat. Never includes the artifact source. */
+export function artifactFixText(input: ArtifactFixInput, lang?: "it" | "en"): string {
+  const chosenLang = input.lang ?? lang ?? (i18n.language?.startsWith("en") ? "en" : "it");
+  const isEn = chosenLang === "en";
   const kind = input.kind.trim() || "html";
   const id = input.id?.trim();
   const who = id ? `\`${id}\` (${kind})` : kind;
-  const version = input.total != null && input.total > 1 && input.index != null ? `, versione ${input.index + 1}` : "";
-  const claim = id ? artifactClaimLine(kind, id) : "Non creare un artefatto nuovo.";
+  const version =
+    input.total != null && input.total > 1 && input.index != null
+      ? isEn
+        ? `, version ${input.index + 1}`
+        : `, versione ${input.index + 1}`
+      : "";
+  const claim = id
+    ? artifactClaimLine(kind, id, isEn ? "en" : "it")
+    : isEn
+      ? "Do not create a new artifact."
+      : "Non creare un artefatto nuovo.";
   const request = input.request?.trim();
-  if (request) return `Modifica l'artefatto ${who}${version}.\n${claim}\nRichiesta: ${request}`;
-  const line = input.line != null && input.line > 0 ? ` (riga ${input.line})` : "";
+  if (request) {
+    if (isEn) {
+      return `Modify the artifact ${who}${version}.\n${claim}\nRequest: ${request}`;
+    }
+    return `Modifica l'artefatto ${who}${version}.\n${claim}\nRichiesta: ${request}`;
+  }
+  const line =
+    input.line != null && input.line > 0
+      ? isEn
+        ? ` (line ${input.line})`
+        : ` (riga ${input.line})`
+      : "";
   const error = input.error?.trim();
-  const detail = error ? `Errore: ${error}${line}` : "Non si apre nell'anteprima.";
+  const detail = error
+    ? isEn
+      ? `Error: ${error}${line}`
+      : `Errore: ${error}${line}`
+    : isEn
+      ? "Does not open in preview."
+      : "Non si apre nell'anteprima.";
+  if (isEn) {
+    return `Fix the artifact ${who}${version}.\n${claim}\n${detail}`;
+  }
   return `Correggi l'artefatto ${who}${version}.\n${claim}\n${detail}`;
 }

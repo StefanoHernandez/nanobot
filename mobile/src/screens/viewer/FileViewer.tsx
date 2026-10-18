@@ -130,7 +130,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const [pageIndex, setPageIndex] = useState(0);
   const toolKind = activeVersion?.kind ?? kind;
   const canFit = toolKind === "html";
-  const canPng = toolKind === "svg" || toolKind === "mermaid";
+  const canPng = toolKind === "svg" || toolKind === "mermaid" || toolKind === "chart";
   const canPdf = toolKind === "html" || toolKind === "svg";
   const canNetwork =
     toolKind === "html" || toolKind === "svg" || toolKind === "mermaid" || toolKind === "map" || toolKind === "react";
@@ -234,7 +234,9 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
             kind === "map" ||
             kind === "react"
           ) {
-            if (size <= 2 * 1024 * 1024 || size > 10 * 1024 * 1024) {
+            if (size > 10 * 1024 * 1024) {
+              if (active) setTooLarge(true);
+            } else if (size <= 2 * 1024 * 1024) {
               const text = await file.text();
               if (active) setContent(text);
             }
@@ -374,7 +376,9 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     if (!body.trim()) return;
     setPdfBusy(true);
     // Full HTML artifacts keep their scripts (charts need them) but stay without network, as today.
-    const html = isReadingView ? markdownToPrintHtml(content) : printDocument(body, { scripts: true });
+    const html = isReadingView
+      ? markdownToPrintHtml(content)
+      : printDocument(body, { scripts: true, isDark: th.scheme === "dark" });
     void Print.printToFileAsync({ html })
       .then((result) => {
         const out = result.uri;
