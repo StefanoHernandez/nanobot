@@ -5,6 +5,7 @@ import { useShareIntent } from "expo-share-intent";
 import { profiles } from "../src/core/profiles";
 import { pathOfResponse, setupNotifications, startTurnNotifications } from "../src/extras/notifications";
 import { handleShare } from "../src/extras/share";
+import { startKeepAliveWiring } from "../src/extras/keepAliveWiring";
 import { useSession } from "../src/state/sessionStore";
 
 /** Notification wiring, tap-to-open and share intake. Navigation waits for the root navigator to be ready. */
@@ -17,6 +18,10 @@ export function NativeIntegrations() {
   useEffect(() => {
     void setupNotifications().catch(() => {});
     return startTurnNotifications();
+  }, []);
+
+  useEffect(() => {
+    return startKeepAliveWiring();
   }, []);
 
   useEffect(() => {

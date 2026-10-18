@@ -7,6 +7,8 @@ const LANG = "pref.language";
 const SOUND = "pref.notificationSound";
 const KANBAN_NOTIFY = "pref.kanbanNotifications";
 const kanbanNotifyListeners = new Set<() => void>();
+const BACKGROUND_CONN = "pref.backgroundConnection";
+const backgroundConnListeners = new Set<() => void>();
 const AUTO_READ = "pref.voiceAutoRead";
 const AUDIO = "pref.audioReplies";
 const VOICE_ENGINE = "pref.voiceEngine";
@@ -39,6 +41,18 @@ export const prefs = {
     kanbanNotifyListeners.add(listener);
     return () => {
       kanbanNotifyListeners.delete(listener);
+    };
+  },
+  /** Background connection via foreground service; on unless explicitly disabled. */
+  backgroundConnection: (): boolean => kv.get(BACKGROUND_CONN) !== "0",
+  setBackgroundConnection(on: boolean): void {
+    kv.set(BACKGROUND_CONN, on ? "1" : "0");
+    for (const listener of backgroundConnListeners) listener();
+  },
+  subscribeBackgroundConnection(listener: () => void): () => void {
+    backgroundConnListeners.add(listener);
+    return () => {
+      backgroundConnListeners.delete(listener);
     };
   },
   /** "Audio replies": shows the Listen button (on-device TTS, free). Off by default. */

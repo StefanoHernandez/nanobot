@@ -29,6 +29,7 @@
     },
     "plugins": [
       "./plugins/withNanobotWidget",
+      "./plugins/withKeepAlive",
       "expo-router",
       "expo-secure-store",
       [

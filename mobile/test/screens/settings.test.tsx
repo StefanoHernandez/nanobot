@@ -27,6 +27,8 @@ jest.mock("../../src/settings/prefs", () => ({
     notificationSound: () => false,
     kanbanNotifications: () => true,
     setKanbanNotifications: jest.fn(),
+    backgroundConnection: () => true,
+    setBackgroundConnection: jest.fn(),
     audioReplies: () => false,
     setAudioReplies: jest.fn(),
     setNotificationSound: jest.fn(),
