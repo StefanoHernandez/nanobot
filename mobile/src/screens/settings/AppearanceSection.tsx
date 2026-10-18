@@ -6,8 +6,10 @@ import * as LocalAuthentication from "expo-local-authentication";
 import { useT } from "../../i18n";
 import { lockSettings } from "../../extras/lock";
 import { prefs, type Language, type VoiceEngine } from "../../settings/prefs";
+import * as IntentLauncher from "expo-intent-launcher";
+import { keepAlive } from "../../platform/keepAlive";
 import { isOfflineLocaleInstalled } from "../../extras/sttEngine";
-import { ListItem, toast } from "../../ui/components";
+import { Button, ListItem, toast } from "../../ui/components";
 import { useThemePreference, useTheme, type ThemePref } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 import { ApprovalsCard } from "./ApprovalsCard";
@@ -23,6 +25,8 @@ export function AppearanceSection() {
   const [lang, setLang] = useState<Language>(prefs.language());
   const [sound, setSound] = useState(prefs.notificationSound());
   const [kanbanNotify, setKanbanNotify] = useState(prefs.kanbanNotifications());
+  const [backgroundConn, setBackgroundConn] = useState(prefs.backgroundConnection());
+  const [isIgnoringBattery, setIsIgnoringBattery] = useState<boolean | null>(null);
   const [voiceAutoRead, setVoiceAutoRead] = useState(prefs.voiceAutoRead?.() ?? false);
   const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(prefs.voiceEngine?.() ?? "device");
   const [offlineReady, setOfflineReady] = useState<boolean | null>(null);
@@ -33,6 +37,12 @@ export function AppearanceSection() {
       void isOfflineLocaleInstalled().then((ready) => setOfflineReady(ready));
     }
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS === "android" || process.env.NODE_ENV === "test") {
+      void keepAlive.isIgnoringBatteryOptimizations().then(setIsIgnoringBattery);
+    }
+  }, [backgroundConn]);
 
   const onLock = async (v: boolean) => {
     if (v) {
@@ -100,6 +110,35 @@ export function AppearanceSection() {
               />
             }
           />
+        </View>
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem
+            title={t("settings.backgroundConnection")}
+            subtitle={t("settings.backgroundConnectionHelp")}
+            right={
+              <Switch
+                accessibilityLabel={t("settings.backgroundConnection")}
+                value={backgroundConn}
+                onValueChange={(v) => {
+                  prefs.setBackgroundConnection(v);
+                  setBackgroundConn(v);
+                }}
+              />
+            }
+          />
+          {backgroundConn && (Platform.OS === "android" || process.env.NODE_ENV === "test") && isIgnoringBattery === false ? (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+              <Button
+                variant="secondary"
+                title={t("settings.exemptBatteryOptimization")}
+                onPress={() => {
+                  void IntentLauncher.startActivityAsync(
+                    IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+                  ).catch(() => {});
+                }}
+              />
+            </View>
+          ) : null}
         </View>
         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
           <ListItem
