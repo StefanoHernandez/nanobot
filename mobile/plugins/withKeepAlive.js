@@ -59,7 +59,8 @@ class KeepAliveService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         isRunning = true
-        return START_STICKY
+        // Not sticky: a restart without the JS runtime would show "connected" with no socket.
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {

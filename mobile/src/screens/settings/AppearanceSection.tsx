@@ -39,9 +39,8 @@ export function AppearanceSection() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === "android" || process.env.NODE_ENV === "test") {
-      void keepAlive.isIgnoringBatteryOptimizations().then(setIsIgnoringBattery);
-    }
+    // true off Android, so the exemption button only ever shows there.
+    void keepAlive.isIgnoringBatteryOptimizations().then(setIsIgnoringBattery);
   }, [backgroundConn]);
 
   const onLock = async (v: boolean) => {
@@ -126,7 +125,7 @@ export function AppearanceSection() {
               />
             }
           />
-          {backgroundConn && (Platform.OS === "android" || process.env.NODE_ENV === "test") && isIgnoringBattery === false ? (
+          {backgroundConn && isIgnoringBattery === false ? (
             <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
               <Button
                 variant="secondary"

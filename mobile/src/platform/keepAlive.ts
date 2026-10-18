@@ -33,5 +33,3 @@ export const keepAlive: KeepAliveNative = {
     return true;
   },
 };
-
-export const KeepAlive = keepAlive;

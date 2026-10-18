@@ -5,12 +5,8 @@ import { chatsStore } from "../../src/state/chatsStore";
 import { threadStore } from "../../src/state/threadStore";
 import { sessionStore } from "../../src/state/sessionStore";
 import { i18n } from "../../src/i18n";
-import {
-  CHANNEL,
-  startTurnNotifications,
-  setCurrentChatKey,
-  getCurrentChatKey,
-} from "../../src/extras/notifications";
+import { CHANNEL, startTurnNotifications } from "../../src/extras/notifications";
+import { getCurrentChatKey, setCurrentChatKey } from "../../src/extras/currentChat";
 import { fakeSession } from "../state/fake";
 
 jest.mock("expo-notifications", () => ({

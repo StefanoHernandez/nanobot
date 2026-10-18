@@ -25,16 +25,8 @@ import { WorkspaceButton } from "./WorkspaceSheet";
 import { collectThreadFiles } from "../gallery/GalleryScreen";
 import { subagentsAvailable, subagentsStore } from "../../state/subagentsStore";
 import { useWorkspace } from "../../state/workspace";
-import { getCurrentChatKey, setCurrentChatKey } from "../../extras/currentChat";
 
 export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () => void }) {
-  React.useEffect(() => {
-    setCurrentChatKey(chatKey);
-    return () => {
-      if (getCurrentChatKey() === chatKey) setCurrentChatKey(null);
-    };
-  }, [chatKey]);
-
   const th = useTheme();
   const t = useT();
   const { messages, running, notices, model, preset, temporary, forkBoundary } = useThread(chatKey);

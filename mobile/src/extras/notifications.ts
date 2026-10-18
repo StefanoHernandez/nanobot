@@ -9,9 +9,7 @@ import { threadStore } from "../state/threadStore";
 import { sessionStore } from "../state/sessionStore";
 import { toast } from "../ui/components";
 import type { NanobotSession } from "../core/session";
-import { getCurrentChatKey, setCurrentChatKey } from "./currentChat";
-
-export { getCurrentChatKey, setCurrentChatKey };
+import { getCurrentChatKey } from "./currentChat";
 
 export const CHANNEL = "turns";
 const ASKED = "notif.asked";

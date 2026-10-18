@@ -8,5 +8,3 @@ export const keepAlive: KeepAliveNative = {
   isRunning: async () => false,
   isIgnoringBatteryOptimizations: async () => true,
 };
-
-export const KeepAlive = keepAlive;
