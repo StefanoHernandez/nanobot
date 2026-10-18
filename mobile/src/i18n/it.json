@@ -114,6 +114,8 @@
     "shareFailed": "Impossibile creare la chat",
     "shareTooLarge": "File troppo grande: {{name}}",
     "replyReady": "Risposta pronta",
+    "newReplyIn": "Nuova risposta in «{{title}}»",
+    "openChat": "Apri",
     "offlineBanner": "Non raggiungibile — Tailscale attivo?",
     "reasoning": "Ragionamento",
     "apply": "Applica",
