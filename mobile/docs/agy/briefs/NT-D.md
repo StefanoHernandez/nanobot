@@ -1,9 +1,9 @@
 # NT-D: keep the connection alive in the background (Android foreground service) (owner: agy)
 
-Branch `agy/NT-D`, from `origin/main` **after NT-C is merged**, **in your own worktree**. Follow `mobile/docs/agy/README.md`, including the checks it always requires. **App only:** no server changes. You will write a little native Android code through an Expo config plugin, the same way `mobile/plugins/withNanobotWidget.js` does.
+Branch `agy/NT-D`, from `origin/main`, **in your own worktree**. NT-C (notifications for unwatched chats) runs in parallel on another branch: do not touch `src/extras/notifications.ts`; put your wiring in a new `src/extras/keepAliveWiring.ts` called from `app/NativeIntegrations.tsx`. Follow `mobile/docs/agy/README.md`, including the checks it always requires. **App only:** no server changes. You will write a little native Android code through an Expo config plugin, the same way `mobile/plugins/withNanobotWidget.js` does.
 
 ## Why
-NT-C makes the app notify for any chat, but only while the app process is alive. When Android puts the app to sleep or kills it, the WebSocket closes and automations reach nobody. The owner chose a **light foreground service** over FCM push: a small, permanent, silent notification ("nanobot connesso") keeps the process, and therefore the existing JS WebSocket, alive. Apps without Google push (ntfy, Signal without Play Services, Conversations) do the same.
+NT-C (in parallel) makes the app notify for any chat, but only while the app process is alive. When Android puts the app to sleep or kills it, the WebSocket closes and automations reach nobody. The owner chose a **light foreground service** over FCM push: a small, permanent, silent notification ("nanobot connesso") keeps the process, and therefore the existing JS WebSocket, alive. Apps without Google push (ntfy, Signal without Play Services, Conversations) do the same.
 
 The JS side does not change: the session (`src/state/sessionStore.ts`) and its WebSocket keep running in the same process; NT-C's listeners do the notifying.
 
@@ -18,7 +18,7 @@ The JS side does not change: the session (`src/state/sessionStore.ts`) and its W
 
 ## 2. JS wiring
 - New pref `prefs.backgroundConnection()` (default **on**), in `src/settings/prefs.ts`.
-- Start the service when a session is connected **and** the pref is on; stop it when the session is closed/forgotten (sign-out, unpair) or the pref is turned off. Put this in one place (e.g. next to `startTurnNotifications` in `app/NativeIntegrations.tsx`).
+- Start the service when a session is connected **and** the pref is on; stop it when the session is closed/forgotten (sign-out, unpair) or the pref is turned off. Put this in one place (`src/extras/keepAliveWiring.ts`).
 - The WebSocket must reconnect by itself after network changes or Doze. Check what the current session does on a dropped socket; if it already reconnects with backoff, leave it. If it gives up after N tries, make it keep retrying (capped backoff, e.g. 60 s) **while the service runs**. Say in the report what you found.
 
 ## 3. Settings
@@ -35,7 +35,7 @@ Only if it is small: a `BOOT_COMPLETED` receiver that starts the service when th
 ## Checks
 - `cd mobile && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx jest && npx tsc --noEmit`
 - `cd mobile && npx expo export --platform android --output-dir /tmp/nb-export`
-- `cd mobile && bash scripts/build-apk.sh` must succeed (the plugin runs at prebuild).
+- `cd mobile && bash scripts/build-apk.sh` must succeed (the plugin runs at prebuild). The Android toolchain lives only in the main checkout: in your worktree run `ln -s ../../nanobot/mobile/.toolchain mobile/.toolchain` once (never commit it; `.toolchain` is ignored). Do not commit `mobile/android/`.
 
 ## Do not
 - Add npm dependencies (Expo modules and the config plugin API are already there). Edit server files or `mobile/vendor/**`. Import `@react-navigation/*`.
