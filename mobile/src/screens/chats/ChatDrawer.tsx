@@ -25,7 +25,8 @@ type DrawerRow =
   | { kind: "header"; key: string; title: string }
   | { kind: "project"; key: string; project: Project }
   | { kind: "allProjects"; key: string }
-  | { kind: "chat"; key: string; chat: ChatSummary };
+  | { kind: "chat"; key: string; chat: ChatSummary }
+  | { kind: "searchAll"; key: string; query: string };
 
 /** Creates a chat (normal or temporary), opens it, then calls `onDone`. Shared with the home empty state. */
 export function useStartChat(onDone?: () => void) {
@@ -77,7 +78,11 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
   const label = (c: ChatSummary) => chatTitle(c, t("chats.untitled"));
   const searching = q.trim().length > 0;
   const listRows = React.useMemo(() => {
-    if (searching) return rows.map((chat) => ({ kind: "chat" as const, key: chat.key, chat }));
+    if (searching) {
+      const chatRows: DrawerRow[] = rows.map((chat) => ({ kind: "chat" as const, key: chat.key, chat }));
+      chatRows.push({ kind: "searchAll", key: "search-all-messages", query: q.trim() });
+      return chatRows;
+    }
     const out: DrawerRow[] = [
       { kind: "header", key: "h-projects", title: t("projects.title") },
       ...recentProjects(projects).map((project) => ({ kind: "project" as const, key: `project:${project.id}`, project })),
@@ -203,6 +208,21 @@ export function ChatDrawer({ onClose }: { onClose: () => void }) {
                 onPress={() => {
                   onClose();
                   router.push("/projects");
+                }}
+              />
+            );
+          }
+          if (item.kind === "searchAll") {
+            return (
+              <ListItem
+                title={t("chats.searchAllMessages", { q: item.query })}
+                left={<MaterialCommunityIcons name="text-search" size={22} color={th.colors.primary ?? th.colors.foreground} />}
+                onPress={() => {
+                  onClose();
+                  router.push({
+                    pathname: "/search" as any,
+                    params: { q: item.query },
+                  });
                 }}
               />
             );

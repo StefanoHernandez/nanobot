@@ -310,6 +310,7 @@
     "deleteTitle": "Delete chat",
     "deleteConfirm": "Delete {{title}}?",
     "allProjects": "All projects",
+    "searchAllMessages": "Search \"{{q}}\" in all messages",
     "section": {
       "today": "Today",
       "yesterday": "Yesterday",
@@ -1336,6 +1337,18 @@
     "tooMany": "Prompt limit reached (maximum 500)",
     "tooLong": "Title or body is too long",
     "sectionTitle": "Prompts"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search across all messages, journal, kanban…",
+    "sourceAll": "All",
+    "sourceChats": "Chat",
+    "sourceJournal": "Journal",
+    "sourceKanban": "Kanban",
+    "emptyNoQuery": "Type to search",
+    "noResults": "No results found",
+    "error": "Error during search",
+    "retry": "Retry"
   },
   "voiceLoop": {
     "start": "Continuous voice conversation",

@@ -310,6 +310,7 @@
     "deleteTitle": "Elimina chat",
     "deleteConfirm": "Eliminare {{title}}?",
     "allProjects": "Tutti i progetti",
+    "searchAllMessages": "Cerca «{{q}}» in tutti i messaggi",
     "section": {
       "today": "Oggi",
       "yesterday": "Ieri",
@@ -1336,6 +1337,18 @@
     "tooMany": "Limite prompt raggiunto (massimo 500)",
     "tooLong": "Titolo o testo troppo lungo",
     "sectionTitle": "Prompt"
+  },
+  "search": {
+    "title": "Cerca",
+    "placeholder": "Cerca in tutti i messaggi, diario, lavagna…",
+    "sourceAll": "Tutti",
+    "sourceChats": "Chat",
+    "sourceJournal": "Diario",
+    "sourceKanban": "Lavagna",
+    "emptyNoQuery": "Digita per cercare",
+    "noResults": "Nessun risultato trovato",
+    "error": "Errore durante la ricerca",
+    "retry": "Riprova"
   },
   "voiceLoop": {
     "start": "Conversazione vocale continua",
