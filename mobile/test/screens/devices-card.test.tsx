@@ -9,11 +9,13 @@ import { ThemeProvider } from "../../src/ui/ThemeProvider";
 
 const fetchMock = jest.fn();
 const mockGet = jest.fn();
+const mockPost = jest.fn();
 
 const session = {
   baseUrl: "https://srv.test",
   apiToken: () => "api-token-secret",
   get: mockGet,
+  post: mockPost,
 } as unknown as NanobotSession;
 
 beforeEach(async () => {
@@ -55,7 +57,7 @@ test("revoke opens confirm and posts only after confirm", async () => {
   mockGet.mockResolvedValue({
     devices: [{ id: "d1", name: "Kitchen", created: 1, last_seen: null, revoked: false }],
   });
-  fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  mockPost.mockResolvedValue({ ok: true });
 
   show();
   await waitFor(() => expect(screen.getByText("Kitchen")).toBeTruthy());
@@ -63,7 +65,7 @@ test("revoke opens confirm and posts only after confirm", async () => {
   await act(async () => {
     fireEvent.press(screen.getAllByRole("button", { name: "Revoke" })[0]!);
   });
-  expect(fetchMock).not.toHaveBeenCalled();
+  expect(mockPost).not.toHaveBeenCalled();
   expect(screen.getByText("Kitchen will no longer be able to connect.")).toBeTruthy();
 
   const confirmButtons = screen.getAllByRole("button", { name: "Revoke" });
@@ -71,19 +73,11 @@ test("revoke opens confirm and posts only after confirm", async () => {
     fireEvent.press(confirmButtons[confirmButtons.length - 1]!);
   });
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  expect(fetchMock).toHaveBeenCalledWith(
-    "https://srv.test/api/ext/devices/revoke",
-    expect.objectContaining({
-      method: "POST",
-      credentials: "omit",
-      headers: expect.objectContaining({ Authorization: "Bearer api-token-secret" }),
-      body: JSON.stringify({ id: "d1" }),
-    }),
+  await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+  expect(mockPost).toHaveBeenCalledWith(
+    "/api/ext/devices/revoke",
+    { id: "d1" },
   );
-  const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as Record<string, unknown>;
-  expect(body.token).toBeUndefined();
-  expect(body.device_token).toBeUndefined();
 });
 
 test("a payload without a device list shows an error instead of crashing", async () => {

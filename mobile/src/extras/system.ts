@@ -67,19 +67,7 @@ export function temperatureColor(tempC: number | null | undefined, theme: Theme)
 }
 
 export async function fetchSystem(session: NanobotSession): Promise<SystemSnapshot> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/system`, {
-    method: "GET",
-    redirect: "error",
-    credentials: "omit",
-    headers: { Authorization: `Bearer ${session.apiToken()}` },
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
-  return (await res.json()) as SystemSnapshot;
+  return await session.get<SystemSnapshot>("/api/ext/system");
 }
 
 let generation = 0;

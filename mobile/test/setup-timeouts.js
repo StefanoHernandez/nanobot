@@ -3,6 +3,19 @@ const { configure } = require("@testing-library/react-native");
 
 configure({ asyncUtilTimeout: 5000 });
 
+// Deterministic number formatting across locales for tests
+const origNumberToLocaleString = Number.prototype.toLocaleString;
+Number.prototype.toLocaleString = function (locales = "en-US", options) {
+  return origNumberToLocaleString.call(this, locales, options);
+};
+
+// Force English language before each file independent of system locale
+const { i18n } = require("../src/i18n");
+beforeAll(async () => {
+  await i18n.changeLanguage("en");
+});
+
+
 jest.mock("expo-speech-recognition", () => ({
   ExpoSpeechRecognitionModule: {
     isRecognitionAvailable: jest.fn(() => false),

@@ -22,7 +22,7 @@ export async function syncKeepAlive(): Promise<void> {
       serviceRunning = true;
       await keepAlive.start().catch(() => {});
     }
-  } else if (state === "none") {
+  } else if (state === "none" || state === "auth_error") {
     if (serviceRunning) {
       serviceRunning = false;
       await keepAlive.stop().catch(() => {});

@@ -1,4 +1,4 @@
-import { browserKv, browserSecretStore } from "../../src/platform/secretStoreShared";
+import { browserKv } from "../../src/platform/secretStoreShared";
 
 function fakeStorage(): Storage {
   const map = new Map<string, string>();
@@ -25,23 +25,6 @@ function fakeStorage(): Storage {
   };
 }
 
-test("browserSecretStore set/get/del roundtrip", async () => {
-  const storage = fakeStorage();
-  const store = browserSecretStore(storage);
-  await store.set("secret.a", "top-secret");
-  expect(await store.get("secret.a")).toBe("top-secret");
-  await store.del("secret.a");
-  expect(await store.get("secret.a")).toBeNull();
-});
-
-test("browserSecretStore uses nanobot.secret. prefix", async () => {
-  const storage = fakeStorage();
-  const store = browserSecretStore(storage);
-  await store.set("secret.a", "v");
-  expect(storage.getItem("secret.a")).toBeNull();
-  expect(storage.getItem("nanobot.secret.secret.a")).toBe("v");
-});
-
 test("browserKv set/get/del/keys", () => {
   const storage = fakeStorage();
   const kv = browserKv(storage);
@@ -56,19 +39,17 @@ test("browserKv set/get/del/keys", () => {
 
 test("browserKv keys exclude secret prefix entries when storage is shared", async () => {
   const storage = fakeStorage();
-  const secrets = browserSecretStore(storage);
   const kv = browserKv(storage);
-  await secrets.set("secret.a", "s");
+  storage.setItem("nanobot.secret.secret.a", "s");
   kv.set("foo", "bar");
   expect(kv.keys()).toEqual(["foo"]);
   expect(kv.get("secret.a")).toBeNull();
 });
 
-test("secret written via browserSecretStore does not appear in browserKv keys or values", async () => {
+test("secret written directly does not appear in browserKv keys or values", async () => {
   const storage = fakeStorage();
-  const secrets = browserSecretStore(storage);
   const kv = browserKv(storage);
-  await secrets.set("secret.x", "hidden");
+  storage.setItem("nanobot.secret.secret.x", "hidden");
   kv.set("visible", "yes");
   expect(kv.keys()).toEqual(["visible"]);
   for (const k of kv.keys()) {

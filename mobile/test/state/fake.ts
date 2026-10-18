@@ -58,12 +58,41 @@ export function fakeSession(routes: Routes = {}, pending: Record<string, Record<
   };
   const get = jest.fn(async (path: string) => {
     const r = routes[path];
-    if (r === undefined) throw new Error(`404 ${path}`);
-    return typeof r === "function" ? (r as () => unknown)() : r;
+    if (r !== undefined) return typeof r === "function" ? (r as () => unknown)() : r;
+    const res = await globalThis.fetch(`http://h${path}`, {
+      method: "GET",
+      headers: { Authorization: "Bearer tok" },
+    });
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}`);
+      (err as any).status = res.status;
+      throw err;
+    }
+    return (await res.json()) as unknown;
   });
-  const session = { client, get, apiToken: () => "tok", baseUrl: "http://h", state: "open", capabilities: new Set<string>() } as unknown as NanobotSession;
+  const post = jest.fn(async (path: string, body?: unknown) => {
+    const r = routes[path];
+    if (r !== undefined) return typeof r === "function" ? (r as (b?: unknown) => unknown)(body) : r;
+    const res = await globalThis.fetch(`http://h${path}`, {
+      method: "POST",
+      headers: { Authorization: "Bearer tok", "Content-Type": "application/json" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      let code = `HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        if (data?.error) code = data.error;
+      } catch {}
+      const err = new Error(code);
+      (err as any).status = res.status;
+      throw err;
+    }
+    return (await res.json()) as unknown;
+  });
+  const session = { client, get, post, apiToken: () => "tok", baseUrl: "http://h", state: "open", capabilities: new Set<string>() } as unknown as NanobotSession;
   return {
-    session, client, get, sent, attached, routes,
+    session, client, get, post, sent, attached, routes,
     emit: (chatId: string, ev: Record<string, unknown>) => {
       if (ev.event === "turn_end") runAt = null;
       else if (ev.event === "user_message" || ev.event === "delta") runAt = runAt ?? 1;

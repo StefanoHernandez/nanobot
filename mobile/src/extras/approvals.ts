@@ -41,39 +41,7 @@ const notifiedIds = new Set<string>();
 const decidedIds = new Map<string, number>();
 
 export async function fetchApprovals(session: NanobotSession): Promise<ApprovalsPayload> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}/api/ext/approvals`, {
-    method: "GET",
-    redirect: "error",
-    credentials: "omit",
-    headers: { Authorization: `Bearer ${session.apiToken()}` },
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
-  return (await res.json()) as ApprovalsPayload;
-}
-
-async function postApprovals<T = unknown>(session: NanobotSession, path: string, body: unknown): Promise<T> {
-  const root = session.baseUrl.replace(/\/+$/, "");
-  const res = await fetch(`${root}${path}`, {
-    method: "POST",
-    redirect: "error",
-    credentials: "omit",
-    headers: {
-      Authorization: `Bearer ${session.apiToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    (err as any).status = res.status;
-    throw err;
-  }
-  return (await res.json()) as T;
+  return await session.get<ApprovalsPayload>("/api/ext/approvals");
 }
 
 export async function decideApproval(
@@ -82,17 +50,17 @@ export async function decideApproval(
   allow: boolean,
   always: boolean,
 ): Promise<boolean> {
-  const res = await postApprovals<{ ok: boolean }>(session, "/api/ext/approvals/decide", { id, allow, always });
+  const res = await session.post<{ ok: boolean }>("/api/ext/approvals/decide", { id, allow, always });
   return res.ok;
 }
 
 export async function setApprovalsEnabled(session: NanobotSession, enabled: boolean): Promise<boolean> {
-  const res = await postApprovals<{ ok: boolean }>(session, "/api/ext/approvals/settings", { enabled });
+  const res = await session.post<{ ok: boolean }>("/api/ext/approvals/settings", { enabled });
   return res.ok;
 }
 
 export async function forgetApproval(session: NanobotSession, session_key: string): Promise<boolean> {
-  const res = await postApprovals<{ ok: boolean }>(session, "/api/ext/approvals/forget", { session_key });
+  const res = await session.post<{ ok: boolean }>("/api/ext/approvals/forget", { session_key });
   return res.ok;
 }
 
