@@ -675,6 +675,13 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
+        # Fork (nanobot/ext/search.py): full-text search.
+        from nanobot.ext.search import dispatch_search_get
+
+        response = await asyncio.to_thread(dispatch_search_get, self, request, got)
+        if response is not None:
+            return response
+
         # API 404 (never serve SPA for /api/ routes)
         if got.startswith("/api/"):
             return _http_error(404, "API route not found")
