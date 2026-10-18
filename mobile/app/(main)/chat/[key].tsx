@@ -6,6 +6,7 @@ import { useSession } from "../../../src/state/sessionStore";
 import { threadStore } from "../../../src/state/threadStore";
 import { chatsStore } from "../../../src/state/chatsStore";
 import { speechStore } from "../../../src/extras/speech";
+import { getCurrentChatKey, setCurrentChatKey } from "../../../src/extras/currentChat";
 
 type NavNode = {
   getState?: () => { type?: string; history?: unknown[] } | undefined;
@@ -42,6 +43,7 @@ export default function ChatRoute() {
 
   useFocusEffect(
     useCallback(() => {
+      setCurrentChatKey(key);
       threadStore.getState().cancelLeave(key);
       const sub = BackHandler.addEventListener("hardwareBackPress", () => {
         if (drawerIsOpen(navigation)) return false;
@@ -49,6 +51,9 @@ export default function ChatRoute() {
         return true;
       });
       return () => {
+        if (getCurrentChatKey() === key) {
+          setCurrentChatKey(null);
+        }
         sub.remove();
         // The Drawer keeps this screen mounted when you leave it, so stop read-aloud on blur, not unmount.
         speechStore.getState().stop();

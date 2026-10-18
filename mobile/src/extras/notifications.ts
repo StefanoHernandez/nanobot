@@ -1,15 +1,54 @@
 import { AppState } from "react-native";
 import * as Notifications from "expo-notifications";
+import { router } from "expo-router";
 import { i18n } from "../i18n";
 import { kv } from "../platform/storage";
 import { prefs } from "../settings/prefs";
 import { chatsStore } from "../state/chatsStore";
 import { threadStore } from "../state/threadStore";
 import { sessionStore } from "../state/sessionStore";
+import { toast } from "../ui/components";
 import type { NanobotSession } from "../core/session";
+import { getCurrentChatKey, setCurrentChatKey } from "./currentChat";
+
+export { getCurrentChatKey, setCurrentChatKey };
 
 export const CHANNEL = "turns";
 const ASKED = "notif.asked";
+
+function normalizeKey(chatId: string): string | null {
+  if (chatId.startsWith("websocket:")) return chatId;
+  if (chatId.includes(":")) return null;
+  return `websocket:${chatId}`;
+}
+
+function normalizeChatId(idOrKey: string): string {
+  return idOrKey.startsWith("websocket:") ? idOrKey.slice("websocket:".length) : idOrKey;
+}
+
+function deliverTurnNotification(
+  key: string,
+  title: string,
+  body: string,
+  isForeground: () => boolean,
+): void {
+  if (isForeground()) {
+    if (getCurrentChatKey() === key) return;
+    toast.show(i18n.t("extras.newReplyIn", { title }), {
+      action: {
+        label: i18n.t("extras.openChat"),
+        onPress: () => {
+          router.push(chatPath(key) as never);
+        },
+      },
+    });
+    return;
+  }
+  void Notifications.scheduleNotificationAsync({
+    content: { title, body, data: { key } },
+    trigger: { channelId: CHANNEL },
+  });
+}
 
 export const notificationHandler = async () => ({
   shouldShowBanner: true,
@@ -63,9 +102,10 @@ export function pathOfResponse(r: Notifications.NotificationResponse | null | un
 }
 
 /**
- * Global run-status hook (no per-chat onChat, which would drain the vendor's pending-inbound replay buffer and
- * attach every listed chat): a running -> null transition means the turn ended. One notification per chatId+startedAt.
- * ponytail: only chats attached in this app session (opened or messaged) report run status, so only those notify.
+ * Global turn notification hooks:
+ * - onRunStatus: handles tracked chats (running -> null transition).
+ * - onSessionUpdate: handles untracked chats (e.g. automations/cron jobs) when scope === "thread".
+ * In the foreground, shows an in-app toast unless the user is already on that chat's screen.
  */
 export function startTurnNotifications(
   isForeground: () => boolean = () => AppState.currentState === "active",
@@ -77,23 +117,57 @@ export function startTurnNotifications(
     if (!session) return;
     const running = new Map<string, number>();
     const done = new Set<string>();
-    off = session.client.onRunStatus((chatId, startedAt) => {
-      if (startedAt !== null) {
-        running.set(chatId, startedAt);
-        return;
-      }
-      const at = running.get(chatId);
-      running.delete(chatId);
-      if (at === undefined || done.has(`${chatId}:${at}`)) return;
-      done.add(`${chatId}:${at}`);
-      const key = `websocket:${chatId}`;
-      const th = threadStore.getState().threads[key];
-      if (isForeground() || th?.stopped) return;
-      const last = [...(th?.messages ?? [])].reverse().find((m) => m.role === "assistant" && m.content?.trim());
-      const body = last?.content.trim().slice(0, 120) || i18n.t("extras.replyReady");
-      const title = chatsStore.getState().chats.find((c) => c.key === key)?.title || "nanobot";
-      void Notifications.scheduleNotificationAsync({ content: { title, body, data: { key } }, trigger: { channelId: CHANNEL } });
-    });
+    const lastHandled = new Map<string, number>();
+    const unsubs: (() => void)[] = [];
+
+    unsubs.push(
+      session.client.onRunStatus((rawChatId, startedAt) => {
+        const chatId = normalizeChatId(rawChatId);
+        if (startedAt !== null) {
+          running.set(chatId, startedAt);
+          return;
+        }
+        const at = running.get(chatId);
+        running.delete(chatId);
+        if (at === undefined || done.has(`${chatId}:${at}`)) return;
+        done.add(`${chatId}:${at}`);
+        const key = normalizeKey(rawChatId);
+        if (!key) return;
+        if (chatsStore.getState().isTemporary(key)) return;
+        const th = threadStore.getState().threads[key];
+        if (th?.stopped) return;
+        lastHandled.set(chatId, Date.now());
+        const last = [...(th?.messages ?? [])].reverse().find((m) => m.role === "assistant" && m.content?.trim());
+        const body = last?.content.trim().slice(0, 120) || i18n.t("extras.replyReady");
+        const title = chatsStore.getState().chats.find((c) => c.key === key)?.title || "nanobot";
+        deliverTurnNotification(key, title, body, isForeground);
+      }),
+    );
+
+    unsubs.push(
+      session.client.onSessionUpdate(async (rawChatId, scope) => {
+        if (scope !== "thread") return;
+        const key = normalizeKey(rawChatId);
+        if (!key) return;
+        if (chatsStore.getState().isTemporary(key)) return;
+        const th = threadStore.getState().threads[key];
+        if (th?.stopped) return;
+        const chatId = normalizeChatId(rawChatId);
+        if (running.has(chatId)) return;
+        const now = Date.now();
+        const last = lastHandled.get(chatId);
+        if (last !== undefined && now - last < 5000) return;
+        lastHandled.set(chatId, now);
+
+        await chatsStore.getState().refresh().catch(() => {});
+        const chat = chatsStore.getState().chats.find((c) => c.key === key);
+        const title = chat?.title || "nanobot";
+        const body = chat?.preview?.trim().slice(0, 120) || i18n.t("extras.replyReady");
+        deliverTurnNotification(key, title, body, isForeground);
+      }),
+    );
+
+    off = () => unsubs.forEach((u) => u());
   };
   bind(sessionStore.getState().session);
   const offSession = sessionStore.subscribe((s, p) => s.session !== p.session && bind(s.session));
