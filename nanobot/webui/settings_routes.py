@@ -224,7 +224,7 @@ class WebUISettingsRouter:
         logger: Any,
         check_api_token: Callable[[WsRequest], bool],
         parse_query: Callable[[str], QueryParams],
-        json_response: Callable[[dict[str, Any]], Response],
+        json_response: Callable[..., Response],  # Fork: allow status parameter
         error_response: Callable[[int, str | None], Response],
         runtime_surface: str,
         runtime_capabilities: dict[str, Any],
@@ -444,6 +444,12 @@ class WebUISettingsRouter:
 
     def _render_result(self, result: SettingsRouteResult) -> Response:
         if result.error is not None:
+            if result.code is not None:
+                # Fork: return structured JSON error when code is provided
+                return self._json_response(
+                    {"error": result.error, "code": result.code},
+                    status=result.status,
+                )
             return self._error_response(result.status, result.error)
         assert result.payload is not None
         payload = result.payload

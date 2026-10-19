@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useT } from "../../../i18n";
-import { Button, Dialog } from "../../../ui/components";
+import { Button, Dialog, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useRestart } from "../../../settings/store";
 import { useFeatures } from "../../../ecosystem/apps";
 import { toastEcosystemError } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
+import { filterEcosystemItems } from "./search";
 import type { NanobotFeatureInfo } from "@/lib/types";
 
 export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
@@ -14,9 +17,12 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
   const th = useTheme();
   const { features, requiresRestart, loading, refresh, enable, disable } = useFeatures();
   const { run: runRestart, state: restartState } = useRestart();
+  const privileged = usePrivileged();
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [confirmFeature, setConfirmFeature] = useState<NanobotFeatureInfo | null>(null);
   const [inFlight, setInFlight] = useState<Set<string>>(new Set());
+  const [featureErrors, setFeatureErrors] = useState<Record<string, { code?: string; message?: string }>>({});
 
   useEffect(() => {
     if (restartState === "done") {
@@ -32,7 +38,15 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
       setInFlight((prev) => new Set(prev).add(feature.name));
       try {
         await disable(feature.name);
+        setFeatureErrors((prev) => {
+          const next = { ...prev };
+          delete next[feature.name];
+          return next;
+        });
       } catch (e) {
+        const code = (e as any)?.code;
+        const message = (e as any)?.message;
+        setFeatureErrors((prev) => ({ ...prev, [feature.name]: { code, message } }));
         toastEcosystemError(e, t);
       } finally {
         setInFlight((prev) => {
@@ -52,10 +66,18 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
     setInFlight((prev) => new Set(prev).add(f.name));
     try {
       const res = await enable(f.name);
+      setFeatureErrors((prev) => {
+        const next = { ...prev };
+        delete next[f.name];
+        return next;
+      });
       if (res?.timedOut) {
         toast.show(t("apps.timedOut"));
       }
     } catch (e) {
+      const code = (e as any)?.code;
+      const message = (e as any)?.message;
+      setFeatureErrors((prev) => ({ ...prev, [f.name]: { code, message } }));
       toastEcosystemError(e, t);
     } finally {
       setInFlight((prev) => {
@@ -66,7 +88,24 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
     }
   };
 
+  const getLockReason = (feature: NanobotFeatureInfo): string | null => {
+    if (feature.enabled) return null;
+    const err = featureErrors[feature.name];
+    const code = err?.code;
+    if (code === "full_power_required") return t("apps.lockFullPower");
+    if (code === "remote_install_disabled") return t("apps.lockRemoteDisabled");
+    if (code === "unsupported_install_env") {
+      const rawMsg = err?.message || "";
+      const cmdMatch = rawMsg.match(/`([^`]+)`/);
+      return t("apps.lockUnsupportedEnv", { command: cmdMatch ? cmdMatch[1] : "" });
+    }
+    if (!privileged) return t("apps.lockFullPower");
+    if (!gateAllowed) return t("apps.lockRemoteDisabled");
+    return null;
+  };
+
   const isRestarting = restartState === "restarting";
+  const filteredFeatures = filterEcosystemItems(features, searchQuery);
 
   return (
     <View style={styles.container}>
@@ -84,21 +123,35 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
         </View>
       ) : null}
 
+      <View style={styles.searchSection}>
+        <TextField
+          label=""
+          placeholder={t("apps.searchPlaceholder")}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} />}
       >
-        {features.length === 0 && !loading ? (
+        {filteredFeatures.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
-              {t("plugins.empty")}
+              {searchQuery.trim()
+                ? t("apps.searchEmpty", { query: searchQuery.trim() })
+                : t("plugins.empty")}
             </Text>
           </View>
         ) : (
-          features.map((feature) => {
+          filteredFeatures.map((feature) => {
             const isInFlight = inFlight.has(feature.name);
             const canEnable = gateAllowed;
             const switchDisabled = (!feature.enabled && !canEnable) || isInFlight;
+            const lockReason = getLockReason(feature);
 
             return (
               <View
@@ -137,6 +190,14 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
                     trackColor={{ false: th.colors.muted, true: th.colors.primary }}
                   />
                 </View>
+                {lockReason ? (
+                  <View style={styles.lockRow}>
+                    <MaterialCommunityIcons name="lock-outline" size={14} color={th.colors.mutedForeground} />
+                    <Text style={[styles.lockText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+                      {lockReason}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             );
           })
@@ -161,6 +222,11 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  searchSection: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   restartBanner: {
     flexDirection: "row",
@@ -210,5 +276,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
     lineHeight: 18,
+  },
+  lockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  lockText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
   },
 });

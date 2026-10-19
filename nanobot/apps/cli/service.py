@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -233,6 +234,76 @@ def cli_app_skill_relative_path(workspace: Path, name: str) -> str:
     return canonical
 
 
+# Fork: cache package manager global bin directories to locate installed CLI apps
+@functools.lru_cache(maxsize=1)
+def _resolved_cli_search_path() -> str:
+    if sys.platform == "win32":
+        sr = os.environ.get("SYSTEMROOT", r"C:\Windows")
+        current_path = os.environ.get("PATH", f"{sr}\\system32;{sr}")
+    else:
+        current_path = os.environ.get("PATH", "/usr/bin:/bin")
+    extra_dirs: list[str] = []
+
+    # 1. npm prefix -g (+ /bin on Unix, prefix itself on Windows)
+    try:
+        proc = subprocess.run(
+            ["npm", "prefix", "-g"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        if proc.returncode == 0:
+            prefix = proc.stdout.strip()
+            if prefix:
+                bin_dir = Path(prefix) if sys.platform == "win32" else Path(prefix) / "bin"
+                extra_dirs.append(str(bin_dir))
+    except Exception:
+        pass
+
+    # 2. uv tool dir --bin (when uv is used)
+    try:
+        proc = subprocess.run(
+            ["uv", "tool", "dir", "--bin"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        if proc.returncode == 0:
+            uv_bin = proc.stdout.strip()
+            if uv_bin and uv_bin not in extra_dirs:
+                extra_dirs.append(uv_bin)
+    except Exception:
+        pass
+
+    if not extra_dirs:
+        return current_path
+
+    seen: set[str] = set()
+    ordered_dirs: list[str] = []
+    for d in extra_dirs:
+        if d and d not in seen:
+            seen.add(d)
+            ordered_dirs.append(d)
+    for p in current_path.split(os.pathsep):
+        if p and p not in seen:
+            seen.add(p)
+            ordered_dirs.append(p)
+    return os.pathsep.join(ordered_dirs)
+
+
+# Fork: robust which helper that passes resolved cli search path but tolerates 1-arg mock lambdas in tests
+def _which(cmd: str, path: str | None = None) -> str | None:
+    search_path = path if path is not None else _resolved_cli_search_path()
+    try:
+        return shutil.which(cmd, path=search_path)
+    except TypeError:
+        return shutil.which(cmd)
+
+
 def _has_shell_meta(command: str) -> bool:
     return any(char in command for char in _SHELL_META_CHARS)
 
@@ -244,7 +315,8 @@ def _command_exists(command: str) -> bool:
         return False
     if not parts:
         return False
-    return shutil.which(parts[0]) is not None
+    # Fork: search via resolved CLI search path
+    return _which(parts[0]) is not None
 
 
 def _is_pip_install_command(command: str) -> bool:
@@ -676,7 +748,8 @@ class CliAppManager:
         entry_point = str(app.get("entry_point") or "")
         install_supported = self._install_supported(app)
         is_installed = name in installed
-        available = bool(entry_point and shutil.which(entry_point))
+        # Fork: resolve entry point using CLI search path
+        available = bool(entry_point and _which(entry_point))
         if is_installed and available:
             status = "installed"
         elif is_installed:
@@ -1007,7 +1080,8 @@ class CliAppManager:
                 "TEMP": os.environ.get("TEMP", f"{sr}\\Temp"),
                 "TMP": os.environ.get("TMP", f"{sr}\\Temp"),
                 "PATHEXT": os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD"),
-                "PATH": os.environ.get("PATH", f"{sr}\\system32;{sr}"),
+                # Fork: include package manager bin dirs in subprocess PATH
+                "PATH": _resolved_cli_search_path(),
                 "PYTHONUNBUFFERED": "1",
             }
             return env
@@ -1015,7 +1089,8 @@ class CliAppManager:
             "HOME": os.environ.get("HOME", "/tmp"),
             "LANG": os.environ.get("LANG", "C.UTF-8"),
             "TERM": os.environ.get("TERM", "dumb"),
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            # Fork: include package manager bin dirs in subprocess PATH
+            "PATH": _resolved_cli_search_path(),
             "PYTHONUNBUFFERED": "1",
         }
         # Desktop CLIs use this directory to locate the running application.
@@ -1062,7 +1137,8 @@ class CliAppManager:
             value = app.get(field)
             if value not in (None, ""):
                 entry[field] = value
-        resolved = shutil.which(entry_point) if entry_point else None
+        # Fork: resolve entry point using CLI search path
+        resolved = _which(entry_point) if entry_point else None
         if resolved:
             entry["entry_point_path"] = resolved
         if strategy == "pip":
@@ -1183,7 +1259,8 @@ Use the `run_cli_app` tool with `name="{name}"` for command execution. Do not in
             raise CliAppError("this CLI app uses an unsupported install strategy")
         strategy = self._strategy(app)
         entry_point = str(app.get("entry_point") or "")
-        if entry_point and shutil.which(entry_point):
+        # Fork: resolve entry point using CLI search path
+        if entry_point and _which(entry_point):
             self._record_installed(app)
             return self.payload() | {
                 "last_action": {
@@ -1272,7 +1349,8 @@ Use the `run_cli_app` tool with `name="{name}"` for command execution. Do not in
             if result.returncode != 0:
                 raise CliAppError(_truncate(result.stderr or result.stdout or "uninstall failed"), status=500)
             still_managed = bool(managed_entry_path and Path(managed_entry_path).exists())
-            still_available = bool(entry_point and shutil.which(entry_point))
+            # Fork: resolve entry point using CLI search path
+            still_available = bool(entry_point and _which(entry_point))
             if still_managed or (not managed_entry_path and still_available):
                 reason = (
                     f"the recorded entry point at {managed_entry_path} still exists"
@@ -1293,7 +1371,8 @@ Use the `run_cli_app` tool with `name="{name}"` for command execution. Do not in
                     }
                 }
         else:
-            still_available = bool(entry_point and shutil.which(entry_point))
+            # Fork: resolve entry point using CLI search path
+            still_available = bool(entry_point and _which(entry_point))
         installed.pop(str(app["name"]), None)
         self._save_installed(installed)
         self.remove_skill(str(app["name"]))
@@ -1324,7 +1403,8 @@ Use the `run_cli_app` tool with `name="{name}"` for command execution. Do not in
     def test(self, name: str) -> dict[str, Any]:
         app = self.get_app(name)
         entry = str(app.get("entry_point") or "")
-        resolved = shutil.which(entry)
+        # Fork: use extended search path including npm prefix -g and uv tool bin
+        resolved = _which(entry)
         if not entry or not resolved:
             raise CliAppError(f"{entry or name} is not available on PATH")
         result = self._run_argv([resolved, "--help"], timeout=min(self.runtime.run_timeout, 30))
@@ -1448,7 +1528,8 @@ Use the `run_cli_app` tool with `name="{name}"` for command execution. Do not in
             raise CliAppError(f"CLI app '{name}' is not installed")
         cwd = self._resolve_cwd(working_dir, restrict_to_workspace=restrict_to_workspace)
         entry = str(installed[str(app["name"])].get("entry_point") or app.get("entry_point") or "")
-        resolved = shutil.which(entry)
+        # Fork: use extended search path including npm prefix -g and uv tool bin
+        resolved = _which(entry)
         if not entry or not resolved:
             raise CliAppError(f"{entry or name} is not available on PATH")
         clean_args = [str(arg) for arg in (args or [])]

@@ -278,12 +278,15 @@ export class NanobotSession {
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       let msg = text;
+      let code: string | undefined;
       try {
-        const j = JSON.parse(text) as { error?: unknown };
+        const j = JSON.parse(text) as { error?: unknown; code?: unknown };
         if (typeof j?.error === "string") msg = j.error;
+        if (typeof j?.code === "string") code = j.code;
       } catch {}
       const err = new Error(msg || `HTTP ${res.status}`);
-      (err as Error & { status?: number }).status = res.status;
+      (err as Error & { status?: number; code?: string }).status = res.status;
+      if (code) (err as Error & { code?: string }).code = code;
       throw err;
     }
     return (await res.json()) as T;
@@ -294,8 +297,21 @@ export class NanobotSession {
       return await this.client.requestMutation<T>(action, payload, timeoutMs);
     } catch (e) {
       const status = (e as { status?: number }).status;
-      const err = new Error(e instanceof Error ? e.message : String((e as { message?: unknown }).message ?? e));
-      (err as Error & { status?: number }).status = status;
+      let code = (e as { code?: string }).code;
+      const rawMsg = e instanceof Error ? e.message : String((e as { message?: unknown }).message ?? e);
+      let msg = rawMsg;
+      if (!code && rawMsg.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(rawMsg) as { error?: unknown; code?: unknown };
+          if (parsed && typeof parsed === "object") {
+            if (typeof parsed.code === "string") code = parsed.code;
+            if (typeof parsed.error === "string") msg = parsed.error;
+          }
+        } catch {}
+      }
+      const err = new Error(msg);
+      (err as Error & { status?: number; code?: string }).status = status;
+      if (code) (err as Error & { code?: string }).code = code;
       throw err;
     }
   }

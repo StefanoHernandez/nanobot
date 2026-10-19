@@ -989,7 +989,13 @@
       "not_installed": "Non installato",
       "unsupported": "Non supportato"
     },
-    "empty": "Nessuna app CLI disponibile"
+    "empty": "Nessuna app CLI disponibile",
+    "searchPlaceholder": "Cerca...",
+    "searchEmpty": "Nessun risultato per «{{query}}»",
+    "lockFullPower": "Serve un dispositivo con pieno controllo",
+    "lockRemoteDisabled": "Installazione da remoto disattivata: attivala dal browser sul server, in Impostazioni",
+    "lockUnsupportedEnv": "Installazione automatica non supportata in questo ambiente. Installa manualmente: {{command}}",
+    "npxCacheBroken": "La cache di npx è corrotta: sul server esegui `npm cache clean --force` e riprova."
   },
   "plugins": {
     "title": "Plugin",
@@ -1029,7 +1035,10 @@
     "tools": "Strumenti",
     "config": "Configurazione",
     "save": "Salva",
-    "empty": "Nessun preset MCP disponibile"
+    "empty": "Nessun preset MCP disponibile",
+    "failureReason": "Errore: {{reason}}",
+    "npxCacheBroken": "La cache di npx è corrotta: sul server esegui `npm cache clean --force` e riprova.",
+    "testSuccess": "Test completato con successo"
   },
   "skills": {
     "title": "Skills",

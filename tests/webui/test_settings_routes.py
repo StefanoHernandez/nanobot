@@ -679,3 +679,51 @@ async def test_image_switch_round_trip_clears_restart(tmp_path, enabled):
     reverted = await router.dispatch(None, _mutation_request(path, {"enabled": enabled}), path)
     assert json.loads(reverted.body)["requires_restart"] is False
     assert json.loads(reverted.body)["restart_required_sections"] == []
+
+
+@pytest.mark.asyncio
+async def test_features_enable_without_full_power_returns_403_and_code(tmp_path):
+    router = _router(config_path=tmp_path / "config.json")
+    path = "/api/settings/nanobot-features/enable"
+    resp = await router.dispatch(None, _mutation_request(path, {"name": "feishu"}), path)
+    assert resp.status_code == 403
+    data = json.loads(resp.body)
+    assert data["code"] == "full_power_required"
+
+
+@pytest.mark.asyncio
+async def test_features_install_remote_disabled_returns_403_and_code(tmp_path, monkeypatch):
+    router = _router(config_path=tmp_path / "config.json")
+    # Simulate non-local browser and remote package install disabled
+    monkeypatch.setattr(router._system, "allow_feature_package_install", lambda _req: False)
+    monkeypatch.setattr("nanobot.optional_features.extra_installed", lambda *args: False)
+    path = "/api/settings/nanobot-features/enable"
+    resp = await router.dispatch(None, _mutation_request(path, {"name": "feishu", "install_only": "true"}), path)
+    assert resp.status_code == 403
+    data = json.loads(resp.body)
+    assert data["code"] == "remote_install_disabled"
+
+
+@pytest.mark.asyncio
+async def test_features_install_unsupported_env_returns_500_and_code(tmp_path, monkeypatch):
+    from nanobot.optional_features import InstallResult
+
+    router = _router(config_path=tmp_path / "config.json")
+    monkeypatch.setattr(router._system, "allow_feature_package_install", lambda _req: True)
+    # Mock install_extra to simulate missing pip in isolated environment
+    def mock_install_extra(*args, **kwargs):
+        return InstallResult(
+            False,
+            "feishu support",
+            ["python", "-m", "pip", "install"],
+            output="No module named pip",
+        )
+
+    monkeypatch.setattr("nanobot.optional_features.install_extra", mock_install_extra)
+    monkeypatch.setattr("nanobot.optional_features.extra_installed", lambda *args: False)
+    path = "/api/settings/nanobot-features/enable"
+    resp = await router.dispatch(None, _mutation_request(path, {"name": "feishu", "install_only": "true"}), path)
+    assert resp.status_code == 500
+    data = json.loads(resp.body)
+    assert data["code"] == "unsupported_install_env"
+    assert "Install manually:" in data["error"]

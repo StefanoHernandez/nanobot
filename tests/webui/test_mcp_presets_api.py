@@ -9,9 +9,10 @@ import pytest
 from mcp.shared.auth import OAuthToken
 
 from nanobot.agent.plugins import AGENT_PLUGIN_MCP_SCHEMA, AGENT_PLUGIN_SCHEMA
+from nanobot.agent.tools.mcp import record_mcp_failure
 from nanobot.agent.tools.mcp_oauth import MCPOAuthStorage, mcp_oauth_has_credentials
 from nanobot.config.loader import load_config, save_config
-from nanobot.config.schema import Config
+from nanobot.config.schema import Config, MCPServerConfig
 from nanobot.webui.mcp_presets_api import (
     McpPresetError,
     custom_mcp_action,
@@ -474,12 +475,12 @@ def test_enable_context7_optional_api_key_appends_arg(
     row = next(item for item in payload["presets"] if item["name"] == "context7")
     assert row["configured"] is True
     config = load_config()
-    assert config.tools.mcp_servers["context7"].args == [
-        "-y",
-        "@upstash/context7-mcp@latest",
-        "--api-key",
-        "ctx7_secret",
-    ]
+    server = config.tools.mcp_servers["context7"]
+    assert server.type == "streamableHttp"
+    assert server.url == "https://mcp.context7.com/mcp"
+    assert server.headers.get("Authorization") == "Bearer ctx7_secret"
+    assert server.args == []
+    assert server.command == ""
 
 
 def test_enable_stdio_preset_uses_config_scoped_cwd(
@@ -930,3 +931,112 @@ def test_normalize_mcp_mentions_uses_explicit_gateway_config(
     )
 
     assert payload == [{"name": "gateway-docs", "display_name": "Gateway docs"}]
+
+
+# Fork: test switching transports cleans up incompatible fields
+def test_materialize_server_cleans_incompatible_transport_fields(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _use_config(tmp_path, monkeypatch)
+
+    # 1. Start with a stdio server configuration for context7
+    cfg = load_config()
+    cfg.tools.mcp_servers["context7"] = MCPServerConfig(
+        type="stdio",
+        command="npx",
+        args=["-y", "@upstash/context7-mcp@latest"],
+        cwd="/tmp/context7",
+        tool_timeout=45,
+    )
+    save_config(cfg)
+
+    # Enable context7 preset (which is now streamableHttp)
+    mcp_presets_action(
+        "enable",
+        {
+            "name": ["context7"],
+            "context7_api_key": ["ctx7_secret"],
+        },
+    )
+
+    updated = load_config()
+    server = updated.tools.mcp_servers["context7"]
+    assert server.type == "streamableHttp"
+    assert server.url == "https://mcp.context7.com/mcp"
+    assert server.headers.get("Authorization") == "Bearer ctx7_secret"
+    assert server.command == ""
+    assert server.args == []
+    assert server.cwd == ""
+
+
+# Fork: test failure_reason in test action scrubs secrets
+@pytest.mark.asyncio
+async def test_mcp_test_action_failure_reason_scrubs_secrets(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _use_config(tmp_path, monkeypatch)
+
+    # Enable context7
+    mcp_presets_action(
+        "enable",
+        {
+            "name": ["context7"],
+            "context7_api_key": ["ctx7_secret"],
+        },
+    )
+
+    async def fake_connect(servers, registry):
+        raise RuntimeError(
+            "Failed to connect https://user:supersecretpass@api.test.com/mcp?token=secret123 with Bearer mysecrettoken"
+        )
+
+    monkeypatch.setattr("nanobot.agent.tools.mcp.connect_mcp_servers", fake_connect)
+
+    payload = await mcp_presets_test_action({"name": ["context7"]})
+    last_action = payload["last_action"]
+    assert last_action["ok"] is False
+    reason = last_action["failure_reason"]
+    assert "supersecretpass" not in reason
+    assert "secret123" not in reason
+    assert "mysecrettoken" not in reason
+    assert "<redacted>" in reason
+    assert len(reason) <= 300
+
+    row = next(item for item in payload["presets"] if item["name"] == "context7")
+    assert row.get("failure_reason") == reason
+
+
+# Fork: test npx_cache_broken error hint code
+@pytest.mark.asyncio
+async def test_mcp_test_action_npx_cache_broken_hint(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _use_config(tmp_path, monkeypatch)
+
+    # Enable playwright (stdio)
+    mcp_presets_action("enable", {"name": ["playwright"]})
+
+    # Simulate stdio process failure with ERR_MODULE_NOT_FOUND
+    async def fake_connect(servers, registry):
+        record_mcp_failure(
+            "playwright",
+            "Error: Cannot find module '@playwright/mcp'",
+            error_hint="npx_cache_broken",
+            hint_message="Cache npx corrotta o modulo mancante. Prova a svuotare ~/.npm o reinstallare il pacchetto.",
+        )
+        return {}
+
+    monkeypatch.setattr("nanobot.agent.tools.mcp.connect_mcp_servers", fake_connect)
+
+    payload = await mcp_presets_test_action({"name": ["playwright"]})
+    last_action = payload["last_action"]
+    assert last_action["ok"] is False
+    assert last_action["error_hint"] == "npx_cache_broken"
+    assert "Cache npx corrotta" in (last_action.get("hint_message") or "")
+
+    row = next(item for item in payload["presets"] if item["name"] == "playwright")
+    assert row.get("error_hint") == "npx_cache_broken"
+

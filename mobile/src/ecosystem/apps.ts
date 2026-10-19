@@ -6,7 +6,11 @@ import { installGate, longMutation } from "./common";
 import { usePrivileged } from "./privilege";
 
 const policyError = () =>
-  Object.assign(new Error("Remote package installation is disabled on the host"), { policy: true, status: 403 });
+  Object.assign(new Error("Remote package installation is disabled on the host"), {
+    policy: true,
+    status: 403,
+    code: "remote_install_disabled",
+  });
 
 export function useCliApps() {
   const { session } = useSession();

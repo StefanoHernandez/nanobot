@@ -24,6 +24,7 @@ class SettingsRouteResult:
     payload: dict[str, Any] | None = None
     status: int = 200
     error: str | None = None
+    code: str | None = None  # Fork: error code for structured failure responses
     decorate_restart: bool = False
     restart_section: str | None = None
     clear_restart_section: str | None = None
@@ -48,8 +49,11 @@ class SettingsRouteResult:
         )
 
     @classmethod
-    def failure(cls, status: int, error: str) -> SettingsRouteResult:
-        return cls(status=status, error=error)
+    def failure(
+        cls, status: int, error: str, *, code: str | None = None
+    ) -> SettingsRouteResult:
+        # Fork: support optional refusal/error code
+        return cls(status=status, error=error, code=code)
 
 
 class WebUISettingsError(ValueError):
