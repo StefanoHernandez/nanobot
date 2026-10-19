@@ -180,7 +180,9 @@
     "pairUnreachable": "Non raggiungo {{url}}: dev'essere l'indirizzo del server, con Tailscale attivo",
     "badSecret": "Segreto del server errato",
     "tooManyAttempts": "Troppi tentativi. Riprova tra poco.",
-    "webSessionEnded": "Sessione terminata o revocata. Accedi di nuovo."
+    "webSessionEnded": "Sessione terminata o revocata. Accedi di nuovo.",
+    "insecureHttpWarning": "Connessione non cifrata: il secret viaggia in chiaro. Usa https o Tailscale.",
+    "continueAnyway": "Continua comunque"
   },
   "settings": {
     "title": "Impostazioni",

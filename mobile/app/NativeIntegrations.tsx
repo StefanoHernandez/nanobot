@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { router, useRootNavigationState } from "expo-router";
 import { useLastNotificationResponse } from "expo-notifications";
 import { useShareIntent } from "expo-share-intent";
+import { useStore } from "zustand";
+import { lockStore } from "../src/extras/lockStore";
 import { profiles } from "../src/core/profiles";
 import { pathOfResponse, setupNotifications, startTurnNotifications } from "../src/extras/notifications";
 import { handleShare } from "../src/extras/share";
@@ -14,6 +16,9 @@ export function NativeIntegrations() {
   const ready = !!useRootNavigationState()?.key;
   const tapped = pathOfResponse(useLastNotificationResponse());
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+  const { enabled, locked } = useStore(lockStore);
+  const isLocked = enabled && locked;
+  const handledTapRef = useRef<string | null>(null);
 
   useEffect(() => {
     void setupNotifications().catch(() => {});
@@ -25,15 +30,19 @@ export function NativeIntegrations() {
   }, []);
 
   useEffect(() => {
-    if (ready && tapped) router.push(tapped as never);
-  }, [ready, tapped]);
+    if (!ready || isLocked || !tapped) return;
+    if (handledTapRef.current === tapped) return;
+    handledTapRef.current = tapped;
+    router.push(tapped as never);
+  }, [ready, isLocked, tapped]);
 
   // newChat needs an open session, unless there is no profile at all (handleShare then routes to /connect).
   useEffect(() => {
-    if (!ready || !hasShareIntent || (state !== "open" && !(state === "none" && !profiles.activeId()))) return;
+    if (!ready || isLocked || !hasShareIntent || (state !== "open" && !(state === "none" && !profiles.activeId()))) return;
     resetShareIntent();
     void handleShare(shareIntent);
-  }, [ready, hasShareIntent, shareIntent, state, resetShareIntent]);
+  }, [ready, isLocked, hasShareIntent, shareIntent, state, resetShareIntent]);
 
   return null;
 }
+
