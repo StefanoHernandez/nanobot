@@ -504,7 +504,12 @@
     "openDocument": "Apri come documento",
     "page": "Pagina {{current}} di {{total}}",
     "prevPage": "Pagina precedente",
-    "nextPage": "Pagina successiva"
+    "nextPage": "Pagina successiva",
+    "resetData": "Reset dati",
+    "sendPrompt": "L'artefatto vuole inviare al bot:",
+    "sendConfirm": "Invia",
+    "dataReset": "Dati dell'artefatto reimpostati",
+    "menu": "Altro"
   },
   "models": {
     "title": "Ordine di chiamata",
