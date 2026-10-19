@@ -17,7 +17,10 @@ test("MathBlock renders a sandboxed WebView", async () => {
   await render(<ThemeProvider><MathBlock tex="x^2" /></ThemeProvider>);
   const w = screen.getByTestId("webview");
   expect(w.props.javaScriptEnabled).toBe(false);
-  expect(w.props.originWhitelist).toEqual(["about:blank"]);
+  expect(w.props.originWhitelist).toEqual(["about:blank", "file://*"]);
+  expect(w.props.allowFileAccess).toBe(true);
+  expect(w.props.allowFileAccessFromFileURLs).toBe(false);
+  expect(w.props.allowUniversalAccessFromFileURLs).toBe(false);
   expect(w.props.onMessage).toBeUndefined();
   expect(w.props.onShouldStartLoadWithRequest({ url: "https://evil" })).toBe(false);
 });

@@ -1,5 +1,6 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { createStore, useStore } from "zustand";
+import { shallow } from "zustand/shallow";
 import { parseWebuiThreadPayload } from "@/lib/api";
 import {
   clearThreadProjectionActivity,
@@ -118,6 +119,7 @@ type Runtime = {
 
 export function createThreadStore() {
   const rts = new Map<string, Runtime>();
+  const visitedChats: string[] = [];
   let ids = 0;
   const leaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const compactTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -435,6 +437,9 @@ export function createThreadStore() {
 
       async load(session, key) {
         cancelLeave(key);
+        const vIdx = visitedChats.indexOf(key);
+        if (vIdx !== -1) visitedChats.splice(vIdx, 1);
+        visitedChats.push(key);
         get().unload(key);
         const rt = rtOf(key);
         rt.loadedOnce = false;
@@ -475,12 +480,32 @@ export function createThreadStore() {
         clearTimeout(compactTimers.get(key));
         compactTimers.delete(key);
         const rt = rts.get(key);
-        if (!rt) return;
-        rt.gen++;
-        rt.buffer = null;
-        if (get().threads[key]) patch(key, () => ({ hydrating: false, loadingOlder: false }));
-        rt.unsubs.forEach((u) => u());
-        rt.unsubs = [];
+        if (rt) {
+          rt.gen++;
+          rt.buffer = null;
+          if (get().threads[key]) patch(key, () => ({ hydrating: false, loadingOlder: false }));
+          rt.unsubs.forEach((u) => u());
+          rt.unsubs = [];
+        }
+
+        // Memory: keep messages of last 5 visited chats plus any running one; evict the rest on unload
+        const keepVisited = new Set(visitedChats.slice(-5));
+        const currentThreads = get().threads;
+        for (const k of Object.keys(currentThreads)) {
+          const thread = currentThreads[k];
+          if (!thread) continue;
+          if (thread.running) continue;
+          if (keepVisited.has(k)) continue;
+          if (thread.messages && thread.messages.length > 0) {
+            patch(k, () => ({ messages: [], loaded: false }));
+            const oldRt = rts.get(k);
+            if (oldRt) {
+              oldRt.proj = createThreadProjectionState();
+              oldRt.olderEvents = [];
+              oldRt.newestEvents = [];
+            }
+          }
+        }
       },
 
       async loadOlder(key, session) {
@@ -527,6 +552,8 @@ export function createThreadStore() {
       },
 
       leave(session, key) {
+        const vIdx = visitedChats.indexOf(key);
+        if (vIdx !== -1) visitedChats.splice(vIdx, 1);
         if (!chatsStore.getState().dropTemporary(key)) return;
         session.client.discardTemporaryChat(chatIdOf(key));
         const { [key]: _gone, ...rest } = get().threads;
@@ -542,6 +569,7 @@ export function createThreadStore() {
       },
 
       reset() {
+        visitedChats.length = 0;
         [...leaveTimers.keys()].forEach(cancelLeave);
         for (const key of [...rts.keys()]) get().unload(key);
         rts.clear();
@@ -710,25 +738,89 @@ export function createThreadStore() {
 
 export const threadStore = createThreadStore();
 
+export type ThreadActions = {
+  setReplyingTo: (m: UIMessage | null) => void;
+  sendQueuedNow: (id: string) => void;
+  modifyQueued: (id: string) => void;
+  removeQueued: (id: string) => void;
+  loadOlder: () => Promise<void>;
+  send: (text: string, opts?: SendOpts) => boolean;
+  setPendingFiles: (files: LocalFile[]) => void;
+  stop: () => void;
+  setDraft: (text: string) => void;
+  clearSendError: () => void;
+};
+
+export function useThreadActions(key: string): ThreadActions {
+  return useMemo(
+    () => ({
+      setReplyingTo: (m: UIMessage | null) => threadStore.getState().setReplyingTo(key, m),
+      sendQueuedNow: (id: string) => {
+        const s = sessionStore.getState().session;
+        if (s) threadStore.getState().sendQueuedNow(s, key, id);
+      },
+      modifyQueued: (id: string) => threadStore.getState().modifyQueued(key, id),
+      removeQueued: (id: string) => threadStore.getState().removeQueued(key, id),
+      loadOlder: () => {
+        const s = sessionStore.getState().session;
+        return s ? threadStore.getState().loadOlder(key, s) : Promise.resolve();
+      },
+      send: (text: string, opts?: SendOpts) => {
+        const s = sessionStore.getState().session;
+        return !!s && threadStore.getState().send(s, key, text, opts);
+      },
+      setPendingFiles: (files: LocalFile[]) => threadStore.getState().setPendingFiles(key, files),
+      stop: () => {
+        const s = sessionStore.getState().session;
+        if (s) threadStore.getState().stop(s, key);
+      },
+      setDraft: (text: string) => threadStore.getState().setDraft(key, text),
+      clearSendError: () => threadStore.getState().clearSendError(key),
+    }),
+    [key]
+  );
+}
+
 /** Selector-only view of a thread plus actions; no load/unload effect (see useThread). */
-export function useThreadSlice(key: string) {
-  const { session } = useSession();
-  const slice = useStore(threadStore, (s) => s.threads[key] ?? EMPTY);
-  return {
-    ...slice,
-    queuedMessages: slice.queuedMessages ?? [],
-    replyingTo: slice.replyingTo ?? null,
-    setReplyingTo: (m: UIMessage | null) => threadStore.getState().setReplyingTo(key, m),
-    sendQueuedNow: (id: string) => session && threadStore.getState().sendQueuedNow(session, key, id),
-    modifyQueued: (id: string) => threadStore.getState().modifyQueued(key, id),
-    removeQueued: (id: string) => threadStore.getState().removeQueued(key, id),
-    loadOlder: () => (session ? threadStore.getState().loadOlder(key, session) : Promise.resolve()),
-    send: (text: string, opts?: SendOpts) => !!session && threadStore.getState().send(session, key, text, opts),
-    setPendingFiles: (files: LocalFile[]) => threadStore.getState().setPendingFiles(key, files),
-    stop: () => session && threadStore.getState().stop(session, key),
-    setDraft: (text: string) => threadStore.getState().setDraft(key, text),
-    clearSendError: () => threadStore.getState().clearSendError(key),
-  };
+export function useThreadSlice<T = ThreadSlice>(
+  key: string,
+  pick?: (slice: ThreadSlice) => T
+): (T extends ThreadSlice ? ThreadSlice : T) & ThreadActions {
+  const actions = useThreadActions(key);
+  const pickRef = useRef(pick);
+  pickRef.current = pick;
+  const prevRef = useRef<any>(undefined);
+
+  const selector = useCallback(
+    (s: { threads: Record<string, ThreadSlice> }) => {
+      const slice = s.threads[key] ?? EMPTY;
+      const next = pickRef.current ? pickRef.current(slice) : slice;
+      if (prevRef.current !== undefined && shallow(prevRef.current, next)) {
+        return prevRef.current;
+      }
+      prevRef.current = next;
+      return next;
+    },
+    [key]
+  );
+
+  const selected = useStore(threadStore, selector);
+
+  return useMemo(() => {
+    if (!pickRef.current) {
+      const slice = selected as ThreadSlice;
+      return {
+        ...slice,
+        queuedMessages: slice.queuedMessages ?? [],
+        replyingTo: slice.replyingTo ?? null,
+        ...actions,
+      } as any;
+    }
+    return {
+      ...selected,
+      ...actions,
+    } as any;
+  }, [selected, actions]);
 }
 
 /** Owns the thread's load/unload lifecycle: use it exactly once per chat (ThreadScreen). */

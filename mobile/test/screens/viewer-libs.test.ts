@@ -67,4 +67,35 @@ describe("viewerLibs", () => {
     const libs = await loadViewerLibs(["pako"]);
     expect(libs.pako).toBe("/* lib content */");
   });
+
+  test("LRU: keeps at most 2 most recently used libraries in memory; others are re-read", async () => {
+    Object.defineProperty(Platform, "OS", { value: "ios", configurable: true });
+    (FileSystem.readAsStringAsync as jest.Mock)
+      .mockResolvedValueOnce("/* pako */")
+      .mockResolvedValueOnce("/* pdfjs */")
+      .mockResolvedValueOnce("/* jszip */")
+      .mockResolvedValueOnce("/* pako re-read */");
+
+    // Read 1: pako
+    await readViewerLib("pako");
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(1);
+
+    // Read 2: pdfjs
+    await readViewerLib("pdfjs");
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(2);
+
+    // Read 3: jszip -> should evict pako (oldest), keeping pdfjs and jszip
+    await readViewerLib("jszip");
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(3);
+
+    // Read pdfjs again -> still in cache (MRU)! Should not call readAsStringAsync
+    const pdfjsAgain = await readViewerLib("pdfjs");
+    expect(pdfjsAgain).toBe("/* pdfjs */");
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(3);
+
+    // Read pako again -> was evicted! Must re-read from asset
+    const pakoAgain = await readViewerLib("pako");
+    expect(pakoAgain).toBe("/* pako re-read */");
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(4);
+  });
 });

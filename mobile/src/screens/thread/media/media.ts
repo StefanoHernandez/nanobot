@@ -10,9 +10,13 @@ import {
   safeName,
   type MediaClass,
 } from "./mediaCore";
+import { triggerCachePruneOnce } from "./pruneCache";
 
 export { absoluteMediaUrl, classify, extOf, mediaName, safeName };
 export type { MediaClass };
+
+// Trigger pruning in the background on media module load
+triggerCachePruneOnce();
 
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
 const MIME: Record<string, string> = {
@@ -49,6 +53,7 @@ const hash = (s: string) => {
 /** Download to cache/media/<hash>/<name>, reusing a previous complete download. Returns the local file uri.
  * Downloads go to <name>.part and are moved into place only on success (Android may leave a partial file). */
 export async function downloadMedia(url: string, name: string): Promise<string> {
+  triggerCachePruneOnce();
   const dir = new Directory(Paths.cache, "media", hash(url));
   dir.create({ intermediates: true, idempotent: true });
   const n = safeName(name);
