@@ -11,6 +11,8 @@ import { Button, Dialog, ListItem, TextField, toast } from "../../ui/components"
 import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 import { NetworkSafetyCard } from "./NetworkSafetyCard";
+import { Features } from "./Features";
+import { ServerSection } from "./MachineSection";
 
 /** The web app opened on the gateway host itself (e.g. over xrdp): the server accepts host-only settings from it. */
 const onGatewayHost = () =>
@@ -25,7 +27,7 @@ const RISK: Record<string, string> = {
 const IMMEDIATE = ["toggle", "boolean", "select"];
 
 /** Renders every visible runtime field of a page, grouped; `lead` is placed before the first group. */
-function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode }) {
+export function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode }) {
   const t = useT();
   const th = useTheme();
   const { data, mutate } = useSettings();
@@ -158,84 +160,18 @@ function RuntimeGroups({ page, lead }: { page: FieldPage; lead?: React.ReactNode
   );
 }
 
-function Features() {
+export { Features } from "./Features";
+
+export const BehaviorSection = () => <RuntimeGroups page="behavior" />;
+
+export const SystemSection = ServerSection;
+
+export function AdvancedSection() {
   const t = useT();
-  const th = useTheme();
-  const { session } = useSession();
-  const { mutate } = useSettings();
-  const [list, setList] = useState<NanobotFeaturesPayload["features"]>([]);
-  const [target, setTarget] = useState<{ name: string; enable: boolean } | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  useEffect(() => {
-    if (!session) return;
-    void (async () => {
-      try {
-        setList((await session.get<NanobotFeaturesPayload>("/api/settings/nanobot-features")).features ?? []);
-      } catch {} // optional list: hidden when unavailable
-    })();
-  }, [session]);
-  const shown = list.filter((f) => f.type !== "channel" && f.settings_visible !== false);
-  if (!shown.length) return null;
-  const run = async () => {
-    const x = target!;
-    setTarget(null);
-    setBusy(x.name);
-    try {
-      const r = await (x.enable
-        ? mutate<NanobotFeaturesPayload>("settings.feature.enable", { name: x.name }, { timeoutMs: 150_000 })
-        : mutate<NanobotFeaturesPayload>("settings.feature.disable", { name: x.name }));
-      if (r?.features) setList(r.features);
-    } catch (e) {
-      toast.show(`${t("system.featureError")}: ${msgOf(e)}`);
-    } finally {
-      setBusy(null);
-    }
-  };
   return (
     <>
-      <Head>{t("system.features")}</Head>
-      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
-        {shown.map((f, idx) => (
-          <View key={f.name} style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border } : undefined}>
-            <ListItem
-              title={f.display_name} subtitle={f.status}
-              right={<Button title={f.enabled ? t("system.disable") : t("system.enable")} variant="secondary" loading={busy === f.name} onPress={() => setTarget({ name: f.name, enable: !f.enabled })} />}
-            />
-          </View>
-        ))}
-      </View>
-      <Dialog
-        open={!!target} destructive={!!target?.enable}
-        title={target?.enable ? t("system.featureConfirmTitle") : t("system.featureDisable")}
-        message={target?.enable ? t("system.featureMessage") : t("system.featureDisableMessage")}
-        confirmLabel={target?.enable ? t("system.featureInstall") : t("system.featureDisable")} cancelLabel={t("common.cancel")}
-        onCancel={() => setTarget(null)} onConfirm={() => void run()}
-      />
+      <RuntimeGroups page="advanced" />
+      <Features place="advanced" title={t("system.otherComponents", { defaultValue: "Altri componenti" })} />
     </>
   );
 }
-
-export function SystemSection() {
-  const t = useT();
-  const th = useTheme();
-  const { data } = useSettings();
-  const { run } = useRestart();
-  if (!data) return null;
-  return (
-    <>
-      <View style={{ ...th.surface, marginHorizontal: 16, marginTop: 12, overflow: "hidden" }}>
-        <ListItem title={t("system.configPath")} subtitle={data.runtime?.config_path} />
-        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
-          <ListItem title={t("system.applyState")} subtitle={data.apply_state?.status ?? "idle"} />
-        </View>
-        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
-          <ListItem title={t("system.restartRow")} subtitle={t("system.restartHint")} onPress={() => void run()} />
-        </View>
-      </View>
-      <RuntimeGroups page="runtime" />
-      <Features />
-    </>
-  );
-}
-
-export const AdvancedSection = () => <RuntimeGroups page="advanced" lead={<NetworkSafetyCard />} />;

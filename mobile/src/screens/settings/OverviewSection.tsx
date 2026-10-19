@@ -292,7 +292,7 @@ export function OverviewSection() {
                   {isOnline ? t("settings.overview.online") : t("settings.overview.offline")}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => router.push("/settings/machine" as never)}>
+              <TouchableOpacity onPress={() => router.push("/settings/server" as never)}>
                 <Text style={{ color: th.colors.primary, fontFamily: th.font.medium, fontSize: 13 }}>
                   {t("settings.overview.details")}
                 </Text>
@@ -527,24 +527,24 @@ export function OverviewSection() {
       </View>
 
       {/* 7. Capacità Card */}
-      <Head>{t("settings.sections.capabilities")}</Head>
+      <Head>{t("settings.sections.features")}</Head>
       <View style={{ ...th.surface, marginHorizontal: 16, padding: 16 }}>
         {data ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <Button
               title={t("settings.web")}
               variant={data.web?.enable ? "primary" : "secondary"}
-              onPress={() => router.push("/settings/capabilities" as never)}
+              onPress={() => router.push("/settings/features" as never)}
             />
             <Button
               title={t("settings.image")}
               variant={data.image_generation?.enabled ? "primary" : "secondary"}
-              onPress={() => router.push("/settings/capabilities" as never)}
+              onPress={() => router.push("/settings/features" as never)}
             />
             <Button
               title={t("settings.voice")}
               variant={data.transcription?.enabled ? "primary" : "secondary"}
-              onPress={() => router.push("/settings/capabilities" as never)}
+              onPress={() => router.push("/settings/features" as never)}
             />
           </View>
         ) : (

@@ -223,7 +223,33 @@
       "machine": "Machine",
       "backup": "Backup",
       "advanced": "Advanced",
-      "about": "About"
+      "about": "About",
+      "features": "Features",
+      "behavior": "Behavior",
+      "security": "Security",
+      "server": "Server status",
+      "app": "App"
+    },
+    "groups": {
+      "bot": "BOT",
+      "security": "SECURITY",
+      "costs": "SPENDING",
+      "server": "SERVER",
+      "thisPhone": "THIS PHONE"
+    },
+    "sectionSubtitles": {
+      "overview": "spending today, bot state, journal, kanban",
+      "models": "providers, chat model, task models (+ azure, bedrock)",
+      "features": "images, voice, web search (+ olostep), documents and PDF (+ documents, pdf), memory",
+      "prompts": "saved prompts",
+      "behavior": "runtime groups identity, sessions, tools, execution, chat",
+      "security": "command approvals · devices and full power · runtime groups shell, safety · network safety card",
+      "costs": "daily limits, monthly spending, tokens",
+      "server": "machine stats, recent errors, one restart, apply state, config path",
+      "backup": "export and restore data",
+      "advanced": "runtime groups gateway, api, cli; \"Other components\" (api, langfuse, unknown extras)",
+      "app": "language, look, sounds, notifications, background connection, battery, lock, voice replies",
+      "about": "version, connected server, change server"
     },
     "comingSoon": "Coming soon",
     "restartNotice": "Saved. Restart to apply",
@@ -741,13 +767,16 @@
       "safety": "Safety",
       "cli": "CLI apps",
       "gateway": "Gateway",
-      "api": "API"
+      "api": "API",
+      "chat": "Chat"
     },
     "configPath": "Config file",
     "applyState": "Apply state",
     "restartRow": "Restart nanobot",
     "restartHint": "Apply saved changes by restarting the server",
     "features": "Features",
+    "otherComponents": "Other components",
+    "documentsTitle": "Documents and PDF",
     "remoteOnly": "Only on the server: open the app from http://localhost",
     "save": "Save {{group}}",
     "confirmTitle": "Confirm risky change",

@@ -223,7 +223,33 @@
       "machine": "Macchina",
       "backup": "Backup",
       "advanced": "Avanzate",
-      "about": "Informazioni"
+      "about": "Informazioni",
+      "features": "Funzioni",
+      "behavior": "Comportamento",
+      "security": "Sicurezza",
+      "server": "Stato del server",
+      "app": "App"
+    },
+    "groups": {
+      "bot": "BOT",
+      "security": "SICUREZZA",
+      "costs": "SPESA",
+      "server": "SERVER",
+      "thisPhone": "QUESTO TELEFONO"
+    },
+    "sectionSubtitles": {
+      "overview": "spesa oggi, stato del bot, diario, lavagna",
+      "models": "provider, modello chat, modelli per attività (+ azure, bedrock)",
+      "features": "immagini, voce, ricerca web (+ olostep), documenti e PDF (+ documents, pdf), memoria",
+      "prompts": "prompt salvati",
+      "behavior": "gruppi runtime identità, sessioni, strumenti, esecuzione, chat",
+      "security": "approvazioni comandi · dispositivi e pieno controllo · gruppi runtime shell, sicurezza · scheda sicurezza rete",
+      "costs": "limiti giornalieri, spesa mensile, token",
+      "server": "statistiche macchina, errori recenti, un riavvio, stato applicazione, percorso configurazione",
+      "backup": "esporta e ripristina dati",
+      "advanced": "gruppi runtime gateway, api, cli; \"Altri componenti\" (api, langfuse, componenti sconosciuti)",
+      "app": "lingua, aspetto, suoni, notifiche, connessione in background, batteria, blocco, risposte vocali",
+      "about": "versione, server connesso, cambia server"
     },
     "comingSoon": "In arrivo",
     "restartNotice": "Salvato. Riavvia per applicare",
@@ -741,13 +767,16 @@
       "safety": "Sicurezza",
       "cli": "App CLI",
       "gateway": "Gateway",
-      "api": "API"
+      "api": "API",
+      "chat": "Chat"
     },
     "configPath": "File di configurazione",
     "applyState": "Stato applicazione",
     "restartRow": "Riavvia nanobot",
     "restartHint": "Applica le modifiche salvate riavviando il server",
     "features": "Funzionalità",
+    "otherComponents": "Altri componenti",
+    "documentsTitle": "Documenti e PDF",
     "remoteOnly": "Si cambia solo sul server: apri l'app da http://localhost",
     "save": "Salva {{group}}",
     "confirmTitle": "Conferma modifica rischiosa",

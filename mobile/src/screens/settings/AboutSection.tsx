@@ -11,7 +11,6 @@ import { mintPairingCode, pairingQrValue } from "../../core/pairing";
 import { Button, Dialog, ListItem, toast } from "../../ui/components";
 import { PairQrView } from "../../ui/PairQrView";
 import { useTheme } from "../../ui/ThemeProvider";
-import { DevicesCard } from "./DevicesCard";
 import { Head } from "./common";
 
 const appVersion: string = require("../../../app.json").expo.version;
@@ -151,7 +150,6 @@ export function AboutSection() {
           ) : null}
         </View>
       </View>
-      {session ? <DevicesCard session={session} /> : null}
 
       <Head>{t("settings.about")}</Head>
       <View style={{ ...th.surface, marginHorizontal: 16, padding: 16, gap: 6, overflow: "hidden" }}>

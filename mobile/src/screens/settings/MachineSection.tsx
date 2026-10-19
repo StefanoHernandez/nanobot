@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useT } from "../../i18n";
-import { useRestart } from "../../settings/store";
+import { useRestart, useSettings } from "../../settings/store";
 import { Dialog, ListItem } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { formatDuration, temperatureColor, useSystemStats } from "../../extras/system";
@@ -43,6 +43,7 @@ export function MachineSection() {
   const th = useTheme();
   const { data, error } = useSystemStats();
   const { run } = useRestart();
+  const { data: settingsData } = useSettings();
   const [confirmRestart, setConfirmRestart] = useState(false);
 
   const cpuText = data?.cpu_percent != null ? `${data.cpu_percent}%` : "—";
@@ -76,6 +77,14 @@ export function MachineSection() {
           <Text style={{ color: th.colors.destructive, fontFamily: th.font.regular, fontSize: 13 }}>{t(error)}</Text>
         </View>
       ) : null}
+
+      <Head>{t("system.configPath")}</Head>
+      <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
+        <ListItem title={t("system.configPath")} subtitle={settingsData?.runtime?.config_path} />
+        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: th.colors.border }}>
+          <ListItem title={t("system.applyState")} subtitle={settingsData?.apply_state?.status ?? "idle"} />
+        </View>
+      </View>
 
       <Head>{t("machine.cpu")}</Head>
       <View style={{ ...th.surface, marginHorizontal: 16, overflow: "hidden" }}>
@@ -180,3 +189,5 @@ export function MachineSection() {
     </>
   );
 }
+
+export const ServerSection = MachineSection;

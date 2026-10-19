@@ -11,6 +11,7 @@ import { useSession } from "../../state/sessionStore";
 import { Button, Dialog, ListItem, TextField, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head, HintSecretField } from "./common";
+import { Features } from "./Features";
 
 const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const field = (p: string) => RUNTIME_FIELDS.find((f) => f.path === p)!;
@@ -51,17 +52,22 @@ const Row = ({ label, value, onChange, disabled }: { label: string; value: boole
 );
 
 export function CapabilitiesSection() {
+  const t = useT();
   const { data } = useSettings();
   if (!data) return null;
   return (
     <KeyboardAvoidingView behavior="padding">
       <ImageCard />
       <WebCard />
+      <Features names={["olostep"]} />
       <TranscriptionCard />
+      <Features names={["documents", "pdf"]} title={t("system.documentsTitle", { defaultValue: "Documenti e PDF" })} />
       <MemoryCard />
     </KeyboardAvoidingView>
   );
 }
+
+export const FeaturesSection = CapabilitiesSection;
 
 function ImageCard() {
   const t = useT();

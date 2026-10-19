@@ -1,6 +1,6 @@
 import type { RuntimeConfigValue } from "@/lib/types";
 
-export type FieldPage = "runtime" | "advanced" | "memory" | "browser" | "network" | "image";
+export type FieldPage = "behavior" | "security" | "advanced" | "memory" | "browser" | "network" | "image" | "runtime";
 export type FieldKind = "toggle" | "boolean" | "text" | "nullable" | "number" | "select" | "list" | "preset";
 export type RuntimeField = {
   path: string; page: FieldPage; group: string; kind: FieldKind;
@@ -10,17 +10,17 @@ export type RuntimeField = {
 };
 
 // Hand port of upstream system/runtime-config-fields.ts. Fields with `card` are rendered inside the
-// web / image capability cards, so the generic System/Advanced renderer skips them (visibleFields).
-const GROUPS: Record<string, { page: FieldPage; enabledBy?: string }> = {
-  identity: { page: "runtime" }, memory: { page: "memory" }, chat: { page: "advanced" },
-  execution: { page: "advanced" }, sessions: { page: "runtime" }, tools: { page: "runtime" },
+// web / image capability cards, so the generic Behavior/Security/Advanced renderer skips them (visibleFields).
+export const GROUPS: Record<string, { page: FieldPage; enabledBy?: string }> = {
+  identity: { page: "behavior" }, memory: { page: "memory" }, chat: { page: "behavior" },
+  execution: { page: "behavior" }, sessions: { page: "behavior" }, tools: { page: "behavior" },
   web: { page: "browser" }, network: { page: "network" }, storage: { page: "image" },
-  shell: { page: "advanced", enabledBy: "tools.exec.enable" }, safety: { page: "advanced" },
+  shell: { page: "security", enabledBy: "tools.exec.enable" }, safety: { page: "security" },
   cli: { page: "advanced", enabledBy: "tools.cli_apps.enable" }, gateway: { page: "advanced" }, api: { page: "advanced" },
 };
 
-type Raw = Omit<RuntimeField, "page" | "enabledBy">;
-const RAW: Raw[] = [
+export type Raw = Omit<RuntimeField, "page" | "enabledBy">;
+export const RAW: Raw[] = [
   { group: "identity", path: "agents.defaults.timezone_mode", kind: "toggle", options: ["manual", "auto"] },
   { group: "identity", path: "agents.defaults.timezone", kind: "text", when: { path: "agents.defaults.timezone_mode", value: "manual" } },
   { group: "memory", path: "agents.defaults.dream.enabled", kind: "boolean" },
