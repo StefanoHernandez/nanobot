@@ -989,7 +989,13 @@
       "not_installed": "Not installed",
       "unsupported": "Unsupported"
     },
-    "empty": "No CLI apps available"
+    "empty": "No CLI apps available",
+    "searchPlaceholder": "Search...",
+    "searchEmpty": "No results for \"{{query}}\"",
+    "lockFullPower": "A full-power device is required",
+    "lockRemoteDisabled": "Remote installation disabled: enable it from the browser on the server, in Settings",
+    "lockUnsupportedEnv": "Automatic installation not supported in this environment. Install manually: {{command}}",
+    "npxCacheBroken": "The npx cache is corrupted: run `npm cache clean --force` on the server and try again."
   },
   "plugins": {
     "title": "Plugins",
@@ -1029,7 +1035,10 @@
     "tools": "Tools",
     "config": "Configuration",
     "save": "Save",
-    "empty": "No MCP presets available"
+    "empty": "No MCP presets available",
+    "failureReason": "Error: {{reason}}",
+    "npxCacheBroken": "The npx cache is corrupted: run `npm cache clean --force` on the server and try again.",
+    "testSuccess": "Test completed successfully"
   },
   "skills": {
     "title": "Skills",

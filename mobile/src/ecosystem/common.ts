@@ -18,6 +18,22 @@ export const isPolicyError = (e: unknown): boolean => (e as { status?: number } 
 
 /** M8: Maps ecosystem error toasts to i18n generic messages, never raw e.message. */
 export function toastEcosystemError(e: unknown, t: (...args: any[]) => any): void {
+  const code = (e as { code?: string } | null)?.code;
+  if (code === "full_power_required") {
+    toast.show(t("apps.lockFullPower"));
+    return;
+  }
+  if (code === "remote_install_disabled") {
+    toast.show(t("apps.lockRemoteDisabled"));
+    return;
+  }
+  if (code === "unsupported_install_env") {
+    const rawMsg = (e as { message?: string } | null)?.message || "";
+    const cmdMatch = rawMsg.match(/`([^`]+)`/);
+    const command = cmdMatch ? cmdMatch[1] : "";
+    toast.show(t("apps.lockUnsupportedEnv", { command }));
+    return;
+  }
   if (isPolicyError(e)) {
     toast.show(t("apps.gateBanner"));
   } else if ((e as { timedOut?: boolean; status?: number } | null)?.timedOut || (e as { status?: number } | null)?.status === 504) {

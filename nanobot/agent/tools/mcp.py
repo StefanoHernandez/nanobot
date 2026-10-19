@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import tempfile  # Fork: stdio stderr capture
 import urllib.parse
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping
 from contextlib import AsyncExitStack, suppress
@@ -62,6 +63,65 @@ _SANITIZE_RE = re.compile(r"_+")
 _ReconnectCallback = Callable[[str, str, Tool], Awaitable[Tool | None]]
 MCPServerLoader = Callable[[], Mapping[str, "MCPServerConfig"]]
 MCPRuntimeStatus = Literal["connecting", "connected", "failed"]
+
+# Fork: regexes for secret scrubbing in MCP error messages
+_SECRET_QUERY_RE = re.compile(
+    r"([?&](?:[^=&]*(?:api[_-]?key|token|secret|password|bearer)[^=&]*)=)[^&#\s]+",
+    re.IGNORECASE,
+)
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"((?:api[_-]?key|token|secret|password|bearer)(?:[=:]|\s+))[^,\s'\"&]+",
+    re.IGNORECASE,
+)
+_BEARER_RE = re.compile(r"(Bearer\s+)[A-Za-z0-9_\-\.~+/]+=*", re.IGNORECASE)
+_BASIC_AUTH_URL_RE = re.compile(r"(://[^:]+:)[^@]+(@)", re.IGNORECASE)
+
+
+_SECRET_KEYWORD_RE = re.compile(
+    r"\b[A-Za-z0-9_.-]*(?:secret|password|apikey|api_key)[A-Za-z0-9_.-]*\b",
+    re.IGNORECASE,
+)
+
+
+# Fork: scrub secrets from MCP error messages and cap length at 300 chars
+def scrub_mcp_error(text: str, max_chars: int = 300) -> str:
+    scrubbed = _SECRET_QUERY_RE.sub(r"\1<redacted>", text.strip())
+    scrubbed = _SECRET_ASSIGNMENT_RE.sub(r"\1<redacted>", scrubbed)
+    scrubbed = _BEARER_RE.sub(r"\1<redacted>", scrubbed)
+    scrubbed = _BASIC_AUTH_URL_RE.sub(r"\1<redacted>\2", scrubbed)
+    scrubbed = _SECRET_KEYWORD_RE.sub("<redacted>", scrubbed)
+    return scrubbed[:max_chars] if scrubbed else "Connection failed."
+
+
+# Fork: global store of last MCP failure details
+_LAST_MCP_FAILURES: dict[str, dict[str, Any]] = {}
+
+
+def get_last_mcp_failure(name: str) -> dict[str, Any] | None:
+    # Fork: get last recorded MCP connection failure details
+    return _LAST_MCP_FAILURES.get(name)
+
+
+def record_mcp_failure(
+    name: str,
+    reason: str,
+    *,
+    error_hint: str | None = None,
+    hint_message: str | None = None,
+) -> None:
+    # Fork: record MCP connection failure details (scrubbed, <= 300 chars)
+    scrubbed = scrub_mcp_error(reason, 300)
+    _LAST_MCP_FAILURES[name] = {
+        "failure_reason": scrubbed,
+        "error": scrubbed,
+        "error_hint": error_hint,
+        "hint_message": hint_message,
+    }
+
+
+def clear_mcp_failure(name: str) -> None:
+    # Fork: clear recorded failure details for an MCP server
+    _LAST_MCP_FAILURES.pop(name, None)
 
 
 class MCPConnection(Protocol):
@@ -1023,6 +1083,8 @@ async def connect_mcp_servers(
     async def open_single_server(
         name: str, cfg: MCPServerConfig, server_stack: AsyncExitStack
     ) -> bool:
+        # Fork: track temporary stderr file for stdio diagnostics
+        stderr_file = None
         try:
             transport_type = cfg.type
             if not transport_type:
@@ -1034,6 +1096,7 @@ async def connect_mcp_servers(
                     )
                 else:
                     logger.warning("MCP server '{}': no command or url configured, skipping", name)
+                    record_mcp_failure(name, "No command or url configured")
                     return False
 
             if transport_type in {"sse", "streamableHttp"}:
@@ -1045,6 +1108,7 @@ async def connect_mcp_servers(
                         _redact_url(cfg.url),
                         error,
                     )
+                    record_mcp_failure(name, f"Blocked unsafe URL: {error}")
                     return False
 
             oauth_auth: httpx.Auth | None = None
@@ -1054,6 +1118,7 @@ async def connect_mcp_servers(
                         "MCP server '{}': OAuth requires an SSE or Streamable HTTP transport",
                         name,
                     )
+                    record_mcp_failure(name, "OAuth requires an SSE or Streamable HTTP transport")
                     return False
                 from nanobot.agent.tools.mcp_oauth import (
                     MCPAuthorizationRequiredError,
@@ -1068,6 +1133,7 @@ async def connect_mcp_servers(
                     )
                 except MCPAuthorizationRequiredError:
                     logger.info("MCP server '{}': waiting for browser authorization", name)
+                    record_mcp_failure(name, "Waiting for browser authorization")
                     return False
 
             if transport_type == "stdio":
@@ -1082,10 +1148,18 @@ async def connect_mcp_servers(
                     env=env,
                     cwd=cfg.cwd or None,
                 )
-                read, write = await server_stack.enter_async_context(stdio_client(params))
+                # Fork: capture stderr for stdio child process
+                stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
+                server_stack.callback(stderr_file.close)
+                try:
+                    stdio_ctx = stdio_client(params, errlog=stderr_file)
+                except TypeError:
+                    stdio_ctx = stdio_client(params)
+                read, write = await server_stack.enter_async_context(stdio_ctx)
             elif transport_type == "sse":
                 if not await _probe_http_url(cfg.url):
                     logger.warning("MCP server '{}': {} unreachable, skipping", name, _redact_url(cfg.url))
+                    record_mcp_failure(name, f"Endpoint {_redact_url(cfg.url)} unreachable")
                     return False
 
                 def httpx_client_factory(
@@ -1118,6 +1192,7 @@ async def connect_mcp_servers(
             elif transport_type == "streamableHttp":
                 if not await _probe_http_url(cfg.url):
                     logger.warning("MCP server '{}': {} unreachable, skipping", name, _redact_url(cfg.url))
+                    record_mcp_failure(name, f"Endpoint {_redact_url(cfg.url)} unreachable")
                     return False
 
                 http_client_kwargs: dict[str, Any] = {
@@ -1143,6 +1218,7 @@ async def connect_mcp_servers(
                 )
             else:
                 logger.warning("MCP server '{}': unknown transport type '{}'", name, transport_type)
+                record_mcp_failure(name, f"Unknown transport type '{transport_type}'")
                 return False
 
             read = _filter_malformed_mcp_progress_notifications(read, name)
@@ -1257,13 +1333,56 @@ async def connect_mcp_servers(
             logger.info(
                 "MCP server '{}': connected, {} capabilities registered", name, registered_count
             )
+            # Fork: clear failure details on successful connection
+            clear_mcp_failure(name)
             return True
 
         except Exception as e:
             hint = ""
-            text = str(e).lower()
+            text = str(e).strip()
+            # Fork: extract child stderr tail if available
+            stderr_tail = ""
+            if stderr_file is not None:
+                try:
+                    stderr_file.seek(0)
+                    stderr_tail = stderr_file.read().strip()
+                except Exception:
+                    pass
+
+            combined_err = f"{text}\n{stderr_tail}".strip()
+            error_hint = None
+            hint_message = None
             if any(
-                marker in text
+                marker in combined_err
+                for marker in (
+                    "ERR_MODULE_NOT_FOUND",
+                    "npm ERR! code ENOENT",
+                    "npm ERR! code E404",
+                    "npm ERR!",
+                )
+            ):
+                error_hint = "npx_cache_broken"
+                hint_message = (
+                    "Cache npx corrotta o modulo mancante. Prova a svuotare ~/.npm o reinstallare il pacchetto."
+                )
+
+            if stderr_tail and not text:
+                chosen_err = stderr_tail
+            elif stderr_tail and text:
+                chosen_err = f"{text}: {stderr_tail[-200:]}"
+            else:
+                chosen_err = text or "Connection failed."
+
+            # Fork: record failure details for server
+            record_mcp_failure(
+                name,
+                chosen_err,
+                error_hint=error_hint,
+                hint_message=hint_message,
+            )
+
+            if any(
+                marker in combined_err.lower()
                 for marker in (
                     "parse error",
                     "invalid json",

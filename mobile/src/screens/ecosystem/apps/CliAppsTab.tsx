@@ -1,19 +1,25 @@
 import React, { useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useT } from "../../../i18n";
-import { Button, Dialog } from "../../../ui/components";
+import { Button, Dialog, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useCliApps } from "../../../ecosystem/apps";
 import { toastEcosystemError } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
+import { filterEcosystemItems } from "./search";
 import type { CliAppInfo } from "@/lib/types";
 
 export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
   const t = useT();
   const th = useTheme();
   const { apps, loading, refresh, install, update, uninstall, test: testApp } = useCliApps();
+  const privileged = usePrivileged();
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [inFlightApps, setInFlightApps] = useState<Set<string>>(new Set());
+  const [appErrors, setAppErrors] = useState<Record<string, { code?: string; message?: string }>>({});
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     type: "install" | "update" | "uninstall";
@@ -43,11 +49,19 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
       } else if (type === "uninstall") {
         res = await uninstall(app.name);
       }
+      setAppErrors((prev) => {
+        const next = { ...prev };
+        delete next[app.name];
+        return next;
+      });
 
       if (res?.timedOut) {
         toast.show(t("apps.timedOut"));
       }
     } catch (e) {
+      const code = (e as any)?.code;
+      const message = (e as any)?.message;
+      setAppErrors((prev) => ({ ...prev, [app.name]: { code, message } }));
       toastEcosystemError(e, t);
     } finally {
       setInFlightApps((prev) => {
@@ -62,8 +76,16 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
     setInFlightApps((prev) => new Set(prev).add(app.name));
     try {
       await testApp(app.name);
+      setAppErrors((prev) => {
+        const next = { ...prev };
+        delete next[app.name];
+        return next;
+      });
       toast.show(t("common.success", "Success"));
     } catch (e) {
+      const code = (e as any)?.code;
+      const message = (e as any)?.message;
+      setAppErrors((prev) => ({ ...prev, [app.name]: { code, message } }));
       toastEcosystemError(e, t);
     } finally {
       setInFlightApps((prev) => {
@@ -72,6 +94,24 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
         return next;
       });
     }
+  };
+
+  const getLockReason = (app: CliAppInfo): string | null => {
+    const isInstalled = app.installed || app.status === "installed";
+    const err = appErrors[app.name];
+    const code = err?.code;
+    if (code === "full_power_required") return t("apps.lockFullPower");
+    if (code === "remote_install_disabled") return t("apps.lockRemoteDisabled");
+    if (code === "unsupported_install_env") {
+      const rawMsg = err?.message || "";
+      const cmdMatch = rawMsg.match(/`([^`]+)`/);
+      return t("apps.lockUnsupportedEnv", { command: cmdMatch ? cmdMatch[1] : "" });
+    }
+    if (!isInstalled) {
+      if (!privileged) return t("apps.lockFullPower");
+      if (!gateAllowed) return t("apps.lockRemoteDisabled");
+    }
+    return null;
   };
 
   const appName = confirmDialog.app?.display_name || confirmDialog.app?.name || "";
@@ -96,24 +136,40 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
     }
   };
 
+  const filteredApps = filterEcosystemItems(apps, searchQuery);
+
   return (
     <View style={styles.container}>
+      <View style={styles.searchSection}>
+        <TextField
+          label=""
+          placeholder={t("apps.searchPlaceholder")}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} />}
       >
-        {apps.length === 0 && !loading ? (
+        {filteredApps.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
-              {t("apps.empty")}
+              {searchQuery.trim()
+                ? t("apps.searchEmpty", { query: searchQuery.trim() })
+                : t("apps.empty")}
             </Text>
           </View>
         ) : (
-          apps.map((app) => {
+          filteredApps.map((app) => {
             const isOperating = inFlightApps.has(app.name);
             const version = app.manifest?.version || (app as any).version;
             const statusKey = `apps.status.${app.status}`;
             const statusLabel = t(statusKey, app.status);
+            const lockReason = getLockReason(app);
 
             return (
               <View
@@ -177,6 +233,15 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
                   </Text>
                 ) : null}
 
+                {lockReason ? (
+                  <View style={styles.lockRow}>
+                    <MaterialCommunityIcons name="lock-outline" size={14} color={th.colors.mutedForeground} />
+                    <Text style={[styles.lockText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+                      {lockReason}
+                    </Text>
+                  </View>
+                ) : null}
+
                 <View style={styles.cardActions}>
                   {isOperating ? (
                     <View style={styles.spinnerWrapper}>
@@ -237,6 +302,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  searchSection: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
   scrollContent: {
     padding: 16,
     gap: 12,
@@ -283,6 +353,17 @@ const styles = StyleSheet.create({
   appDescription: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  lockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  lockText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
   },
   cardActions: {
     flexDirection: "row",

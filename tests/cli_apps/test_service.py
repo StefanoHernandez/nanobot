@@ -11,7 +11,13 @@ import pytest
 
 from nanobot.agent import plugins as agent_plugins
 from nanobot.agent.skills import SkillsLoader
-from nanobot.apps.cli.service import CliAppError, CliAppManager, CliAppsRuntimeConfig
+from nanobot.apps.cli.service import (
+    CliAppError,
+    CliAppManager,
+    CliAppsRuntimeConfig,
+    _resolved_cli_search_path,
+    _which,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -1100,3 +1106,91 @@ def test_uninstall_uses_uv_pip_when_pip_unavailable(
         sys.executable,
         "suno-cli",
     ]
+
+
+# Fork: test resolved search path finds app in npm prefix bin
+def test_cli_search_path_finds_app_in_npm_prefix_bin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    npm_prefix = tmp_path / "npm_prefix"
+    bin_dir = npm_prefix / "bin"
+    bin_dir.mkdir(parents=True)
+    fake_cli = bin_dir / "my-npm-cli"
+    fake_cli.write_text("#!/bin/sh\necho 'hello from npm cli'\n", encoding="utf-8")
+    fake_cli.chmod(0o755)
+
+    orig_run = subprocess.run
+
+    def fake_subprocess_run(cmd, *args, **kwargs):
+        if cmd == ["npm", "prefix", "-g"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{npm_prefix}\n", stderr="")
+        if cmd == ["uv", "tool", "dir", "--bin"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="not found")
+        return orig_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("nanobot.apps.cli.service.subprocess.run", fake_subprocess_run)
+    monkeypatch.setattr("nanobot.apps.cli.service.sys.platform", "linux")
+    _resolved_cli_search_path.cache_clear()
+    try:
+        resolved_path = _resolved_cli_search_path()
+        assert str(bin_dir) in resolved_path.split(":")
+        assert _which("my-npm-cli") == str(fake_cli)
+
+        manager = _manager(tmp_path)
+        app_def = {
+            "name": "my-npm-cli",
+            "display_name": "My NPM CLI",
+            "entry_point": "my-npm-cli",
+            "install_strategy": "npm",
+            "install_cmd": "npm install -g my-npm-cli",
+        }
+        _write_cache(manager._cache_path("public"), {"meta": {}, "clis": [app_def]})
+        manager._save_installed({"my-npm-cli": {"entry_point": "my-npm-cli"}})
+
+        payload = manager.payload()
+        app_payload = next(a for a in payload["apps"] if a["name"] == "my-npm-cli")
+        assert app_payload["status"] == "installed"
+        assert app_payload["available"] is True
+
+        out = manager.run("my-npm-cli")
+        assert "hello from npm cli" in out
+    finally:
+        _resolved_cli_search_path.cache_clear()
+
+
+# Fork: test fallback when npm fails
+def test_cli_search_path_fallback_when_npm_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(cmd, *args, **kwargs):
+        raise FileNotFoundError("command not found")
+
+    monkeypatch.setattr("nanobot.apps.cli.service.subprocess.run", fake_run)
+    _resolved_cli_search_path.cache_clear()
+    try:
+        path = _resolved_cli_search_path()
+        assert path
+    finally:
+        _resolved_cli_search_path.cache_clear()
+
+
+# Fork: test Windows prefix resolution does not append /bin
+def test_cli_search_path_windows_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    win_prefix = r"C:\Users\tester\AppData\Roaming\npm"
+
+    def fake_run(cmd, *args, **kwargs):
+        if cmd == ["npm", "prefix", "-g"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{win_prefix}\n", stderr="")
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+
+    monkeypatch.setattr("nanobot.apps.cli.service.subprocess.run", fake_run)
+    monkeypatch.setattr("nanobot.apps.cli.service.sys.platform", "win32")
+    monkeypatch.setattr("nanobot.apps.cli.service.os.pathsep", ";")
+    _resolved_cli_search_path.cache_clear()
+    try:
+        path = _resolved_cli_search_path()
+        parts = path.split(";")
+        assert win_prefix in parts
+        assert f"{win_prefix}\\bin" not in parts
+    finally:
+        _resolved_cli_search_path.cache_clear()
+

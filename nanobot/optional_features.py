@@ -32,11 +32,13 @@ from nanobot.channels.registry import channel_default_enabled
 from nanobot.config.schema import Config
 
 
+# Fork: support structured error code in OptionalFeatureError
 class OptionalFeatureError(Exception):
-    def __init__(self, message: str, *, status: int = 400) -> None:
+    def __init__(self, message: str, *, status: int = 400, code: str | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.status = status
+        self.code = code
 
 
 @dataclass
@@ -655,10 +657,12 @@ def _install_feature_dependencies(
     if not dependencies or extra_installed(name, dependencies):
         return False
     if not allow_install:
+        # Fork: add code="remote_install_disabled"
         raise OptionalFeatureError(
             "Installing optional features from a remote WebUI is disabled. "
             "Run this action from localhost or set tools.webuiAllowRemotePackageInstall to true.",
             status=403,
+            code="remote_install_disabled",
         )
     result = install_extra(
         name,
@@ -668,6 +672,24 @@ def _install_feature_dependencies(
     if not result.ok:
         failed = command_text(result.failed_cmd or result.pip_cmd)
         detail = f": {result.output}" if result.output else ""
+        # Fork: detect unsupported installation environment and return manual install command
+        out_lower = (result.output or "").lower()
+        if (
+            "externally-managed-environment" in out_lower
+            or "no module named pip" in out_lower
+            or missing_pip(subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=result.output or ""))
+        ):
+            manual_cmd = (
+                f"uv tool install --upgrade --with 'nanobot-ai[{name}]' nanobot-ai"
+                if "uv" in sys.executable
+                else f"pip install 'nanobot-ai[{name}]'"
+            )
+            raise OptionalFeatureError(
+                f"Automatic package install is not supported in this environment: {result.output or 'pip is unavailable'}. "
+                f"Install manually: `{manual_cmd}`",
+                status=500,
+                code="unsupported_install_env",
+            )
         raise OptionalFeatureError(f"Failed: {failed}{detail}", status=500)
     return True
 

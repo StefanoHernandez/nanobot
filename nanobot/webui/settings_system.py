@@ -553,13 +553,15 @@ class SystemSettingsHandler:
                 config_path=self.settings.config.path,
             )
         except WebUISettingsError as exc:
-            return SettingsRouteResult.failure(exc.status, exc.message)
+            return SettingsRouteResult.failure(exc.status, exc.message, code=getattr(exc, "code", None))
         except Exception as exc:
             status = getattr(exc, "status", 500)
             message = getattr(exc, "message", str(exc))
+            code = getattr(exc, "code", None)
             if status >= 500:
                 self.logger.exception("CLI Apps action '{}' failed", action)
-            return SettingsRouteResult.failure(status, message)
+            # Fork: propagate structured refusal/error code
+            return SettingsRouteResult.failure(status, message, code=code)
         return SettingsRouteResult.success(payload)
 
     async def _features(
@@ -610,6 +612,13 @@ class SystemSettingsHandler:
             and (query_first(request.query, "install_only") or "").strip().lower()
             in {"1", "true", "yes"}
         )
+        # Fork: enabling features requires full power / local browser
+        if action == "enable" and not install_only and not request.local_browser:
+            return SettingsRouteResult.failure(
+                403,
+                "Enabling features requires full power.",
+                code="full_power_required",
+            )
         try:
             payload = await asyncio.to_thread(
                 self._nanobot_features_action,
@@ -622,7 +631,8 @@ class SystemSettingsHandler:
                 ),
             )
         except OptionalFeatureError as exc:
-            return SettingsRouteResult.failure(exc.status, exc.message)
+            # Fork: pass structured refusal code
+            return SettingsRouteResult.failure(exc.status, exc.message, code=exc.code)
         except Exception as exc:
             status = getattr(exc, "status", 500)
             message = getattr(exc, "message", str(exc))
@@ -791,9 +801,11 @@ class SystemSettingsHandler:
                 allow_install=self.allow_feature_package_install(request),
             )
         except OptionalFeatureError as exc:
+            # Fork: propagate structured refusal/error code
             return SettingsRouteResult.failure(
                 exc.status,
                 f"Settings saved, but {exc.message}",
+                code=exc.code,
             )
         except Exception as exc:
             self.logger.exception(
@@ -1041,12 +1053,14 @@ class SystemSettingsHandler:
         except Exception as exc:
             status = getattr(exc, "status", 500)
             message = getattr(exc, "message", str(exc))
+            code = getattr(exc, "code", None)
             if status >= 500:
                 self.logger.exception(
                     "MCP preset action '{}' failed",
                     action or "list",
                 )
-            return SettingsRouteResult.failure(status, message)
+            # Fork: propagate structured refusal/error code
+            return SettingsRouteResult.failure(status, message, code=code)
         return SettingsRouteResult.success(
             payload,
             decorate_restart=action is not None,

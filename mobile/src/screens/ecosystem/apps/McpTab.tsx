@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useT } from "../../../i18n";
-import { Button, Dialog } from "../../../ui/components";
+import { Button, Dialog, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useMcp } from "../../../ecosystem/mcp";
 import { toastEcosystemError } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
+import { filterEcosystemItems } from "./search";
 import { McpSheet } from "./McpSheet";
 import { McpOAuthSheet } from "./McpOAuthSheet";
 import type { McpPresetInfo } from "@/lib/types";
@@ -14,11 +17,14 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
   const t = useT();
   const th = useTheme();
   const { presets, loading, refresh, enable, disable, remove, test: testPreset, reconnect, tools } = useMcp();
+  const privileged = usePrivileged();
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<McpPresetInfo | null>(null);
   const [oauthPresetName, setOauthPresetName] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<McpPresetInfo | null>(null);
   const [enableTarget, setEnableTarget] = useState<McpPresetInfo | null>(null);
+  const [mcpErrors, setMcpErrors] = useState<Record<string, { code?: string; message?: string }>>({});
 
   const handleToggle = async (preset: McpPresetInfo, value: boolean) => {
     if (value) {
@@ -26,7 +32,15 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
     } else {
       try {
         await disable(preset.name);
+        setMcpErrors((prev) => {
+          const next = { ...prev };
+          delete next[preset.name];
+          return next;
+        });
       } catch (e) {
+        const code = (e as any)?.code;
+        const message = (e as any)?.message;
+        setMcpErrors((prev) => ({ ...prev, [preset.name]: { code, message } }));
         toastEcosystemError(e, t);
       }
     }
@@ -39,16 +53,43 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
 
     try {
       await enable(target.name);
+      setMcpErrors((prev) => {
+        const next = { ...prev };
+        delete next[target.name];
+        return next;
+      });
     } catch (e) {
+      const code = (e as any)?.code;
+      const message = (e as any)?.message;
+      setMcpErrors((prev) => ({ ...prev, [target.name]: { code, message } }));
       toastEcosystemError(e, t);
     }
   };
 
   const handleTest = async (preset: McpPresetInfo) => {
     try {
-      await testPreset(preset.name);
-      toast.show(t("common.success", "Success"));
+      const res = await testPreset(preset.name);
+      const action = (res as any)?.last_action;
+      if (action && !action.ok) {
+        setMcpErrors((prev) => ({
+          ...prev,
+          [preset.name]: {
+            code: action.error_hint,
+            message: action.failure_reason || action.error,
+          },
+        }));
+      } else {
+        setMcpErrors((prev) => {
+          const next = { ...prev };
+          delete next[preset.name];
+          return next;
+        });
+        toast.show(t("common.success", "Success"));
+      }
     } catch (e) {
+      const code = (e as any)?.code;
+      const message = (e as any)?.message;
+      setMcpErrors((prev) => ({ ...prev, [preset.name]: { code, message } }));
       toastEcosystemError(e, t);
     }
   };
@@ -58,6 +99,9 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       await reconnect(preset.name);
       toast.show(t("common.success", "Success"));
     } catch (e) {
+      const code = (e as any)?.code;
+      const message = (e as any)?.message;
+      setMcpErrors((prev) => ({ ...prev, [preset.name]: { code, message } }));
       toastEcosystemError(e, t);
     }
   };
@@ -69,28 +113,71 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
 
     try {
       await remove(target.name);
+      setMcpErrors((prev) => {
+        const next = { ...prev };
+        delete next[target.name];
+        return next;
+      });
     } catch (e) {
       toastEcosystemError(e, t);
     }
   };
 
+  const getLockReason = (preset: McpPresetInfo): string | null => {
+    const err = mcpErrors[preset.name];
+    const code = err?.code;
+    if (code === "full_power_required") return t("apps.lockFullPower");
+    if (code === "remote_install_disabled") return t("apps.lockRemoteDisabled");
+    if (code === "unsupported_install_env") {
+      const rawMsg = err?.message || "";
+      const cmdMatch = rawMsg.match(/`([^`]+)`/);
+      return t("apps.lockUnsupportedEnv", { command: cmdMatch ? cmdMatch[1] : "" });
+    }
+    if (!preset.enabled && !gateAllowed) {
+      return !privileged ? t("apps.lockFullPower") : t("apps.lockRemoteDisabled");
+    }
+    return null;
+  };
+
+  const filteredPresets = filterEcosystemItems(presets, searchQuery);
+
   return (
     <View style={styles.container}>
+      <View style={styles.searchSection}>
+        <TextField
+          label=""
+          placeholder={t("apps.searchPlaceholder")}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} />}
       >
-        {presets.length === 0 && !loading ? (
+        {filteredPresets.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
-              {t("mcp.empty")}
+              {searchQuery.trim()
+                ? t("apps.searchEmpty", { query: searchQuery.trim() })
+                : t("mcp.empty")}
             </Text>
           </View>
         ) : (
-          presets.map((preset) => {
+          filteredPresets.map((preset) => {
             const isOAuth = preset.auth === "oauth" || preset.transport === "oauth";
             const toolCount = preset.tool_count ?? preset.tool_names?.length ?? 0;
             const switchDisabled = !gateAllowed && !preset.enabled;
+            const failureReason = (preset as any).failure_reason || preset.error;
+            const isFailed = preset.runtime_status === "failed" || !!failureReason;
+            const isNpxCacheBroken =
+              (preset as any).error_hint === "npx_cache_broken" ||
+              failureReason?.includes("ERR_MODULE_NOT_FOUND") ||
+              failureReason?.includes("npm ERR");
+            const lockReason = getLockReason(preset);
 
             return (
               <Pressable
@@ -183,6 +270,28 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                   </Text>
                 ) : null}
 
+                {isFailed && failureReason ? (
+                  <View style={[styles.failureBox, { backgroundColor: th.colors.muted, borderRadius: th.radius.sm }]}>
+                    <Text style={[styles.failureText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
+                      {t("mcp.failureReason", { reason: failureReason })}
+                    </Text>
+                    {isNpxCacheBroken ? (
+                      <Text style={[styles.hintText, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                        {t("mcp.npxCacheBroken")}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {lockReason ? (
+                  <View style={styles.lockRow}>
+                    <MaterialCommunityIcons name="lock-outline" size={14} color={th.colors.mutedForeground} />
+                    <Text style={[styles.lockText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+                      {lockReason}
+                    </Text>
+                  </View>
+                ) : null}
+
                 <View style={styles.actionsRow}>
                   {isOAuth ? (
                     <Button
@@ -224,6 +333,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
         preset={selectedPreset}
         gateAllowed={gateAllowed}
         enable={enable}
+        test={testPreset}
         tools={tools}
         onClose={() => setSelectedPreset(null)}
         onOpenOAuth={(name) => {
@@ -242,9 +352,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       <Dialog
         open={!!enableTarget}
         title={t("mcp.enableTitle")}
-        message={t("mcp.enableMessage", {
-          name: enableTarget?.display_name || enableTarget?.name || "",
-        })}
+        message={t("mcp.enableMessage", { name: enableTarget?.display_name || enableTarget?.name || "" })}
         confirmLabel={t("apps.confirm")}
         cancelLabel={t("apps.cancel")}
         onConfirm={() => void handleConfirmEnable()}
@@ -254,10 +362,8 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       <Dialog
         open={!!removeTarget}
         title={t("mcp.removeTitle")}
-        message={t("mcp.removeMessage", {
-          name: removeTarget?.display_name || removeTarget?.name || "",
-        })}
-        destructive={true}
+        message={t("mcp.removeMessage", { name: removeTarget?.display_name || removeTarget?.name || "" })}
+        destructive
         confirmLabel={t("apps.confirm")}
         cancelLabel={t("apps.cancel")}
         onConfirm={() => void handleConfirmRemove()}
@@ -270,6 +376,11 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  searchSection: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   scrollContent: {
     padding: 16,
@@ -324,6 +435,30 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  failureBox: {
+    padding: 10,
+    gap: 4,
+  },
+  failureText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  hintText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  lockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  lockText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
   },
   actionsRow: {
     flexDirection: "row",

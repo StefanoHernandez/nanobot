@@ -15,6 +15,7 @@ export function McpSheet({
   onClose,
   onOpenOAuth,
   enable: propEnable,
+  test: propTest,
   tools: propTools,
 }: {
   open: boolean;
@@ -23,6 +24,7 @@ export function McpSheet({
   onClose: () => void;
   onOpenOAuth?: (presetName: string) => void;
   enable?: (name: string, values?: Record<string, string>) => Promise<any>;
+  test?: (name: string) => Promise<any>;
   tools?: (name: string, enabledTools: string[]) => Promise<any>;
 }) {
   const t = useT();
@@ -32,6 +34,13 @@ export function McpSheet({
   const [editingSecrets, setEditingSecrets] = useState<Record<string, boolean>>({});
   const [enabledTools, setEnabledTools] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    message?: string;
+    failure_reason?: string;
+    error_hint?: string;
+  } | null>(null);
   const [showConfirmEnable, setShowConfirmEnable] = useState(false);
 
   useEffect(() => {
@@ -40,6 +49,7 @@ export function McpSheet({
       setEditingSecrets({});
       setEnabledTools(preset.enabled_tools ?? preset.tool_names ?? []);
       setShowConfirmEnable(false);
+      setTestResult(null);
     }
   }, [preset]);
 
@@ -62,6 +72,36 @@ export function McpSheet({
     }
   };
 
+  const handleTestInSheet = async () => {
+    if (!propTest) return;
+    setTesting(true);
+    try {
+      const res = await propTest(preset.name);
+      const action = (res as any)?.last_action;
+      if (action) {
+        setTestResult({
+          ok: !!action.ok,
+          message: action.message,
+          failure_reason: action.failure_reason || action.error,
+          error_hint: action.error_hint,
+        });
+        if (action.ok) {
+          toast.show(action.message || t("mcp.testSuccess", "Test completato con successo"));
+        }
+      } else {
+        setTestResult({ ok: true, message: t("mcp.testSuccess", "Test completato con successo") });
+        toast.show(t("mcp.testSuccess", "Test completato con successo"));
+      }
+    } catch (e) {
+      const code = (e as any)?.code;
+      const msg = (e as any)?.message || String(e);
+      setTestResult({ ok: false, failure_reason: msg, error_hint: code });
+      toastEcosystemError(e, t);
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleSaveClick = () => {
     if (!preset.enabled) {
       setShowConfirmEnable(true);
@@ -79,6 +119,19 @@ export function McpSheet({
   const isOAuth = preset.auth === "oauth" || preset.transport === "oauth";
   const saveDisabled = !gateAllowed && !preset.enabled;
 
+  const failureReason = testResult
+    ? (!testResult.ok ? testResult.failure_reason : null)
+    : (preset.runtime_status === "failed" || (preset as any).failure_reason || preset.error
+        ? ((preset as any).failure_reason || preset.error)
+        : null);
+  const isNpxCacheBroken = testResult
+    ? testResult.error_hint === "npx_cache_broken" ||
+      testResult.failure_reason?.includes("ERR_MODULE_NOT_FOUND") ||
+      testResult.failure_reason?.includes("npm ERR")
+    : (preset as any).error_hint === "npx_cache_broken" ||
+      failureReason?.includes("ERR_MODULE_NOT_FOUND") ||
+      failureReason?.includes("npm ERR");
+
   return (
     <>
       <Sheet open={open} title={preset.display_name || preset.name} onClose={onClose} scroll={false}>
@@ -88,6 +141,25 @@ export function McpSheet({
               <Text style={[styles.description, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                 {preset.description}
               </Text>
+            ) : null}
+
+            {failureReason ? (
+              <View style={[styles.failureBox, { backgroundColor: th.colors.muted, borderRadius: th.radius.sm }]}>
+                <Text style={[styles.failureText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
+                  {t("mcp.failureReason", { reason: failureReason })}
+                </Text>
+                {isNpxCacheBroken ? (
+                  <Text style={[styles.hintText, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                    {t("mcp.npxCacheBroken")}
+                  </Text>
+                ) : null}
+              </View>
+            ) : testResult?.ok ? (
+              <View style={[styles.successBox, { backgroundColor: th.colors.brandSoft, borderRadius: th.radius.sm }]}>
+                <Text style={[styles.successText, { color: th.colors.brandSoftForeground, fontFamily: th.font.medium }]}>
+                  {testResult.message || t("mcp.testSuccess", "Test completato con successo")}
+                </Text>
+              </View>
             ) : null}
 
             {isOAuth && onOpenOAuth ? (
@@ -158,6 +230,14 @@ export function McpSheet({
             ) : null}
 
             <View style={styles.actions}>
+              {propTest ? (
+                <Button
+                  title={t("mcp.test")}
+                  variant="secondary"
+                  loading={testing}
+                  onPress={() => void handleTestInSheet()}
+                />
+              ) : null}
               <Button
                 title={t("mcp.save")}
                 variant="primary"
@@ -194,6 +274,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
   },
+  failureBox: {
+    padding: 10,
+    gap: 4,
+    marginBottom: 16,
+  },
+  failureText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  hintText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  successBox: {
+    padding: 10,
+    marginBottom: 16,
+  },
+  successText: {
+    fontSize: 13,
+  },
   oauthRow: {
     marginBottom: 16,
   },
@@ -216,6 +317,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   actions: {
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end",
     marginTop: 12,
     marginBottom: 24,
   },

@@ -20,6 +20,14 @@ from nanobot.agent.plugins import (
     discover_agent_plugins,
     set_agent_plugin_enabled,
 )
+
+# Fork: import failure tracking and error scrubber from mcp tool runtime
+from nanobot.agent.tools.mcp import (
+    clear_mcp_failure,
+    get_last_mcp_failure,
+    record_mcp_failure,
+    scrub_mcp_error,
+)
 from nanobot.agent.tools.mcp_oauth import (
     delete_mcp_oauth_credentials,
     mcp_oauth_has_credentials,
@@ -298,9 +306,18 @@ def _materialize_server(
     if preset.server is None or not preset.install_supported:
         raise McpPresetError(f"{preset.display_name} is not supported yet", status=409)
 
-    cfg = _clone_server(existing or preset.server)
+    # Fork: if existing server has a different transport, start fresh from preset.server
+    if existing is not None and existing.type != preset.server.type:
+        cfg = _clone_server(preset.server)
+        cfg.tool_timeout = existing.tool_timeout
+        cfg.enabled_tools = list(existing.enabled_tools)
+        existing_for_fields = None
+    else:
+        cfg = _clone_server(existing or preset.server)
+        existing_for_fields = existing
+
     for field_spec in preset.fields:
-        value = _resolve_field_value(field_spec, query, existing)
+        value = _resolve_field_value(field_spec, query, existing_for_fields)
         if field_spec.required and not value:
             raise McpPresetError(f"missing {field_spec.label}")
         if not value:
@@ -316,6 +333,17 @@ def _materialize_server(
             cfg.url = _url_with_param(cfg.url, target_name, value)
         elif target_kind == "url":
             cfg.url = value
+
+    # Fork: drop transport-incompatible fields to prevent mcp-client runtime errors
+    if cfg.type in ("streamableHttp", "sse"):
+        cfg.command = ""
+        cfg.args = []
+        cfg.cwd = ""
+    elif cfg.type == "stdio":
+        cfg.url = ""
+        cfg.headers = {}
+        cfg.auth = None
+
     return _with_managed_stdio_cwd(preset.name, cfg)
 
 
@@ -471,7 +499,7 @@ def _preset_payload(preset: McpPreset, configured_servers: dict[str, MCPServerCo
     status = _status_for(preset, cfg)
     configured = cfg is not None and status not in {"missing_credentials", "authorization_required"}
     logo_url = _favicon_url(preset.brand_domain)
-    return {
+    row = {
         "name": preset.name,
         "display_name": preset.display_name,
         "category": preset.category,
@@ -494,6 +522,7 @@ def _preset_payload(preset: McpPreset, configured_servers: dict[str, MCPServerCo
         "source": "preset",
         "manifest": _preset_manifest(preset, logo_url=logo_url),
     }
+    return row
 
 
 def _custom_payload(
@@ -510,7 +539,7 @@ def _custom_payload(
     else:
         status = "missing_dependency" if cfg.command and not _command_available(cfg.command) else "configured"
     configured = status != "authorization_required"
-    return {
+    row = {
         "name": name,
         "display_name": name,
         "category": "custom",
@@ -534,6 +563,15 @@ def _custom_payload(
         "source": "custom",
         "manifest": _custom_manifest(name, cfg),
     }
+    # Fork: attach failure details if known
+    failure = get_last_mcp_failure(name)
+    if failure:
+        row["failure_reason"] = failure["failure_reason"]
+        if failure.get("error_hint"):
+            row["error_hint"] = failure["error_hint"]
+        if failure.get("hint_message"):
+            row["hint_message"] = failure["hint_message"]
+    return row
 
 
 def _agent_plugin_payload(plugin: AgentPlugin) -> dict[str, Any]:
@@ -592,6 +630,24 @@ def mcp_presets_payload(
     }
     if last_action is not None:
         payload["last_action"] = last_action
+        # Fork: project failure info from failed test action onto matching preset row
+        if not last_action.get("ok"):
+            tested_name = str(last_action.get("name") or "")
+            if tested_name:
+                raw_rows: object = payload.get("presets", [])
+                preset_rows = cast(list[object], raw_rows) if isinstance(raw_rows, list) else []
+                for raw_row in preset_rows:
+                    if isinstance(raw_row, dict):
+                        row = cast(dict[str, Any], raw_row)
+                        if str(row.get("name") or "") == tested_name:
+                            if "failure_reason" in last_action:
+                                row["failure_reason"] = last_action["failure_reason"]
+                            if "error" in last_action:
+                                row["error"] = last_action["error"]
+                            if "error_hint" in last_action:
+                                row["error_hint"] = last_action["error_hint"]
+                            if "hint_message" in last_action:
+                                row["hint_message"] = last_action["hint_message"]
     return attach_mcp_runtime_status(payload, runtime_status)
 
 
@@ -624,8 +680,20 @@ def attach_mcp_runtime_status(
             and (row.get("configured") is True or oauth_authorization_failed)
         ):
             row["runtime_status"] = status
+            # Fork: attach failure details when status is failed
+            if status == "failed" and isinstance(name, str):
+                failure = get_last_mcp_failure(name)
+                if failure:
+                    row["failure_reason"] = failure["failure_reason"]
+                    if failure.get("error_hint"):
+                        row["error_hint"] = failure["error_hint"]
+                    if failure.get("hint_message"):
+                        row["hint_message"] = failure["hint_message"]
         else:
             row.pop("runtime_status", None)
+            row.pop("failure_reason", None)
+            row.pop("error_hint", None)
+            row.pop("hint_message", None)
         rows.append(row)
     projected["presets"] = rows
     return projected
@@ -695,9 +763,8 @@ def mcp_reconnect_action(
 
 
 def _scrub_test_error(text: str) -> str:
-    scrubbed = _SECRET_QUERY_RE.sub(r"\1<redacted>", text.strip())
-    scrubbed = _SECRET_ASSIGNMENT_RE.sub(r"\1<redacted>", scrubbed)
-    return scrubbed[:400] if scrubbed else "Connection failed."
+    # Fork: delegate to scrub_mcp_error with 300 char limit
+    return scrub_mcp_error(text, 300)
 
 
 def _checked_at() -> str:
@@ -737,11 +804,14 @@ async def mcp_presets_test_action(
             config_path=config_path,
         )
     except ValueError as exc:
+        err = _scrub_test_error(str(exc))
         return mcp_presets_payload(
             last_action={
+                "name": name,
                 "ok": False,
-                "message": _scrub_test_error(str(exc)),
-                "error": _scrub_test_error(str(exc)),
+                "message": err,
+                "error": err,
+                "failure_reason": err,
                 "tool_count": 0,
                 "tool_names": [],
                 "checked_at": _checked_at(),
@@ -757,10 +827,13 @@ async def mcp_presets_test_action(
         "missing_dependency" if cfg.command and not _command_available(cfg.command) else "configured"
     )
     if status == "missing_credentials":
+        msg = f"{display_name} is missing required credentials."
         last_action: dict[str, Any] = {
+            "name": name,
             "ok": False,
-            "message": f"{display_name} is missing required credentials.",
+            "message": msg,
             "error": "missing credentials",
+            "failure_reason": msg,
             "tool_count": 0,
             "tool_names": [],
             "checked_at": _checked_at(),
@@ -768,10 +841,13 @@ async def mcp_presets_test_action(
         return mcp_presets_payload(last_action=last_action, config_path=config_path)
 
     if cfg.command and not _command_available(cfg.command):
+        msg = f"{display_name} requires '{cfg.command}' on PATH."
         last_action = {
+            "name": name,
             "ok": False,
-            "message": f"{display_name} requires '{cfg.command}' on PATH.",
+            "message": msg,
             "error": "missing dependency",
+            "failure_reason": msg,
             "tool_count": 0,
             "tool_names": [],
             "checked_at": _checked_at(),
@@ -794,7 +870,9 @@ async def mcp_presets_test_action(
         )
         ok = name in stacks
         if ok:
+            clear_mcp_failure(name)
             last_action = {
+                "name": name,
                 "ok": True,
                 "message": (
                     f"{display_name} connected with {len(tool_names)} tools."
@@ -806,29 +884,53 @@ async def mcp_presets_test_action(
                 "checked_at": _checked_at(),
             }
         else:
-            last_action = {
-                "ok": False,
-                "message": f"{display_name} did not complete an MCP handshake.",
-                "error": "MCP handshake failed",
-                "tool_count": 0,
-                "tool_names": [],
-                "checked_at": _checked_at(),
-            }
+            failure = get_last_mcp_failure(name)
+            if failure:
+                last_action = {
+                    "name": name,
+                    "ok": False,
+                    "message": f"{display_name} could not connect: {failure['failure_reason']}",
+                    "error": failure["error"],
+                    "failure_reason": failure["failure_reason"],
+                    "error_hint": failure.get("error_hint"),
+                    "hint_message": failure.get("hint_message"),
+                    "tool_count": 0,
+                    "tool_names": [],
+                    "checked_at": _checked_at(),
+                }
+            else:
+                last_action = {
+                    "name": name,
+                    "ok": False,
+                    "message": f"{display_name} did not complete an MCP handshake.",
+                    "error": "MCP handshake failed",
+                    "failure_reason": "MCP handshake failed",
+                    "tool_count": 0,
+                    "tool_names": [],
+                    "checked_at": _checked_at(),
+                }
     except asyncio.TimeoutError:
+        timeout_msg = f"{display_name} test timed out."
+        record_mcp_failure(name, timeout_msg)
         last_action = {
+            "name": name,
             "ok": False,
-            "message": f"{display_name} test timed out.",
+            "message": timeout_msg,
             "error": "timeout",
+            "failure_reason": timeout_msg,
             "tool_count": 0,
             "tool_names": [],
             "checked_at": _checked_at(),
         }
     except Exception as exc:
         error = _scrub_test_error(str(exc))
+        record_mcp_failure(name, error)
         last_action = {
+            "name": name,
             "ok": False,
             "message": f"{display_name} could not connect.",
             "error": error,
+            "failure_reason": error,
             "tool_count": 0,
             "tool_names": [],
             "checked_at": _checked_at(),

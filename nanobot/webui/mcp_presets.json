@@ -55,33 +55,31 @@
     "category": "docs",
     "description": "Fetch current library docs and code examples while the agent works.",
     "docs_url": "https://context7.com/docs/resources/all-clients",
-    "transport": "stdio",
+    "transport": "streamableHttp",
     "install_supported": true,
     "brand_domain": "context7.com",
     "brand_color": "#111827",
     "server": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@upstash/context7-mcp@latest"
-      ],
+      "type": "streamableHttp",
+      "url": "https://mcp.context7.com/mcp",
       "tool_timeout": 45
     },
     "fields": [
       {
         "name": "context7_api_key",
-        "label": "Context7 API key",
+        "label": "Context7 API Key",
         "target": [
-          "arg",
-          "--api-key"
+          "header",
+          "Authorization"
         ],
+        "value_prefix": "Bearer ",
+        "placeholder": "ctx_...",
+        "secret": true,
         "required": false,
-        "env_var": "CONTEXT7_API_KEY",
-        "placeholder": "ctx7_..."
+        "env_var": "CONTEXT7_API_KEY"
       }
     ],
-    "requires": "Node.js and npx; API key optional",
+    "requires": "API key optional",
     "note": "Works without a key for basic public docs; add a key for higher limits or private docs."
   },
   {
