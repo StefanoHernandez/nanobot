@@ -171,7 +171,8 @@ export function McpTab() {
         ) : (
           filteredPresets.map((preset) => {
             const isOAuth = preset.auth === "oauth" || preset.transport === "oauth";
-            const toolCount = preset.tool_count ?? preset.tool_names?.length ?? 0;
+            // The list never reports tools; only a Test does. Unknown is not zero.
+            const toolCount = preset.tool_count ?? preset.tool_names?.length;
             const failureReason = (preset as any).failure_reason || preset.error;
             const isFailed = preset.runtime_status === "failed" || !!failureReason;
             const isNpxCacheBroken =
@@ -249,9 +250,11 @@ export function McpTab() {
                           {preset.configured ? t("mcp.configured") : t("mcp.notConfigured")}
                         </Text>
                       </View>
-                      <Text style={[styles.toolCount, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
-                        {t("mcp.toolsCount", { count: toolCount })}
-                      </Text>
+                      {toolCount !== undefined && (
+                        <Text style={[styles.toolCount, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+                          {t("mcp.toolsCount", { count: toolCount })}
+                        </Text>
+                      )}
                     </View>
                   </View>
                   <Switch
