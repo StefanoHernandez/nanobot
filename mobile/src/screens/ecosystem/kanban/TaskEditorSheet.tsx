@@ -19,6 +19,7 @@ import {
   type KanbanBot,
   type KanbanPriority,
   type KanbanStatus,
+  type SaveKanbanTaskInput,
   type KanbanTask,
   type KanbanTaskDetail,
   type KanbanWorkspace,
@@ -26,7 +27,6 @@ import {
 } from "../../../ecosystem/kanban";
 
 const REPEAT_LIMIT_SECONDS = 2_592_000;
-const START_STATUSES = new Set<KanbanStatus>(["triage", "todo", "blocked", "done"]);
 
 function repeatSeconds(amount: string, unit: RecurrenceUnit): number | null {
   if (!/^\d+$/.test(amount)) return null;
@@ -38,6 +38,7 @@ function repeatSeconds(amount: string, unit: RecurrenceUnit): number | null {
   return seconds;
 }
 import { useT } from "../../../i18n";
+import { START_STATUSES } from "./taskActions";
 import { Chips } from "../../settings/common";
 import { Button, Dialog, Sheet, TextField, toast } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
@@ -188,27 +189,28 @@ export function TaskEditorSheet({
   const repeatOk = repeatMode === "never" || repeatSeconds(repeatAmount, repeatUnit) !== null;
   const showStart = !task || START_STATUSES.has(task.status);
 
+  const formInput = (nextStatus: KanbanStatus): SaveKanbanTaskInput => ({
+    board_id: boardId,
+    title: title.trim(),
+    ...(task ? { id: task.id } : {}),
+    description,
+    priority,
+    status: nextStatus,
+    assignee_bot_id: assignee,
+    reviewer_bot_id: reviewer,
+    workspace_mode: workspace,
+    recurrence_expr: repeatMode === "every" ? recurrenceToExpr(Number(repeatAmount), repeatUnit) : "",
+    scheduled_at_ms: whenMode === "at" ? atDate.getTime() : null,
+    max_retries: maxRetries,
+    parent_ids: parentIds,
+  });
+
   const save = async (nextStatus: KanbanStatus) => {
     if (busy || !titleOk || !retriesOk || !repeatOk) return;
     if (nextStatus === "ready" && (!showStart || !assignee)) return;
     setBusy(true);
     try {
-      await saveKanbanTask(session, {
-        board_id: boardId,
-        title: title.trim(),
-        ...(task ? { id: task.id } : {}),
-        description,
-        priority,
-        status: nextStatus,
-        assignee_bot_id: assignee,
-        reviewer_bot_id: reviewer,
-        workspace_mode: workspace,
-        recurrence_expr:
-          repeatMode === "every" ? recurrenceToExpr(Number(repeatAmount), repeatUnit) : "",
-        scheduled_at_ms: whenMode === "at" ? atDate.getTime() : null,
-        max_retries: maxRetries,
-        parent_ids: parentIds,
-      });
+      await saveKanbanTask(session, formInput(nextStatus));
       onClose();
       await onChanged();
     } catch (error) {
@@ -218,10 +220,39 @@ export function TaskEditorSheet({
     }
   };
 
+  /** True when the form no longer matches the task as the board shows it. */
+  const hasUnsavedEdits = () => {
+    if (!task) return false;
+    const originalParents = links.filter((link) => link.child_id === task.id).map((link) => link.parent_id);
+    const original: SaveKanbanTaskInput = {
+      board_id: boardId,
+      title: task.title,
+      id: task.id,
+      description: task.description,
+      priority: task.priority,
+      status: task.status,
+      assignee_bot_id: task.assignee_bot_id,
+      reviewer_bot_id: task.reviewer_bot_id,
+      workspace_mode: task.workspace_mode,
+      recurrence_expr: task.recurrence_expr,
+      scheduled_at_ms: task.scheduled_at_ms,
+      max_retries: task.max_retries,
+      parent_ids: originalParents,
+    };
+    const normalized = (input: SaveKanbanTaskInput) => JSON.stringify({ ...input, parent_ids: [...(input.parent_ids ?? [])].sort() });
+    return normalized(formInput(task.status)) !== normalized(original);
+  };
+
   const onPickStatus = async (status: KanbanStatus) => {
     if (!task || busy || status === task.status) return;
+    const dirty = hasUnsavedEdits();
+    if (dirty && !(titleOk && retriesOk && repeatOk)) {
+      toast.show(t("kanban.moveInvalid"));
+      return;
+    }
     setBusy(true);
     try {
+      if (dirty) await saveKanbanTask(session, formInput(task.status));
       await moveKanbanTask(session, task.id, status);
       onClose();
       await onChanged();

@@ -854,6 +854,15 @@
     "boardDescription": "Description",
     "maxConcurrent": "At once",
     "modelPreset": "Model",
+    "action": {
+      "startNow": "Start now",
+      "sendBack": "Send back",
+      "markDone": "Move to Done",
+      "block": "Block"
+    },
+    "cardHint": "Long-press for quick actions",
+    "watchBot": "Watch the bot",
+    "moveInvalid": "Fix the title, retries or repeat before moving this task.",
     "error": {
       "invalid_recurrence": "That repeat is not valid.",
       "invalid_scheduled_at": "That date is not valid.",
@@ -1130,6 +1139,10 @@
     "filesCount_other": "{{count}} files"
   },
   "outbox": {
+    "waiting_one": "{{count}} message waiting — tap to manage",
+    "waiting_other": "{{count}} messages waiting — tap to manage",
+    "notSentTitle": "Not sent yet",
+    "queuedTitle": "Waiting for the bot to finish",
     "pending": "Pending",
     "paused": "Pending — tap to send",
     "cancel": "Cancel",

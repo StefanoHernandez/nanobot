@@ -287,6 +287,20 @@ describe("AU-A: NewAutomationSheet & AutomationsScreen", () => {
     );
   });
 
+  test("the existing-chat picker scrolls on its own inside the sheet's scroll view", async () => {
+    await renderWithProviders(<NewAutomationSheet open={true} onClose={jest.fn()} />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Chat esistente" }));
+    });
+
+    const picker = screen.getByTestId("automation-chat-picker");
+    expect(picker.props.nestedScrollEnabled).toBe(true);
+    expect(picker.props.horizontal).toBeFalsy();
+    expect(screen.getByText("General Chat")).toBeTruthy();
+    expect(screen.getByText("Project Work")).toBeTruthy();
+  });
+
   test("a server error is shown and the form is kept", async () => {
     mockSession.post.mockRejectedValueOnce({
       response: { data: { error: "invalid_schedule" } },

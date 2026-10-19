@@ -13,8 +13,7 @@ import {
   type JournalIndex,
 } from "../../../ecosystem/journal";
 import { useSession } from "../../../state/sessionStore";
-import { Chips } from "../../settings/common";
-import { IconButton, goBackOr, toast } from "../../../ui/components";
+import { IconButton, SegmentedTabs, goBackOr, toast } from "../../../ui/components";
 import { Markdown } from "../../../ui/markdown/Markdown";
 import { useTheme } from "../../../ui/ThemeProvider";
 
@@ -148,6 +147,8 @@ export function MemoryScreen() {
         </Text>
       </View>
 
+      <SegmentedTabs tabs={tabOptions} value={tab} onChange={setTab} />
+
       <ScrollView
         contentContainerStyle={styles.bodyContent}
         refreshControl={
@@ -204,8 +205,6 @@ export function MemoryScreen() {
           ) : null}
         </View>
       ) : null}
-
-      <Chips options={tabOptions} value={tab} onChange={setTab} />
 
         {tab === "journal" ? (
           <View style={styles.journalBlock}>

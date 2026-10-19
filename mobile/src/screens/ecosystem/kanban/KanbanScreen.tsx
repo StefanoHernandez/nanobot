@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +28,7 @@ import {
   validateRolePrompt,
   validateTaskTitle,
   type KanbanBot,
+  type KanbanColumnStatus,
   type KanbanSnapshot,
   type KanbanTask,
 } from "../../../ecosystem/kanban";
@@ -32,9 +36,11 @@ import { useT } from "../../../i18n";
 import { sessionStore } from "../../../state/sessionStore";
 import { SettingsShell } from "../../settings/SettingsShell";
 import { Chips } from "../../settings/common";
-import { Button, Dialog, IconButton, TextField, goBackOr, toast } from "../../../ui/components";
+import { Button, Dialog, IconButton, SegmentedTabs, TextField, goBackOr, toast } from "../../../ui/components";
 import { setOnKanbanScreen } from "../../../extras/kanbanNotify";
 import { useTheme } from "../../../ui/ThemeProvider";
+import { KanbanCard } from "./KanbanCard";
+import { TaskActionSheet } from "./TaskActionSheet";
 import { TaskEditorSheet, toastKanbanError } from "./TaskEditorSheet";
 
 type Phase = "loading" | "ok" | "404" | "error";
@@ -43,16 +49,14 @@ type KanbanTab = "board" | "chat" | "bots";
 const emptyBotForm = { name: "", icon: "", role_prompt: "", model_preset: "", max_concurrent: "1" };
 const emptyBoardForm = { title: "", description: "", max_concurrent: "2" };
 
-function shortWhen(ms: number): string {
-  const date = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
+/** Below this width the board shows one column at a time. */
+const NARROW_WIDTH = 768;
 
 export function KanbanScreen({ session }: { session: NanobotSession }) {
   const t = useT();
   const th = useTheme();
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const narrow = windowWidth < NARROW_WIDTH;
   const params = useLocalSearchParams<{ task?: string | string[]; board?: string | string[] }>();
   const deepTaskId = typeof params.task === "string" ? params.task : undefined;
   const deepBoardId = typeof params.board === "string" ? params.board : undefined;
@@ -62,6 +66,12 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
   const [tab, setTab] = useState<KanbanTab>("board");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<KanbanTask | null>(null);
+  const [actionTask, setActionTask] = useState<KanbanTask | null>(null);
+  const [column, setColumn] = useState<KanbanColumnStatus>(KANBAN_COLUMNS[0]);
+  const columnRef = useRef<KanbanColumnStatus>(KANBAN_COLUMNS[0]);
+  const pagerRef = useRef<ScrollView>(null);
+  const chipsRef = useRef<ScrollView>(null);
+  const chipX = useRef<Partial<Record<KanbanColumnStatus, number>>>({});
   const [chatDraft, setChatDraft] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [botDialogOpen, setBotDialogOpen] = useState(false);
@@ -150,6 +160,30 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
     setEditingTask(task);
     setEditorOpen(true);
   };
+
+  const watchBot = (task: KanbanTask) => {
+    if (task.assignee_bot_id) router.push(`/chat/${encodeURIComponent(`kanban:${task.id}:${task.assignee_bot_id}`)}`);
+  };
+
+  const selectColumn = (next: KanbanColumnStatus, scrollPager: boolean) => {
+    columnRef.current = next;
+    setColumn(next);
+    if (scrollPager) pagerRef.current?.scrollTo({ x: KANBAN_COLUMNS.indexOf(next) * windowWidth, y: 0, animated: true });
+    const x = chipX.current[next];
+    if (x !== undefined) chipsRef.current?.scrollTo({ x: Math.max(0, x - 24), y: 0, animated: true });
+  };
+
+  const onPagerSettled = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(event.nativeEvent.contentOffset.x / windowWidth);
+    selectColumn(KANBAN_COLUMNS[Math.min(KANBAN_COLUMNS.length - 1, Math.max(0, index))], false);
+  };
+
+  // A rotation or a first render must show the selected column, not whichever page the scroll view starts on.
+  const hasSnapshot = snapshot !== null;
+  useEffect(() => {
+    if (!narrow) return;
+    pagerRef.current?.scrollTo({ x: KANBAN_COLUMNS.indexOf(columnRef.current) * windowWidth, y: 0, animated: false });
+  }, [narrow, windowWidth, tab, hasSnapshot]);
 
   const onSendChat = async () => {
     if (chatBusy || !snapshot || !validateBoardMessageContent(chatDraft)) return;
@@ -266,6 +300,29 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
     }
   };
 
+  const tasksIn = (status: KanbanColumnStatus) => visibleTasks.filter((task) => task.status === status);
+
+  const renderCards = (status: KanbanColumnStatus) => {
+    const cards = tasksIn(status);
+    if (cards.length === 0) {
+      return (
+        <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 13, marginTop: 8 }}>
+          {t("kanban.empty")}
+        </Text>
+      );
+    }
+    return cards.map((task) => (
+      <KanbanCard
+        key={task.id}
+        task={task}
+        bot={task.assignee_bot_id != null ? botsById.get(task.assignee_bot_id) : undefined}
+        onPress={() => openTask(task)}
+        onLongPress={() => setActionTask(task)}
+        onWatch={() => watchBot(task)}
+      />
+    ));
+  };
+
   const bodyMessage =
     phase === "404" ? t("kanban.unavailable") : phase === "error" ? t("common.error") : null;
 
@@ -295,30 +352,11 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
 
       {snapshot && phase !== "404" ? (
         <>
-          <View style={[styles.tabBar, { backgroundColor: th.colors.muted, borderRadius: 999 }]}>
-            {(["board", "chat", "bots"] as const).map((key) => (
-              <Pressable
-                key={key}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: tab === key }}
-                onPress={() => setTab(key)}
-                style={[
-                  styles.tabSegment,
-                  { backgroundColor: tab === key ? th.colors.card : "transparent" },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: tab === key ? th.colors.foreground : th.colors.mutedForeground,
-                    fontFamily: tab === key ? th.font.medium : th.font.regular,
-                    fontSize: 15,
-                  }}
-                >
-                  {t(`kanban.tab.${key}`)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <SegmentedTabs
+            tabs={(["board", "chat", "bots"] as const).map((key) => ({ value: key, label: t(`kanban.tab.${key}`) }))}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === "board" ? (
             <>
@@ -342,82 +380,64 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
                   }}
                 />
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.boardRow}
-                style={styles.boardScroll}
-              >
-                {KANBAN_COLUMNS.map((column) => {
-                  const columnTasks = visibleTasks.filter((task) => task.status === column);
-                  return (
-                    <View key={column} style={[styles.column, th.bezel, th.surface]}>
+              {narrow ? (
+                <>
+                  <ScrollView
+                    ref={chipsRef}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.columnChips}
+                  >
+                    {KANBAN_COLUMNS.map((key) => (
+                      <View
+                        key={key}
+                        onLayout={(event: LayoutChangeEvent) => {
+                          chipX.current[key] = event.nativeEvent.layout.x;
+                        }}
+                      >
+                        <Button
+                          title={`${t(`kanban.status.${key}`)} (${tasksIn(key).length})`}
+                          variant={key === column ? "primary" : "secondary"}
+                          accessibilityRole="tab"
+                          accessibilityState={{ selected: key === column }}
+                          onPress={() => selectColumn(key, true)}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                  <ScrollView
+                    ref={pagerRef}
+                    testID="kanban-pager"
+                    horizontal
+                    pagingEnabled
+                    decelerationRate="fast"
+                    showsHorizontalScrollIndicator={false}
+                    onMomentumScrollEnd={onPagerSettled}
+                  >
+                    {KANBAN_COLUMNS.map((key) => (
+                      <View key={key} testID={`kanban-page-${key}`} style={{ width: windowWidth }}>
+                        <View style={[styles.pageColumn, th.bezel, th.surface]}>{renderCards(key)}</View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.boardRow}
+                  style={styles.boardScroll}
+                >
+                  {KANBAN_COLUMNS.map((key) => (
+                    <View key={key} style={[styles.column, th.bezel, th.surface]}>
                       <Text style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}>
-                        {t(`kanban.status.${column}`)} ({columnTasks.length})
+                        {t(`kanban.status.${key}`)} ({tasksIn(key).length})
                       </Text>
-                      {columnTasks.length === 0 ? (
-                        <Text
-                          style={{
-                            color: th.colors.mutedForeground,
-                            fontFamily: th.font.regular,
-                            fontSize: 13,
-                            marginTop: 8,
-                          }}
-                        >
-                          {t("kanban.empty")}
-                        </Text>
-                      ) : (
-                        columnTasks.map((task) => {
-                          const bot = task.assignee_bot_id != null ? botsById.get(task.assignee_bot_id) : undefined;
-                          const scheduled =
-                            typeof task.scheduled_at_ms === "number" && task.scheduled_at_ms > Date.now();
-                          return (
-                            <Pressable
-                              key={task.id}
-                              accessibilityRole="button"
-                              onPress={() => openTask(task)}
-                              style={[styles.card, th.surface]}
-                            >
-                              <Text
-                                numberOfLines={2}
-                                style={{ color: th.colors.foreground, fontFamily: th.font.medium, fontSize: 15 }}
-                              >
-                                {task.title}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: th.colors.mutedForeground,
-                                  fontFamily: th.font.regular,
-                                  fontSize: 13,
-                                  marginTop: 4,
-                                }}
-                              >
-                                {t(`kanban.priority.${task.priority}`)}
-                              </Text>
-                              {bot || scheduled || task.recurrence_expr || task.status === "blocked" ? (
-                                <Text
-                                  style={{
-                                    color: th.colors.mutedForeground,
-                                    fontFamily: th.font.regular,
-                                    fontSize: 13,
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {bot?.icon ? <Text>{bot.icon} </Text> : null}
-                                  {bot?.name ? <Text>{bot.name}</Text> : null}
-                                  {scheduled && task.scheduled_at_ms != null ? <Text>{` 🕒 ${shortWhen(task.scheduled_at_ms)}`}</Text> : null}
-                                  {task.recurrence_expr ? <Text> 🔁</Text> : null}
-                                  {task.status === "blocked" ? <Text> ⛔</Text> : null}
-                                </Text>
-                              ) : null}
-                            </Pressable>
-                          );
-                        })
-                      )}
+                      {renderCards(key)}
                     </View>
-                  );
-                })}
-              </ScrollView>
+                  ))}
+                </ScrollView>
+              )}
 
               <View style={styles.fabRow}>
                 <IconButton
@@ -584,6 +604,14 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
         onChanged={load}
       />
 
+      <TaskActionSheet
+        task={actionTask}
+        boardId={snapshot?.active_board.id ?? boardId}
+        session={session}
+        onClose={() => setActionTask(null)}
+        onChanged={load}
+      />
+
       <Dialog
         open={boardOpen}
         title={t("kanban.addBoard")}
@@ -679,14 +707,13 @@ export function KanbanScreen({ session }: { session: NanobotSession }) {
 
 const styles = StyleSheet.create({
   centered: { padding: 24, alignItems: "center" },
-  tabBar: { marginHorizontal: 16, marginTop: 8, marginBottom: 8, padding: 4, flexDirection: "row", gap: 4 },
-  tabSegment: { flex: 1, minHeight: 48, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   boardScroll: { marginTop: 0 },
   boardPicker: { flexDirection: "row", alignItems: "center", paddingLeft: 16, paddingRight: 8 },
   boardChips: { alignItems: "center" },
   boardRow: { paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
   column: { width: 260, padding: 12, borderWidth: StyleSheet.hairlineWidth, gap: 8 },
-  card: { minHeight: 48, padding: 12, borderWidth: StyleSheet.hairlineWidth, justifyContent: "center" },
+  columnChips: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
+  pageColumn: { marginHorizontal: 16, marginBottom: 8, padding: 12, borderWidth: StyleSheet.hairlineWidth, gap: 8 },
   fabRow: { alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8 },
   chatList: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
   messageRow: { padding: 12, borderWidth: StyleSheet.hairlineWidth },

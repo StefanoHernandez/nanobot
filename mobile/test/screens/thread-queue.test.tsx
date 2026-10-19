@@ -15,6 +15,14 @@ beforeAll(async () => {
   await i18n.changeLanguage("it");
 });
 
+/** The queue is one collapsed line; open it to reach the cards. */
+const expandQueue = async (r: { getByRole: (role: string, opts: { name: RegExp }) => unknown }) => {
+  await act(async () => {
+    fireEvent.press(r.getByRole("button", { name: /in attesa — tocca per gestire/ }) as never);
+    await flush();
+  });
+};
+
 describe("Part 4: Messages sent while running go into visible queue", () => {
   test("sending while running queues message in state and shows card", async () => {
     const f = fakeSession();
@@ -64,7 +72,10 @@ describe("Part 4: Messages sent while running go into visible queue", () => {
     // Client sendMessage was NOT called
     expect(f.sent).toHaveLength(0);
 
-    // Card is shown
+    // Collapsed line first, card after expanding
+    expect(r.getByText("1 messaggio in attesa — tocca per gestire")).toBeTruthy();
+    expect(r.queryByText("messaggio in coda")).toBeNull();
+    await expandQueue(r);
     expect(r.getByText("messaggio in coda")).toBeTruthy();
     expect(r.getByText("Invia ora")).toBeTruthy();
     expect(r.getByText("Modifica")).toBeTruthy();
@@ -105,6 +116,7 @@ describe("Part 4: Messages sent while running go into visible queue", () => {
       </SafeAreaProvider>,
     );
 
+    await expandQueue(r);
     expect(r.getByText("steer questo")).toBeTruthy();
 
     // Click "Invia ora"
@@ -156,6 +168,7 @@ describe("Part 4: Messages sent while running go into visible queue", () => {
       </SafeAreaProvider>,
     );
 
+    await expandQueue(r);
     expect(r.getByText("testo da modificare")).toBeTruthy();
 
     // Click "Modifica"
@@ -205,6 +218,7 @@ describe("Part 4: Messages sent while running go into visible queue", () => {
       </SafeAreaProvider>,
     );
 
+    await expandQueue(r);
     expect(r.getByText("cancella questo")).toBeTruthy();
 
     // Click "Elimina"

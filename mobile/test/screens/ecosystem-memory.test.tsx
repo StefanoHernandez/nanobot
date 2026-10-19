@@ -211,6 +211,8 @@ describe("Ecosystem memory screen", () => {
     });
     const view = await renderScreen();
     expect(await view.findByText("Automatic journal")).toBeTruthy();
+    expect(view.getByRole("tab", { name: "Journal" }).props.accessibilityState.selected).toBe(true);
+    expect(view.getByRole("tab", { name: "Profile" }).props.accessibilityState.selected).toBe(false);
   });
 
   test("route params tab=journal and date opens journal and loads day content", async () => {

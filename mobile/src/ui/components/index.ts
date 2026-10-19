@@ -5,5 +5,6 @@ export * from "./Sheet";
 export * from "./Toast";
 export * from "./ListItem";
 export * from "./Dialog";
+export * from "./SegmentedTabs";
 export * from "../navigation";
 

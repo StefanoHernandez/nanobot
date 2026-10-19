@@ -38,6 +38,9 @@ async function mount(key = KEY, profileId = "p1", history = thread([])) {
   return f;
 }
 
+/** The outbox is one collapsed line; open it to reach the items. */
+const expandPending = () => step(() => fireEvent.press(screen.getByRole("button", { name: /waiting — tap to manage/ })));
+
 const step = async (fn?: () => void) => {
   if (fn) {
     await act(async () => {
@@ -104,7 +107,10 @@ describe("P5-O1: Offline outbox per chat", () => {
     // sendMessage was NOT called on client
     expect(f.client.sendMessage).not.toHaveBeenCalled();
 
-    // OutboxBar renders the item with Pending label
+    // The pending bar shows one line, and the item with its Pending label once opened
+    expect(screen.getByText("1 message waiting — tap to manage")).toBeTruthy();
+    expect(screen.queryByText("hello offline")).toBeNull();
+    await expandPending();
     expect(screen.getByText("hello offline")).toBeTruthy();
     expect(screen.getByText("Pending")).toBeTruthy();
   });
@@ -121,6 +127,7 @@ describe("P5-O1: Offline outbox per chat", () => {
     const sendBtn = screen.getByLabelText("Send");
     await step(() => fireEvent.press(sendBtn));
 
+    await expandPending();
     expect(screen.getByText("message to cancel")).toBeTruthy();
     const cancelBtn = screen.getByRole("button", { name: "Cancel" });
     await step(() => fireEvent.press(cancelBtn));
@@ -221,6 +228,7 @@ describe("P5-O1: Offline outbox per chat", () => {
     });
 
     // Item loaded from kv has paused: true
+    await expandPending();
     expect(screen.getByText("message from p1")).toBeTruthy();
     expect(screen.getByText("Pending — tap to send")).toBeTruthy();
     // Does NOT auto-send on profile switch

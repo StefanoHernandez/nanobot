@@ -378,7 +378,12 @@ export function NewAutomationSheet({ open, onClose, onRefresh }: NewAutomationSh
             </View>
 
             {targetMode === "existing" && (
-              <View style={[styles.pickerBox, { backgroundColor: th.colors.card, borderColor: th.colors.border }]}>
+              <ScrollView
+                testID="automation-chat-picker"
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                style={[styles.pickerBox, { backgroundColor: th.colors.card, borderColor: th.colors.border }]}
+              >
                 {nonTempChats.length === 0 ? (
                   <Text style={[styles.emptyText, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
                     {t("automations.empty", "Nessuna chat trovata")}
@@ -401,7 +406,7 @@ export function NewAutomationSheet({ open, onClose, onRefresh }: NewAutomationSh
                     </Pressable>
                   ))
                 )}
-              </View>
+              </ScrollView>
             )}
           </View>
 
