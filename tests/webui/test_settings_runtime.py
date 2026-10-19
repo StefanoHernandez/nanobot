@@ -146,6 +146,35 @@ def test_remote_client_cannot_change_install_policy():
     }, local_browser=True)
 
 
+def test_privileged_runtime_paths_require_full_power():
+    config = Config()
+    # 1) Non-privileged change of tools.exec.sandbox -> 403 and nothing saved
+    with pytest.raises(WebUISettingsError) as error:
+        update_runtime_config(config, {
+            "tools.exec.sandbox": "bwrap",
+        }, local_browser=False)
+    assert error.value.status == 403
+    assert "Change this setting from a browser on the gateway host or a device with full power." in str(error.value)
+    assert config.tools.exec.sandbox == ""
+
+    # 2) Same value -> allowed even if not local_browser
+    assert not update_runtime_config(config, {
+        "tools.exec.sandbox": "",
+    }, local_browser=False)
+
+    # 3) Privileged -> saved
+    assert update_runtime_config(config, {
+        "tools.exec.sandbox": "bwrap",
+    }, local_browser=True)
+    assert config.tools.exec.sandbox == "bwrap"
+
+    # 4) Non-listed key (e.g. max_tool_iterations) unchanged behaviour (allowed when not local_browser)
+    assert update_runtime_config(config, {
+        "agents.defaults.max_tool_iterations": 50,
+    }, local_browser=False)
+    assert config.agents.defaults.max_tool_iterations == 50
+
+
 def test_timezone_auto_and_nullable_fields():
     config = Config.model_validate({"agents": {"defaults": {
         "timezoneMode": "manual", "timezone": "UTC", "dream": {"cron": "0 2 * * *"},

@@ -9,6 +9,7 @@ from loguru import logger
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
+from nanobot.security.workspace_policy import safe_workspace_file
 from nanobot.utils.gitstore import GitStore, GitStoreError
 from nanobot.webui.http_utils import http_error, http_json_response
 
@@ -24,12 +25,11 @@ _PAGE_PATHS = {
 
 
 def _read_page_text(workspace: Path, rel: str) -> tuple[str, bool]:
-    root = workspace.expanduser().resolve(strict=False)
-    path = (root / rel).resolve(strict=False)
-    if not path.is_relative_to(root):
+    safe = safe_workspace_file(workspace, rel)
+    if safe is None:
         return "", False
     try:
-        text = path.read_text(encoding="utf-8")
+        text = safe.read_text(encoding="utf-8")
     except (FileNotFoundError, OSError, UnicodeError):
         return "", False
     if len(text) > _MAX_PAGE_CHARS:

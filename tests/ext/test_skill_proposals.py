@@ -515,3 +515,49 @@ def test_write_proposal_accepts_fields_at_the_caps(tmp_path: Path):
         workspace, name="max-skill", summary="x" * 300, reason="r" * 500, content="c" * (64 * 1024), source="chat"
     )
     assert (workspace / "skills-proposed" / "max-skill" / "SKILL.md").exists()
+
+
+def test_symlinked_proposal_is_not_listed_not_readable_and_activate_refuses_it(tmp_path: Path):
+    workspace, _ = _sessions(tmp_path)
+    pdir = workspace / "skills-proposed"
+    pdir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Symlinked proposal directory
+    secret_dir = tmp_path / "secret_skill_dir"
+    secret_dir.mkdir()
+    (secret_dir / "proposal.json").write_text(json.dumps({"name": "sym-dir-skill"}), encoding="utf-8")
+    (secret_dir / "SKILL.md").write_text("---\nname: sym-dir-skill\n---\n", encoding="utf-8")
+
+    (pdir / "sym-dir-skill").symlink_to(secret_dir, target_is_directory=True)
+
+    # 2. Symlinked SKILL.md inside a regular proposal directory
+    regular_dir = pdir / "sym-file-skill"
+    regular_dir.mkdir()
+    (regular_dir / "proposal.json").write_text(json.dumps({"name": "sym-file-skill"}), encoding="utf-8")
+    secret_file = tmp_path / "secret.md"
+    secret_file.write_text("---\nname: sym-file-skill\n---\n", encoding="utf-8")
+    (regular_dir / "SKILL.md").symlink_to(secret_file)
+
+    # list_proposals skips both
+    proposals = skill_proposals.list_proposals(workspace)
+    names = [p.get("name") for p in proposals]
+    assert "sym-dir-skill" not in names
+    assert "sym-file-skill" not in names
+
+    # get_proposal raises 404
+    with pytest.raises(skill_proposals.SkillProposalError) as exc1:
+        skill_proposals.get_proposal(workspace, "sym-dir-skill")
+    assert exc1.value.status == 404
+
+    with pytest.raises(skill_proposals.SkillProposalError) as exc2:
+        skill_proposals.get_proposal(workspace, "sym-file-skill")
+    assert exc2.value.status == 404
+
+    # activate_proposal raises 404
+    with pytest.raises(skill_proposals.SkillProposalError) as exc3:
+        skill_proposals.activate_proposal(workspace, "sym-dir-skill")
+    assert exc3.value.status == 404
+
+    with pytest.raises(skill_proposals.SkillProposalError) as exc4:
+        skill_proposals.activate_proposal(workspace, "sym-file-skill")
+    assert exc4.value.status == 404

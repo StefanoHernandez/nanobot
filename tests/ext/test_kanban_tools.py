@@ -107,16 +107,42 @@ async def test_create_from_chat_saves_name_when_and_daily_repeat(store):
 
     await _as("websocket:abc", tool, action="create", title="Start now", bot="coder", start=True)
     started = next(row for row in store.board_snapshot("main")["tasks"] if row["title"] == "Start now")
-    assert started["status"] == "ready"
+    assert started["status"] == "todo"
 
 
-async def test_start_needs_a_known_bot(store):
+async def test_unknown_bot_is_rejected(store):
     tool = kt.KanbanTool()
-    missing = await _as("websocket:abc", tool, action="create", title="Now", start=True)
-    assert "needs_bot" in str(missing)
-    unknown = await _as("websocket:abc", tool, action="create", title="Now", bot="Nope", start=True)
+    unknown = await _as("websocket:abc", tool, action="create", title="Now", bot="Nope")
     assert "unknown_bot" in str(unknown)
     assert "Coder" in str(unknown)
+
+
+async def test_agent_cannot_start_unattended_runs(store):
+    tool = kt.KanbanTool()
+    # 1) Agent create with start=True -> status == "todo"
+    res1 = await _as("websocket:abc", tool, action="create", title="Unattended card", bot="coder", start=True)
+    data1 = json.loads(str(res1))
+    assert data1["status"] == "todo"
+    card_id = data1["task_id"]
+    assert store.get_task_detail(card_id)["task"]["status"] == "todo"
+
+    # 2) Agent update to ready -> stays todo
+    res2 = await _as("websocket:abc", tool, action="update", task_id=card_id, status="ready")
+    data2 = json.loads(str(res2))
+    assert data2["status"] == "todo"
+    assert store.get_task_detail(card_id)["task"]["status"] == "todo"
+
+    # 3) HTTP path can still start cards
+    store.save_task({"id": card_id, "status": "ready"})
+    assert store.get_task_detail(card_id)["task"]["status"] == "ready"
+
+    # 4) Agent every on a user-started card -> recurrence set, status stays ready
+    res3 = await _as("websocket:abc", tool, action="update", task_id=card_id, every="1d")
+    data3 = json.loads(str(res3))
+    assert data3["status"] == "ready"
+    updated = store.get_task_detail(card_id)["task"]
+    assert updated["status"] == "ready"
+    assert updated["recurrence_expr"] == "every:86400s"
 
 
 async def test_update_changes_only_the_fields_passed(store):

@@ -20,6 +20,7 @@ from websockets.http11 import Response
 from nanobot.config.paths import get_data_dir
 from nanobot.ext.devices import router_admin_authorized
 from nanobot.ext.kanban import kanban_db_path
+from nanobot.security.workspace_policy import safe_workspace_file
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.keys import is_internal_session
 from nanobot.webui.http_utils import http_error, http_json_response
@@ -310,21 +311,22 @@ def _sync_journal(search_conn: sqlite3.Connection, workspace: Path) -> None:
     journal_dir = workspace / "memory" / "journal"
     valid_files: set[str] = set()
 
-    if journal_dir.is_dir():
+    if journal_dir.is_dir() and not journal_dir.is_symlink():
         for file in journal_dir.iterdir():
-            if not file.is_file() or not _DATE_FILE_RE.match(file.name):
+            safe_file = safe_workspace_file(workspace, file)
+            if safe_file is None or not _DATE_FILE_RE.match(safe_file.name):
                 continue
-            date_str = file.stem
-            valid_files.add(file.name)
+            date_str = safe_file.stem
+            valid_files.add(safe_file.name)
             try:
-                mtime = file.stat().st_mtime
+                mtime = safe_file.stat().st_mtime
             except OSError:
                 continue
             version = str(mtime)
 
             curr = search_conn.execute(
                 "SELECT version FROM sync_state WHERE source = 'journal' AND item_id = ?",
-                (file.name,),
+                (safe_file.name,),
             ).fetchone()
 
             if curr is not None and curr[0] == version:
@@ -334,7 +336,7 @@ def _sync_journal(search_conn: sqlite3.Connection, workspace: Path) -> None:
             search_conn.execute("DELETE FROM docs WHERE source = 'journal' AND ref = ?", (ref,))
 
             try:
-                content = file.read_text(encoding="utf-8").strip()
+                content = safe_file.read_text(encoding="utf-8").strip()
             except OSError:
                 continue
 

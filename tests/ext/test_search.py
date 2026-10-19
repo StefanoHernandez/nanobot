@@ -118,6 +118,19 @@ def test_index_and_find_journal_day(tmp_path, monkeypatch):
     assert "«solar»" in hit["snippet"].lower() or "«inverter»" in hit["snippet"].lower()
 
 
+def test_symlinked_journal_file_not_indexed(tmp_path, monkeypatch):
+    env = _init_env(tmp_path, monkeypatch)
+    journal_dir = env.workspace / "memory" / "journal"
+    journal_dir.mkdir(parents=True, exist_ok=True)
+    target = tmp_path / "secret_file.md"
+    target.write_text("classified supersecret quantum algorithm", encoding="utf-8")
+    symlink_file = journal_dir / "2026-10-19.md"
+    symlink_file.symlink_to(target)
+
+    results = search.search("supersecret quantum", workspace=env.workspace, sessions_dir=env.sessions_mgr.sessions_dir)
+    assert len(results) == 0
+
+
 def test_index_and_find_kanban_task(tmp_path, monkeypatch):
     env = _init_env(tmp_path, monkeypatch)
     store = KanbanStore(env.kanban_db)

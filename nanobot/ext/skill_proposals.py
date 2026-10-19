@@ -29,6 +29,7 @@ from nanobot.ext.devices import (
 from nanobot.ext.devices import (
     read_json as devices_read_json,
 )
+from nanobot.security.workspace_policy import safe_workspace_file
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.manager import SessionManager
 from nanobot.webui.http_utils import http_error, http_json_response
@@ -132,15 +133,15 @@ def sync_scout_job(cron: CronService, workspace: Path, tz_name: str | None) -> N
 
 def list_proposals(workspace: Path) -> list[dict[str, Any]]:
     pdir = proposals_dir(workspace)
-    if not pdir.is_dir():
+    if not pdir.is_dir() or pdir.is_symlink():
         return []
     items: list[dict[str, Any]] = []
     for entry in pdir.iterdir():
-        if not entry.is_dir():
+        if not entry.is_dir() or entry.is_symlink():
             continue
-        meta_file = entry / "proposal.json"
-        skill_file = entry / "SKILL.md"
-        if not meta_file.exists() or not skill_file.exists():
+        meta_file = safe_workspace_file(workspace, entry / "proposal.json")
+        skill_file = safe_workspace_file(workspace, entry / "SKILL.md")
+        if meta_file is None or skill_file is None:
             continue
         try:
             meta = json.loads(meta_file.read_text(encoding="utf-8"))
@@ -154,9 +155,11 @@ def list_proposals(workspace: Path) -> list[dict[str, Any]]:
 
 def get_proposal(workspace: Path, name: str) -> dict[str, Any]:
     p_dir = proposal_path(workspace, name)
-    skill_file = p_dir / "SKILL.md"
-    meta_file = p_dir / "proposal.json"
-    if not skill_file.is_file() or not meta_file.is_file():
+    if not p_dir.is_dir() or p_dir.is_symlink():
+        raise SkillProposalError(404, "not_found")
+    skill_file = safe_workspace_file(workspace, p_dir / "SKILL.md")
+    meta_file = safe_workspace_file(workspace, p_dir / "proposal.json")
+    if skill_file is None or meta_file is None:
         raise SkillProposalError(404, "not_found")
     try:
         content = skill_file.read_text(encoding="utf-8")
@@ -218,8 +221,10 @@ def write_proposal(
 
 def activate_proposal(workspace: Path, name: str) -> dict[str, Any]:
     p_dir = proposal_path(workspace, name)
-    skill_file = p_dir / "SKILL.md"
-    if not skill_file.is_file():
+    if not p_dir.is_dir() or p_dir.is_symlink():
+        raise SkillProposalError(404, "not_found")
+    skill_file = safe_workspace_file(workspace, p_dir / "SKILL.md")
+    if skill_file is None:
         raise SkillProposalError(404, "not_found")
     target_dir = active_skills_dir(workspace) / name
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -235,7 +240,7 @@ def activate_proposal(workspace: Path, name: str) -> dict[str, Any]:
 
 def reject_proposal(workspace: Path, name: str) -> dict[str, Any]:
     p_dir = proposal_path(workspace, name)
-    if not p_dir.is_dir():
+    if not p_dir.is_dir() or p_dir.is_symlink():
         raise SkillProposalError(404, "not_found")
     shutil.rmtree(p_dir, ignore_errors=True)
     return {"ok": True, "deleted": True}

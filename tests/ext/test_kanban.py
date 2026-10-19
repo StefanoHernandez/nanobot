@@ -780,3 +780,37 @@ def test_claim_skips_task_when_reviewer_is_assignee(store_path):
 
     # Claim should skip this task
     assert store.claim_next_ready_task() is None
+
+
+def test_save_task_closes_connection(store_path):
+    store = kb.KanbanStore(store_path, seed=False)
+    store.create_board(board_id="main", title="Main")
+    real_connect = store._connect
+    connections = []
+
+    def tracking_connect():
+        conn = real_connect()
+        connections.append(conn)
+        return conn
+
+    store._connect = tracking_connect
+    store.save_task({"board_id": "main", "title": "Check closing"})
+
+    assert len(connections) >= 1
+    for conn in connections:
+        with pytest.raises(Exception, match="closed"):
+            conn.execute("SELECT 1")
+
+
+def test_recurrence_without_runs_does_not_requeue_ready(store_path):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "tick", status="todo", assignee="coder", recurrence_expr="every:3600s")
+    task = store.get_task_detail("tick")["task"]
+    assert task["status"] == "todo"
+
+    # Even if completed, without any recorded runs it does not requeue to ready
+    store.complete_task("tick", "cycle done")
+    task = store.get_task_detail("tick")["task"]
+    assert task["status"] == "done"

@@ -41,24 +41,42 @@ from nanobot.webui.http_utils import http_error, http_json_response
 PREFIX = "/api/ext/approvals"
 TIMEOUT_S = 300
 MAX_PENDING = 20
-MAX_SUMMARY = 500
+MAX_SUMMARY = 8000
 DENIED = "Error: the user denied this command on their phone (or did not answer in time)."
 _GUARDED_TOOL = "exec"
+_corrupt_warned: set[str] = set()
 
 
 def approvals_file_path() -> Path:
     raw = os.environ.get("NANOBOT_APPROVALS_FILE", "").strip()
-    return Path(raw).expanduser() if raw else Path.home() / ".nanobot" / "ext_approvals.json"
+    if raw:
+        return Path(raw).expanduser()
+    try:
+        return Path.home() / ".nanobot" / "ext_approvals.json"
+    except RuntimeError:
+        return Path(tempfile.gettempdir()) / ".nanobot" / "ext_approvals.json"
 
 
 def _load(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    if not path.is_file():
         return {"enabled": False, "allow": {}}
-    data = cast(dict[str, Any], data)
-    allow = cast(dict[str, Any], data.get("allow") if isinstance(data.get("allow"), dict) else {})
-    return {"enabled": data.get("enabled") is True, "allow": {str(k): list(cast(list[Any], v)) for k, v in allow.items() if isinstance(v, list)}}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("approvals state must be a JSON object")
+        data: dict[str, Any] = cast(dict[str, Any], raw)
+        allow_val = data.get("allow")
+        allow: dict[str, Any] = cast(dict[str, Any], allow_val) if isinstance(allow_val, dict) else {}
+        return {
+            "enabled": data.get("enabled") is True,
+            "allow": {str(k): list(cast(list[Any], v)) for k, v in allow.items() if isinstance(v, list)},
+        }
+    except Exception as exc:
+        key = str(path)
+        if key not in _corrupt_warned:
+            logger.warning("approvals: corrupt or unreadable approvals file {}: {}", path, exc)
+            _corrupt_warned.add(key)
+        return {"enabled": True, "allow": {}}
 
 
 def _save(path: Path, state: dict[str, Any]) -> None:
@@ -129,6 +147,9 @@ class ApprovalGate:
         return [p.public() for p in self._pending.values() if not p.future.done()]
 
     async def request(self, session_key: str, tool: str, summary: str, *, timeout_s: float = TIMEOUT_S) -> bool:
+        if len(summary) > MAX_SUMMARY:
+            logger.warning("approvals: summary exceeds limit ({} > {}), denying", len(summary), MAX_SUMMARY)
+            return False
         state = self.state()
         if not state["enabled"] or tool in state["allow"].get(session_key, []):
             return True
@@ -139,7 +160,7 @@ class ApprovalGate:
             id=secrets.token_urlsafe(9),
             session_key=session_key,
             tool=tool,
-            summary=summary[:MAX_SUMMARY],
+            summary=summary,
             created_at=now,
             expires_at=now + timeout_s,
             future=asyncio.get_running_loop().create_future(),
@@ -171,36 +192,69 @@ class ApprovalGate:
 GATE = ApprovalGate()
 
 
-def _summary(params: dict[str, Any]) -> str:
+def _exec_summary(params: dict[str, Any]) -> tuple[bool, str]:
     command: Any = params.get("command") or params.get("cmd") or ""
     if isinstance(command, list):
         command = " ".join(str(c) for c in cast(list[Any], command))
     cwd = params.get("working_dir") or params.get("workdir") or ""
-    return f"{command}\n(cwd: {cwd})" if cwd else str(command)
+    summary = f"{command}\n(cwd: {cwd})" if cwd else str(command)
+    return True, summary
 
 
-def install() -> None:
-    """Guard ``ExecTool.execute`` once per process (main agent and subagents alike)."""
-    from nanobot.agent.tools.shell import ExecTool
+def _exec_session_summary(params: dict[str, Any]) -> tuple[bool, str]:
+    input_text = params.get("input")
+    if not isinstance(input_text, str) or not input_text:
+        return False, ""
+    session_id = str(params.get("session_id") or "")
+    summary = f"{session_id}: {input_text}" if session_id else input_text
+    return True, summary
 
-    if getattr(ExecTool.execute, "_approval_guarded", False):
+
+def _cli_apps_summary(params: dict[str, Any]) -> tuple[bool, str]:
+    name = str(params.get("name") or "")
+    args = params.get("args")
+    if isinstance(args, list) and args:
+        summary = f"{name} " + " ".join(str(a) for a in cast(list[Any], args))
+    else:
+        summary = name
+    return True, summary
+
+
+def _guard_tool(
+    cls: type,
+    method_name: str,
+    tool_name: str,
+    extractor: Callable[[dict[str, Any]], tuple[bool, str]],
+) -> None:
+    original = getattr(cls, method_name, None)
+    if original is None or getattr(original, "_approval_guarded", False):
         return
-    original = ExecTool.execute
-
     signature = inspect.signature(original)
 
     async def guarded(self: Any, *args: Any, **kwargs: Any) -> Any:
-        # Bind positionals too, so no calling style skips the gate.
         params = dict(signature.bind_partial(self, *args, **kwargs).arguments)
         params.pop("self", None)
-        session_key = current_request_session_key() or "unknown"
-        if not await GATE.request(session_key, _GUARDED_TOOL, _summary(params)):
-            logger.info("approvals: exec denied for {}", session_key)
-            return ToolResult.error(DENIED)
+        should_gate, summary = extractor(params)
+        if should_gate:
+            session_key = current_request_session_key() or "unknown"
+            if not await GATE.request(session_key, tool_name, summary):
+                logger.info("approvals: {} denied for {}", tool_name, session_key)
+                return ToolResult.error(DENIED)
         return await original(self, *args, **kwargs)
 
     guarded._approval_guarded = True  # type: ignore[attr-defined]
-    ExecTool.execute = guarded  # type: ignore[method-assign]
+    setattr(cls, method_name, guarded)
+
+
+def install() -> None:
+    """Guard ``ExecTool.execute``, ``ExecSessionTool.execute``, and ``CliAppsTool.execute`` once per process."""
+    from nanobot.agent.tools.cli_apps import CliAppsTool
+    from nanobot.agent.tools.exec_session import ExecSessionTool
+    from nanobot.agent.tools.shell import ExecTool
+
+    _guard_tool(ExecTool, "execute", "exec", _exec_summary)
+    _guard_tool(ExecSessionTool, "execute", "exec_session", _exec_session_summary)
+    _guard_tool(CliAppsTool, "execute", "run_cli_app", _cli_apps_summary)
 
 
 def dispatch_approvals_get(router: Any, request: WsRequest, got: str) -> Response | None:

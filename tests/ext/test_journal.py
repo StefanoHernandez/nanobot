@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
@@ -429,3 +430,76 @@ async def test_journal_routes_body_too_large(tmp_path):
         resp2 = await handler(req2)
         assert resp2.status == 413
         assert json.loads(resp2.text) == {"error": "body_too_large"}
+
+
+def test_read_day_refuses_symlink(tmp_path):
+    workspace = tmp_path / "workspace"
+    journal_dir = workspace / "memory" / "journal"
+    journal_dir.mkdir(parents=True)
+    target = tmp_path / "secret.txt"
+    target.write_text("secret config", encoding="utf-8")
+
+    symlink_file = journal_dir / "2026-10-16.md"
+    symlink_file.symlink_to(target)
+
+    with pytest.raises(journal.JournalError) as exc_info:
+        journal.read_day(workspace, DAY)
+    assert exc_info.value.status == 404
+    assert exc_info.value.code == "not_found"
+
+    assert "2026-10-16" not in journal.list_days(workspace)
+
+
+def test_chat_pieces_skips_sessions_updated_before_day(tmp_path, monkeypatch):
+    workspace, sessions = _sessions(tmp_path)
+    _say(sessions, "websocket:old", "user", "old message", "2026-10-15T10:00:00")
+    # Force updated_at in sqlite db to be in the past
+    with sessions._store.transaction(write=True) as db:
+        db.execute("UPDATE sessions SET updated_at = '2026-10-15T23:59:59+00:00' WHERE key = 'websocket:old'")
+
+    _say(sessions, "websocket:today", "user", "today message", "2026-10-16T10:00:00")
+    with sessions._store.transaction(write=True) as db:
+        db.execute("UPDATE sessions SET updated_at = '2026-10-16T12:00:00+00:00' WHERE key = 'websocket:today'")
+
+    loaded_keys: list[str] = []
+    real_get_existing = sessions.get_existing
+
+    def track_get(key: str):
+        loaded_keys.append(key)
+        return real_get_existing(key)
+
+    monkeypatch.setattr(sessions, "get_existing", track_get)
+
+    text = journal.collect_day(DAY, sessions, tz_name="UTC")
+    assert "today message" in text
+    assert "old message" not in text
+    assert "websocket:old" not in loaded_keys
+    assert "websocket:today" in loaded_keys
+
+
+@pytest.mark.asyncio
+async def test_execute_day_does_not_block_loop(tmp_path, monkeypatch):
+    import time
+    workspace, sessions = _sessions(tmp_path)
+
+    def slow_collect(*args, **kwargs):
+        time.sleep(0.05)
+        return "content"
+
+    monkeypatch.setattr(journal, "collect_day", slow_collect)
+
+    concurrent_ran = False
+
+    async def concurrent_task():
+        nonlocal concurrent_ran
+        await asyncio.sleep(0.01)
+        concurrent_ran = True
+
+    async def fake_turn(_prompt: str) -> str:
+        return "diario scritto"
+
+    ctask = asyncio.create_task(concurrent_task())
+    result = await journal.execute_day(workspace, sessions, DAY, fake_turn)
+    await ctask
+    assert concurrent_ran is True
+    assert result["written"] is True

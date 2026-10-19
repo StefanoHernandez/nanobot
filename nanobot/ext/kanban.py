@@ -9,7 +9,8 @@ import secrets
 import sqlite3
 import threading
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Generator
+from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any, cast
 
@@ -242,9 +243,15 @@ class KanbanStore:
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
+    @contextmanager
+    def _connection(self) -> Generator[sqlite3.Connection]:
+        with closing(self._connect()) as conn:
+            with conn:
+                yield conn
+
     def _ensure_schema(self) -> None:
         with self._lock:
-            with self._connect() as conn:
+            with self._connection() as conn:
                 conn.execute("PRAGMA journal_mode=WAL")  # persistent on the DB file
                 conn.executescript(
                     """
@@ -355,7 +362,7 @@ class KanbanStore:
             )
 
     def list_bots(self) -> list[dict[str, Any]]:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             rows = conn.execute("SELECT * FROM bots ORDER BY created_at_ms").fetchall()
         return [_row_dict(r) for r in rows]
 
@@ -374,7 +381,7 @@ class KanbanStore:
         role_prompt = _validate_prose(role_prompt, max_len=MAX_ROLE_PROMPT, code="invalid_role_prompt")
         max_concurrent = _bounded_int(max_concurrent, default=1, low=1, high=20, code="invalid_max_concurrent")
         model_preset = _validate_no_control(model_preset or "", max_len=80, code="invalid_preset")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             count = conn.execute("SELECT COUNT(*) FROM bots").fetchone()[0]
             if count >= MAX_BOTS:
                 raise KanbanError(409, "bot_limit")
@@ -404,7 +411,7 @@ class KanbanStore:
     ) -> dict[str, Any]:
         if not _validate_optional_id(bot_id):
             raise KanbanError(400, "invalid_id")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             row = conn.execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
             if row is None:
                 raise KanbanError(404, "not_found")
@@ -438,7 +445,7 @@ class KanbanStore:
         bot_id = body.get("id")
         if isinstance(bot_id, str) and bot_id.strip():
             bid = bot_id.strip()
-            with self._lock, self._connect() as conn:
+            with self._lock, self._connection() as conn:
                 exists = conn.execute("SELECT 1 FROM bots WHERE id = ?", (bid,)).fetchone()
             if exists:
                 return self.update_bot(
@@ -466,7 +473,7 @@ class KanbanStore:
     def delete_bot(self, bot_id: str) -> None:
         if not _validate_optional_id(bot_id):
             raise KanbanError(400, "invalid_id")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             if conn.execute("SELECT 1 FROM bots WHERE id = ?", (bot_id,)).fetchone() is None:
                 raise KanbanError(404, "not_found")
             assigned = conn.execute(
@@ -482,7 +489,7 @@ class KanbanStore:
             conn.execute("DELETE FROM bots WHERE id = ?", (bot_id,))
 
     def list_boards(self) -> list[dict[str, Any]]:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             rows = conn.execute("SELECT * FROM boards ORDER BY created_at_ms").fetchall()
         return [_row_dict(r) for r in rows]
 
@@ -497,7 +504,7 @@ class KanbanStore:
         title = _validate_no_control(title.strip(), max_len=MAX_TITLE, code="invalid_title")
         description = _validate_prose(description, max_len=MAX_DESCRIPTION, code="invalid_description")
         max_concurrent = _bounded_int(max_concurrent, default=2, low=1, high=20, code="invalid_max_concurrent")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             count = conn.execute("SELECT COUNT(*) FROM boards").fetchone()[0]
             if count >= MAX_BOARDS:
                 raise KanbanError(409, "board_limit")
@@ -518,7 +525,7 @@ class KanbanStore:
     def delete_board(self, board_id: str) -> None:
         if not _validate_optional_id(board_id):
             raise KanbanError(400, "invalid_id")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             cur = conn.execute("DELETE FROM boards WHERE id = ?", (board_id,))
             if cur.rowcount == 0:
                 raise KanbanError(404, "not_found")
@@ -541,7 +548,7 @@ class KanbanStore:
         title = body.get("title")
         description = body.get("description", "")
         if isinstance(task_id, str) and task_id.strip():
-            with self._lock, self._connect() as conn:
+            with self._lock, self._connection() as conn:
                 exists = conn.execute(
                     "SELECT 1 FROM tasks WHERE id = ?", (task_id.strip(),)
                 ).fetchone()
@@ -577,7 +584,7 @@ class KanbanStore:
         max_retries = _bounded_int(
             body.get("max_retries"), default=2, low=0, high=20, code="invalid_retries"
         )
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             self._board_or_404(conn, board_id)
             count = conn.execute(
                 "SELECT COUNT(*) FROM tasks WHERE board_id = ?", (board_id,)
@@ -622,7 +629,7 @@ class KanbanStore:
     def _update_task(self, task_id: Any, body: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(task_id, str) or not _validate_optional_id(task_id):
             raise KanbanError(400, "invalid_id")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             existing = self._task_or_404(conn, task_id)
             fields: dict[str, Any] = {}
             if "title" in body:
@@ -696,7 +703,7 @@ class KanbanStore:
     def move_task(self, task_id: str, status: str) -> dict[str, Any]:
         if status not in STATUSES:
             raise KanbanError(400, "invalid_status")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             task = self._task_or_404(conn, task_id)
             if task["status"] != status:
                 self._finish_open_run(conn, task_id, status="cancelled")
@@ -712,7 +719,7 @@ class KanbanStore:
     def delete_task(self, task_id: str) -> None:
         if not _validate_optional_id(task_id):
             raise KanbanError(400, "invalid_id")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             cur = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
             if cur.rowcount == 0:
                 raise KanbanError(404, "not_found")
@@ -720,7 +727,7 @@ class KanbanStore:
     def get_task_detail(self, task_id: str) -> dict[str, Any]:
         if not _validate_optional_id(task_id):
             raise KanbanError(404, "not_found")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             task_row = self._task_or_404(conn, task_id)
             parents = conn.execute(
                 """
@@ -791,11 +798,11 @@ class KanbanStore:
         )
 
     def add_dependency(self, parent_id: str, child_id: str) -> None:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             self._add_dependency_locked(conn, parent_id, child_id)
 
     def remove_dependency(self, parent_id: str, child_id: str) -> None:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             conn.execute(
                 "DELETE FROM task_links WHERE parent_id = ? AND child_id = ?",
                 (parent_id, child_id),
@@ -984,7 +991,7 @@ class KanbanStore:
 
     def claim_next_ready_task(self, now_ms: int | None = None) -> dict[str, Any] | None:
         now = now_ms if now_ms is not None else _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             board_running: dict[str, int] = {}
             bot_running: dict[str, int] = {}
             return self._claim_one_ready_task_locked(conn, now, board_running, bot_running)
@@ -992,7 +999,7 @@ class KanbanStore:
     def claim_ready_tasks(self, now_ms: int | None = None) -> list[dict[str, Any]]:
         now = now_ms if now_ms is not None else _now_ms()
         claimed: list[dict[str, Any]] = []
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             board_running: dict[str, int] = {}
             bot_running: dict[str, int] = {}
             while True:
@@ -1029,12 +1036,13 @@ class KanbanStore:
         summary = _validate_prose(summary, max_len=MAX_DESCRIPTION, code="invalid_summary")
         arts = _parse_artifacts(artifacts or [])
         now = _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             task = self._task_or_404(conn, task_id)
             self._finish_open_run(conn, task_id, summary=summary, artifacts=arts, status="done")
+            has_runs = conn.execute("SELECT 1 FROM task_runs WHERE task_id = ?", (task_id,)).fetchone() is not None
             recurrence = str(task["recurrence_expr"] or "")
             every_match = re.fullmatch(r"every:(\d+)s", recurrence)
-            if every_match:
+            if every_match and has_runs:
                 seconds = int(every_match.group(1))
                 if 60 <= seconds <= 2592000:
                     scheduled = now + seconds * 1000
@@ -1075,7 +1083,7 @@ class KanbanStore:
         summary = _validate_prose(summary, max_len=MAX_DESCRIPTION, code="invalid_summary")
         arts = _parse_artifacts(artifacts or [])
         now = _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             self._task_or_404(conn, task_id)
             self._finish_open_run(conn, task_id, summary=summary, artifacts=arts, status="review")
             conn.execute(
@@ -1093,7 +1101,7 @@ class KanbanStore:
         self, task_id: str, approved: bool, feedback: str = ""
     ) -> dict[str, Any]:
         feedback = _validate_prose(feedback, max_len=MAX_MESSAGE, code="invalid_feedback")
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             task = self._task_or_404(conn, task_id)
             summary = str(task["summary"] or "")
             arts = _loads_artifacts(task["artifacts_json"])
@@ -1102,7 +1110,7 @@ class KanbanStore:
         if approved:
             return self.complete_task(task_id, summary, arts)
         now = _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             self._finish_open_run(conn, task_id, summary=feedback, status="rejected")
             conn.execute(
                 """
@@ -1127,7 +1135,7 @@ class KanbanStore:
     def block_task(self, task_id: str, reason: str) -> dict[str, Any]:
         reason = _validate_prose(reason, max_len=MAX_DESCRIPTION, code="invalid_reason")
         now = _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             self._task_or_404(conn, task_id)
             self._finish_open_run(conn, task_id, error=reason, status="blocked")
             conn.execute(
@@ -1143,7 +1151,7 @@ class KanbanStore:
     def record_failure(self, task_id: str, error: str, *, transient: bool = False) -> dict[str, Any]:
         error = _validate_prose(error, max_len=MAX_DESCRIPTION, code="invalid_error")
         now = _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             task = self._task_or_404(conn, task_id)
             self._finish_open_run(conn, task_id, status="failed", error=error)
             if transient:
@@ -1176,7 +1184,7 @@ class KanbanStore:
         """If task is in review with an open run for reviewer_bot_id, fail the run and count a retry."""
         error = _validate_prose(error, max_len=MAX_DESCRIPTION, code="invalid_error")
         now = _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
             if task is None or task["status"] != "review":
                 return None
@@ -1218,7 +1226,7 @@ class KanbanStore:
 
     def events_since(self, since_ms: int) -> dict[str, Any]:
         now = _now_ms()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             run_rows = conn.execute(
                 """
                 SELECT r.id AS run_id, r.status AS kind, r.finished_at_ms AS event_ms,
@@ -1314,7 +1322,7 @@ class KanbanStore:
         parent = parent_hop_count if isinstance(parent_hop_count, int) and not isinstance(parent_hop_count, bool) else 0
         parent = min(max(parent, 0), 10)
         hop_count = 0 if author_type == "user" else parent + 1
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             self._board_or_404(conn, board_id)
             if task_id:
                 task = self._task_or_404(conn, task_id)
@@ -1356,19 +1364,19 @@ class KanbanStore:
 
     def take_wake(self) -> dict[str, Any] | None:
         """Oldest pending wake. It stays queued until finish_wake: a crash mid-turn retries it."""
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             row = conn.execute(
                 "SELECT * FROM wakes ORDER BY created_at_ms ASC LIMIT 1"
             ).fetchone()
             return _row_dict(row) if row is not None else None
 
     def finish_wake(self, wake_id: str) -> None:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             conn.execute("DELETE FROM wakes WHERE id = ?", (wake_id,))
 
     def requeue_wake(self, wake: dict[str, Any], attempts: int) -> bool:
         """Retry a failed wake later (back of the queue). Returns True if dropped instead."""
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             if attempts > 2:
                 conn.execute("DELETE FROM wakes WHERE id = ?", (wake["id"],))
                 return True
@@ -1380,7 +1388,7 @@ class KanbanStore:
 
     def recover_interrupted(self) -> list[str]:
         """After a gateway restart, no turn is running: count each 'running' or open 'review' task as a failed attempt."""
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             running_ids = [str(r["id"]) for r in conn.execute("SELECT id FROM tasks WHERE status = 'running'").fetchall()]
             review_rows = conn.execute(
                 """
@@ -1396,7 +1404,7 @@ class KanbanStore:
         return list(dict.fromkeys(running_ids + [str(r["id"]) for r in review_rows]))
 
     def board_snapshot(self, board_id: str) -> dict[str, Any]:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._connection() as conn:
             board = self._board_or_404(conn, board_id)
             tasks = conn.execute(
                 "SELECT * FROM tasks WHERE board_id = ? ORDER BY created_at_ms",
