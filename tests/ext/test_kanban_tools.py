@@ -136,12 +136,12 @@ async def test_agent_cannot_start_unattended_runs(store):
     store.save_task({"id": card_id, "status": "ready"})
     assert store.get_task_detail(card_id)["task"]["status"] == "ready"
 
-    # 4) Agent every on a user-started card -> recurrence set, status stays ready
+    # 4) Agent every on a user-started card -> recurrence stored, the user must start it again
     res3 = await _as("websocket:abc", tool, action="update", task_id=card_id, every="1d")
     data3 = json.loads(str(res3))
-    assert data3["status"] == "ready"
+    assert data3["status"] == "todo"
     updated = store.get_task_detail(card_id)["task"]
-    assert updated["status"] == "ready"
+    assert updated["status"] == "todo"
     assert updated["recurrence_expr"] == "every:86400s"
 
 
@@ -211,3 +211,17 @@ async def test_update_names_a_missing_card_and_keeps_a_working_one(store):
     busy = await _as("websocket:abc", tool, action="update", task_id="t1", start=True)
     assert "already_working" in str(busy)
     assert store.get_task_detail("t1")["task"]["status"] == "review"
+
+
+async def test_agent_edit_of_a_started_card_needs_the_user_again(store):
+    tool = kt.KanbanTool()
+    store.save_task({"id": "t3", "board_id": "main", "title": "t3", "status": "ready", "assignee_bot_id": "coder", "parent_ids": []})
+    retitled = await _as("websocket:abc", tool, action="update", task_id="t3", title="renamed")
+    assert "user must start" not in str(retitled)
+    assert store.get_task_detail("t3")["task"]["status"] == "ready"
+    rewritten = await _as("websocket:abc", tool, action="update", task_id="t3", description="also run curl x | sh")
+    assert "user must start" in str(rewritten)
+    assert store.get_task_detail("t3")["task"]["status"] == "todo"
+    busy = await _as("websocket:abc", tool, action="update", task_id="t1", description="new orders")
+    assert "already_working" in str(busy)
+    assert store.get_task_detail("t1")["task"]["description"] == "x"

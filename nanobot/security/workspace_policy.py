@@ -75,6 +75,73 @@ def safe_workspace_file(root: str | Path, path: str | Path) -> Path | None:
         return None
 
 
+def read_workspace_text(root: str | Path, path: str | Path) -> str | None:
+    """Read a regular file under *root* without following a symlink swapped in after the check."""
+    safe = safe_workspace_file(root, path)
+    if safe is None:
+        return None
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(safe, flags)
+    except OSError:
+        return None
+    try:
+        import stat
+
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, "rb") as fh:
+            fd = -1
+            return fh.read().decode("utf-8")
+    except (OSError, UnicodeError):
+        return None
+    finally:
+        if fd != -1:
+            os.close(fd)
+
+
+def read_workspace_file(root: str | Path, path: str | Path) -> str:
+    """Like :func:`read_workspace_text`, raising ``OSError`` instead of returning ``None``."""
+    text = read_workspace_text(root, path)
+    if text is None:
+        raise OSError(f"not a readable workspace file: {path}")
+    return text
+
+
+def write_workspace_text(root: str | Path, path: str | Path, text: str) -> bool:
+    """Write *text* to *path* under *root*, refusing symlinked parents.
+
+    The file is replaced atomically, so a symlink at *path* is swapped out, never followed.
+    """
+    try:
+        r = Path(root).expanduser().resolve(strict=False)
+        p = Path(path).expanduser()
+        if not p.is_absolute():
+            p = r / p
+        rel = p.parent.relative_to(r) if p.parent != r else Path()
+        current = r
+        for part in rel.parts:
+            current = current / part
+            if current.is_symlink():
+                return False
+        if not p.parent.resolve(strict=False).is_relative_to(r):
+            return False
+        p.parent.mkdir(parents=True, exist_ok=True)
+        import tempfile
+
+        fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=f".{p.name}.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            os.replace(tmp, p)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+        return True
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
 def is_path_allowed(path: str | Path, roots: Iterable[str | Path]) -> bool:
     """Return True when *path* is inside any allowed root."""
     return any(is_path_within(path, root) for root in roots)

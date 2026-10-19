@@ -561,3 +561,19 @@ def test_symlinked_proposal_is_not_listed_not_readable_and_activate_refuses_it(t
     with pytest.raises(skill_proposals.SkillProposalError) as exc4:
         skill_proposals.activate_proposal(workspace, "sym-file-skill")
     assert exc4.value.status == 404
+
+
+def test_activate_never_writes_through_a_symlinked_skill_dir(tmp_path: Path):
+    workspace, _ = _sessions(tmp_path)
+    skill_proposals.write_proposal(
+        workspace, name="evil", summary="s", reason="r",
+        content="---\nname: evil\ndescription: d\n---\n# x", source="chat",
+    )
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    skills_dir = skill_proposals.active_skills_dir(workspace)
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    (skills_dir / "evil").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(skill_proposals.SkillProposalError):
+        skill_proposals.activate_proposal(workspace, "evil")
+    assert list(outside.iterdir()) == []

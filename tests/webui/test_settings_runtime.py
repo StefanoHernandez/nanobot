@@ -125,7 +125,7 @@ def test_other_settings_preserve_a_longer_trusted_shell_runtime(tmp_path):
         "maxRuntime": 172800, "maxRuntimeLimit": 86400,
     }}}), path)
 
-    update_runtime_config_settings({"tools.exec.path_append": "extra-bin"}, config_path=path)
+    update_runtime_config_settings({"tools.exec.path_append": "extra-bin"}, local_browser=True, config_path=path)
 
     saved = load_config(path).tools.exec
     assert saved.max_runtime == 172800

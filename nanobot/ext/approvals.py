@@ -51,14 +51,12 @@ def approvals_file_path() -> Path:
     raw = os.environ.get("NANOBOT_APPROVALS_FILE", "").strip()
     if raw:
         return Path(raw).expanduser()
-    try:
-        return Path.home() / ".nanobot" / "ext_approvals.json"
-    except RuntimeError:
-        return Path(tempfile.gettempdir()) / ".nanobot" / "ext_approvals.json"
+    return Path.home() / ".nanobot" / "ext_approvals.json"
 
 
 def _load(path: Path) -> dict[str, Any]:
-    if not path.is_file():
+    # Only a missing file means "never configured"; anything else unreadable fails closed below.
+    if not path.exists() and not path.is_symlink():
         return {"enabled": False, "allow": {}}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -147,12 +145,13 @@ class ApprovalGate:
         return [p.public() for p in self._pending.values() if not p.future.done()]
 
     async def request(self, session_key: str, tool: str, summary: str, *, timeout_s: float = TIMEOUT_S) -> bool:
-        if len(summary) > MAX_SUMMARY:
-            logger.warning("approvals: summary exceeds limit ({} > {}), denying", len(summary), MAX_SUMMARY)
-            return False
         state = self.state()
         if not state["enabled"] or tool in state["allow"].get(session_key, []):
             return True
+        if len(summary) > MAX_SUMMARY:
+            # The phone could not show the whole command: refuse rather than approve a hidden tail.
+            logger.warning("approvals: summary exceeds limit ({} > {}), denying", len(summary), MAX_SUMMARY)
+            return False
         if len(self._pending) >= MAX_PENDING:
             return False  # fail closed rather than queue without bound
         now = time.time()
@@ -217,7 +216,8 @@ def _cli_apps_summary(params: dict[str, Any]) -> tuple[bool, str]:
         summary = f"{name} " + " ".join(str(a) for a in cast(list[Any], args))
     else:
         summary = name
-    return True, summary
+    cwd = params.get("working_dir") or ""
+    return True, f"{summary}\n(cwd: {cwd})" if cwd else summary
 
 
 def _guard_tool(

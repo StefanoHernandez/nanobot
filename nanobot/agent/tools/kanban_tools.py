@@ -212,6 +212,9 @@ def _create_task(store: KanbanStore, kwargs: dict[str, Any]) -> str | ToolResult
     return _json_payload(payload)
 
 
+_RUN_SHAPING_KEYS = ("description", "bot", "reviewer", "when", "every")
+
+
 def _update_task(store: KanbanStore, task_id: str, kwargs: dict[str, Any]) -> str | ToolResult:
     # Raises not_found for an unknown id; save_task would treat it as a new card and say invalid_board_id.
     current = cast(dict[str, Any], store.get_task_detail(task_id)["task"])
@@ -246,6 +249,15 @@ def _update_task(store: KanbanStore, task_id: str, kwargs: dict[str, Any]) -> st
 
     if "every" in kwargs:
         if current_status != "ready" and body.get("status") != "ready":
+            user_start_needed = True
+            body["status"] = "todo"
+
+    # What the bot will do (its instructions, who runs it, when) changed on a card the user started:
+    # the user has to start it again, so injected text never runs unattended.
+    if any(key in kwargs for key in _RUN_SHAPING_KEYS):
+        if current_status in ("running", "review"):
+            return ToolResult.error("kanban error: already_working")
+        if current_status == "ready" or body.get("status") == "ready":
             user_start_needed = True
             body["status"] = "todo"
 

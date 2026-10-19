@@ -29,7 +29,11 @@ from nanobot.ext.devices import (
 from nanobot.ext.devices import (
     read_json as devices_read_json,
 )
-from nanobot.security.workspace_policy import safe_workspace_file
+from nanobot.security.workspace_policy import (
+    read_workspace_file,
+    safe_workspace_file,
+    write_workspace_text,
+)
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.manager import SessionManager
 from nanobot.webui.http_utils import http_error, http_json_response
@@ -106,9 +110,8 @@ def load_scout_settings(workspace: Path) -> dict[str, Any]:
 def save_scout_settings(workspace: Path, settings: dict[str, Any]) -> dict[str, Any]:
     enabled = settings.get("enabled") is True
     clean = {"enabled": enabled}
-    path = scout_settings_path(workspace)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(clean), encoding="utf-8")
+    if not write_workspace_text(workspace, scout_settings_path(workspace), json.dumps(clean)):
+        raise SkillProposalError(409, "unsafe_path")
     return clean
 
 
@@ -144,7 +147,7 @@ def list_proposals(workspace: Path) -> list[dict[str, Any]]:
         if meta_file is None or skill_file is None:
             continue
         try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            meta = json.loads(read_workspace_file(workspace, meta_file))
         except (OSError, ValueError):
             continue
         if isinstance(meta, dict):
@@ -162,8 +165,8 @@ def get_proposal(workspace: Path, name: str) -> dict[str, Any]:
     if skill_file is None or meta_file is None:
         raise SkillProposalError(404, "not_found")
     try:
-        content = skill_file.read_text(encoding="utf-8")
-        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        content = read_workspace_file(workspace, skill_file)
+        meta = json.loads(read_workspace_file(workspace, meta_file))
     except (OSError, ValueError) as exc:
         raise SkillProposalError(500, "read_error") from exc
     return {
@@ -194,8 +197,8 @@ def write_proposal(
     if len(content.encode("utf-8")) > MAX_CONTENT_BYTES:
         raise SkillProposalError(400, "content_too_large")
     p_dir = proposal_path(workspace, name)
-    p_dir.mkdir(parents=True, exist_ok=True)
-    (p_dir / "SKILL.md").write_text(content, encoding="utf-8")
+    if not write_workspace_text(workspace, p_dir / "SKILL.md", content):
+        raise SkillProposalError(409, "unsafe_path")
 
     active_file = active_skills_dir(workspace) / name / "SKILL.md"
     from nanobot.agent.skills import SkillsLoader
@@ -215,7 +218,8 @@ def write_proposal(
         meta["session_key"] = session_key
     if active_file.exists() or name in builtin_names:
         meta["updates"] = name
-    (p_dir / "proposal.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    if not write_workspace_text(workspace, p_dir / "proposal.json", json.dumps(meta, indent=2)):
+        raise SkillProposalError(409, "unsafe_path")
     return meta
 
 
@@ -226,14 +230,19 @@ def activate_proposal(workspace: Path, name: str) -> dict[str, Any]:
     skill_file = safe_workspace_file(workspace, p_dir / "SKILL.md")
     if skill_file is None:
         raise SkillProposalError(404, "not_found")
+    try:
+        content = read_workspace_file(workspace, skill_file)
+    except OSError:
+        raise SkillProposalError(404, "not_found") from None
     target_dir = active_skills_dir(workspace) / name
-    target_dir.mkdir(parents=True, exist_ok=True)
     target_file = target_dir / "SKILL.md"
-    target_bak = target_dir / "SKILL.md.bak"
-
-    if target_file.exists():
-        target_file.replace(target_bak)
-    shutil.copy2(skill_file, target_file)
+    previous = read_workspace_file(workspace, target_file) if safe_workspace_file(workspace, target_file) else None
+    if target_dir.is_symlink() or (target_file.is_symlink() and previous is None):
+        raise SkillProposalError(409, "unsafe_path")
+    if previous is not None and not write_workspace_text(workspace, target_dir / "SKILL.md.bak", previous):
+        raise SkillProposalError(409, "unsafe_path")
+    if not write_workspace_text(workspace, target_file, content):
+        raise SkillProposalError(409, "unsafe_path")
     shutil.rmtree(p_dir, ignore_errors=True)
     return {"ok": True, "name": name, "activated": True}
 
@@ -485,9 +494,7 @@ def _read_scout_job_data(workspace: Path) -> tuple[bool, int, list[dict[str, Any
 
 
 def _write_scout_cursor(workspace: Path, cursor: int) -> None:
-    c_file = cursor_file_path(workspace)
-    c_file.parent.mkdir(parents=True, exist_ok=True)
-    c_file.write_text(str(cursor), encoding="utf-8")
+    write_workspace_text(workspace, cursor_file_path(workspace), str(cursor))
 
 
 async def run_scout_job(agent: Any, *, tz_name: str | None = None) -> None:

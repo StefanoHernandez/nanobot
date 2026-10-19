@@ -270,3 +270,16 @@ def test_load_corrupt_file_enables_and_missing_defaults(tmp_path):
     corrupt_state = ap._load(corrupt_file)
     assert corrupt_state == {"enabled": True, "allow": {}}
 
+
+
+async def test_long_command_runs_when_approvals_are_off(gate):
+    assert await gate.request("websocket:c1", "exec", "a" * (ap.MAX_SUMMARY + 1)) is True
+
+
+def test_unreadable_approvals_path_fails_closed(tmp_path):
+    folder = tmp_path / "is_a_dir.json"
+    folder.mkdir()
+    assert ap._load(folder)["enabled"] is True
+    dangling = tmp_path / "dangling.json"
+    dangling.symlink_to(tmp_path / "gone.json")
+    assert ap._load(dangling)["enabled"] is True

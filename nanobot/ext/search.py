@@ -20,7 +20,7 @@ from websockets.http11 import Response
 from nanobot.config.paths import get_data_dir
 from nanobot.ext.devices import router_admin_authorized
 from nanobot.ext.kanban import kanban_db_path
-from nanobot.security.workspace_policy import safe_workspace_file
+from nanobot.security.workspace_policy import read_workspace_file, safe_workspace_file
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.keys import is_internal_session
 from nanobot.webui.http_utils import http_error, http_json_response
@@ -336,7 +336,7 @@ def _sync_journal(search_conn: sqlite3.Connection, workspace: Path) -> None:
             search_conn.execute("DELETE FROM docs WHERE source = 'journal' AND ref = ?", (ref,))
 
             try:
-                content = safe_file.read_text(encoding="utf-8").strip()
+                content = read_workspace_file(workspace, safe_file).strip()
             except OSError:
                 continue
 

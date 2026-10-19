@@ -22,7 +22,11 @@ from nanobot.cron.service import CronService
 from nanobot.cron.types import CronJob, CronPayload, CronSchedule
 from nanobot.ext.devices import admin_authorized
 from nanobot.ext.kanban import kanban_db_path
-from nanobot.security.workspace_policy import safe_workspace_file
+from nanobot.security.workspace_policy import (
+    read_workspace_file,
+    safe_workspace_file,
+    write_workspace_text,
+)
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.manager import SessionManager
 from nanobot.webui.http_utils import http_error, http_json_response
@@ -60,7 +64,7 @@ def load_settings(workspace: Path) -> dict[str, Any]:
     if safe is None:
         return {"enabled": False, "hour": 3, "model": None}
     try:
-        parsed: object = json.loads(safe.read_text(encoding="utf-8"))
+        parsed: object = json.loads(read_workspace_file(workspace, safe))
     except (OSError, ValueError):
         return {"enabled": False, "hour": 3, "model": None}
     if not isinstance(parsed, dict):
@@ -117,9 +121,8 @@ def save_settings(workspace: Path, settings: dict[str, Any], *, preset_names: fr
         previous_model=previous.get("model"),
         preset_names=preset_names,
     )
-    path = settings_path(workspace)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(clean), encoding="utf-8")
+    if not write_workspace_text(workspace, settings_path(workspace), json.dumps(clean)):
+        raise JournalError(409, "unsafe_path")
     return clean
 
 
@@ -344,7 +347,7 @@ def read_day(workspace: Path, day: date) -> str:
     if safe is None:
         raise JournalError(404, "not_found")
     try:
-        return safe.read_text(encoding="utf-8")
+        return read_workspace_file(workspace, safe)
     except OSError:
         raise JournalError(404, "not_found") from None
 
@@ -353,10 +356,8 @@ def write_day(workspace: Path, day: date, text: str) -> bool:
     body = text.strip()
     if not body:
         return False
-    path = day_path(workspace, day)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body + "\n", encoding="utf-8")
-    return True
+    # Never through a symlink the agent may have planted in memory/journal/.
+    return write_workspace_text(workspace, day_path(workspace, day), body + "\n")
 
 
 async def execute_day(
