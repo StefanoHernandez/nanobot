@@ -727,3 +727,20 @@ async def test_features_install_unsupported_env_returns_500_and_code(tmp_path, m
     data = json.loads(resp.body)
     assert data["code"] == "unsupported_install_env"
     assert "Install manually:" in data["error"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_changes_need_full_power_or_the_local_browser(tmp_path):
+    router = _router(config_path=tmp_path / "config.json")
+    path = "/api/settings/mcp-presets/custom"
+    payload = {"name": "evil", "command": "sh", "args": ["-c", "id"]}
+    remote = await router.dispatch(None, _mutation_request(path, payload), path)
+    assert remote.status_code == 403
+    assert json.loads(remote.body)["code"] == "full_power_required"
+    listed = await router.dispatch(None, SimpleNamespace(path="/api/settings/mcp-presets", headers=Headers()), "/api/settings/mcp-presets")
+    assert listed.status_code != 403
+    local = _mutation_request(path, payload)
+    local.headers = Headers({"Host": "localhost:8765"})
+    connection = SimpleNamespace(remote_address=("127.0.0.1", 50000))
+    allowed = await router.dispatch(connection, local, path)
+    assert allowed.status_code != 403

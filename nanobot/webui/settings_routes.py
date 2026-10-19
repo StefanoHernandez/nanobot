@@ -318,6 +318,8 @@ class WebUISettingsRouter:
                     "channel-configure",
                     "channel-connect",
                 }
+                # Fork: MCP changes can start host commands (stdio servers): full power only.
+                or (action.startswith("mcp-") and action != "mcp-list")
             ),
         )
         if domain == "models":

@@ -6,12 +6,12 @@ import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { HintSecretField } from "../../settings/common";
 import { toastEcosystemError } from "../../../ecosystem/common";
+import { usePrivileged } from "../../../ecosystem/privilege";
 import type { McpPresetInfo } from "@/lib/types";
 
 export function McpSheet({
   open,
   preset,
-  gateAllowed = true,
   onClose,
   onOpenOAuth,
   enable: propEnable,
@@ -20,7 +20,6 @@ export function McpSheet({
 }: {
   open: boolean;
   preset: McpPresetInfo | null;
-  gateAllowed?: boolean;
   onClose: () => void;
   onOpenOAuth?: (presetName: string) => void;
   enable?: (name: string, values?: Record<string, string>) => Promise<any>;
@@ -53,6 +52,7 @@ export function McpSheet({
     }
   }, [preset]);
 
+  const privileged = usePrivileged();
   if (!preset || !open) return null;
 
   const doSave = async () => {
@@ -117,7 +117,6 @@ export function McpSheet({
   };
 
   const isOAuth = preset.auth === "oauth" || preset.transport === "oauth";
-  const saveDisabled = !gateAllowed && !preset.enabled;
 
   const failureReason = testResult
     ? (!testResult.ok ? testResult.failure_reason : null)
@@ -235,14 +234,15 @@ export function McpSheet({
                   title={t("mcp.test")}
                   variant="secondary"
                   loading={testing}
+                  disabled={!privileged}
                   onPress={() => void handleTestInSheet()}
                 />
               ) : null}
               <Button
                 title={t("mcp.save")}
                 variant="primary"
-                disabled={saveDisabled}
                 loading={saving}
+                disabled={!privileged}
                 onPress={handleSaveClick}
               />
             </View>

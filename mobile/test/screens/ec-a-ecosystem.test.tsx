@@ -237,7 +237,7 @@ describe("EC-A Search & Ecosystem Features", () => {
         tools: jest.fn(),
       });
 
-      await renderWithTheme(<McpTab gateAllowed={true} />);
+      await renderWithTheme(<McpTab />);
 
       expect(screen.getByText("Errore: Process exited: ERR_MODULE_NOT_FOUND")).toBeTruthy();
       expect(
@@ -246,6 +246,7 @@ describe("EC-A Search & Ecosystem Features", () => {
     });
 
     test("McpSheet shows reason and npx hint after failed test in sheet", async () => {
+      mockPrivileged = true;
       const mockTest = jest.fn().mockResolvedValue({
         last_action: {
           ok: false,
@@ -270,7 +271,6 @@ describe("EC-A Search & Ecosystem Features", () => {
         <McpSheet
           open={true}
           preset={preset}
-          gateAllowed={true}
           test={mockTest}
           onClose={jest.fn()}
         />

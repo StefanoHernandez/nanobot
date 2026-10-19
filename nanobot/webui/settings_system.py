@@ -1035,6 +1035,14 @@ class SystemSettingsHandler:
         action: str | None,
         operations: SystemSettingsOperations,
     ) -> SettingsRouteResult:
+        # Fork: adding, enabling or testing an MCP server may run a command on the host,
+        # so only the local browser or a full-power device may do it (nanobot/ext/devices.py).
+        if action is not None and not request.local_browser:
+            return SettingsRouteResult.failure(
+                403,
+                "Manage MCP servers from a browser on the gateway host or a device with full power.",
+                code="full_power_required",
+            )
         try:
             payload = await operations.mcp_presets_action(
                 action,

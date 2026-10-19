@@ -70,7 +70,7 @@ export function AppsScreen() {
         {tab === "cli" ? (
           <CliAppsTab gateAllowed={gateAllowed} />
         ) : tab === "mcp" ? (
-          <McpTab gateAllowed={gateAllowed} />
+          <McpTab />
         ) : (
           <PluginsTab gateAllowed={gateAllowed} />
         )}

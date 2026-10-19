@@ -8,6 +8,9 @@ import { toast } from "../../src/ui/components/Toast";
 import { AppsScreen } from "../../src/screens/ecosystem/apps/AppsScreen";
 import type { CliAppInfo, McpPresetInfo, NanobotFeatureInfo } from "@/lib/types";
 
+let mockPrivileged = false;
+jest.mock("../../src/ecosystem/privilege", () => ({ usePrivileged: () => mockPrivileged }));
+
 jest.mock("../../src/ui/components/Toast", () => ({
   toast: { show: jest.fn() },
 }));
@@ -145,6 +148,7 @@ const renderWithTheme = async (ui: React.ReactElement) => {
 
 describe("P4-U2 Apps UI (CLI apps, MCP, plugins)", () => {
   beforeEach(async () => {
+    mockPrivileged = false;
     jest.clearAllMocks();
     await i18n.changeLanguage("en");
     mockSettingsData = {
@@ -458,10 +462,34 @@ describe("P4-U2 Apps UI (CLI apps, MCP, plugins)", () => {
     expect(mockSubmit).toHaveBeenCalledWith("https://127.0.0.1:8000/oauth?code=xyz");
   });
 
-  test("With the gate off, the MCP enable switch is disabled", async () => {
+  test("With full power, MCP switches work even with the install flag off", async () => {
+    mockPrivileged = true;
     mockSettingsData.runtime_config["tools.webui_allow_remote_package_install"] = false;
     mockUseMcp.mockReturnValue({
-      presets: [{ ...samplePreset, enabled: false }],
+      presets: [{ ...samplePreset, transport: "streamableHttp", enabled: false }],
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+      enable: jest.fn(),
+      disable: jest.fn(),
+      remove: jest.fn(),
+      test: jest.fn(),
+      reconnect: jest.fn(),
+      tools: jest.fn(),
+    });
+
+    await renderWithTheme(<AppsScreen />);
+    await fireEvent.press(screen.getByText("MCP"));
+
+    const switchEl = screen.getByRole("switch");
+    expect(switchEl.props.accessibilityState?.disabled ?? switchEl.props.disabled).not.toBe(true);
+  });
+
+  test("Without full power, MCP switches are locked with the reason", async () => {
+    mockPrivileged = false;
+    mockSettingsData.runtime_config["tools.webui_allow_remote_package_install"] = false;
+    mockUseMcp.mockReturnValue({
+      presets: [{ ...samplePreset, transport: "streamableHttp", enabled: false }],
       loading: false,
       error: null,
       refresh: jest.fn(),
@@ -478,6 +506,7 @@ describe("P4-U2 Apps UI (CLI apps, MCP, plugins)", () => {
 
     const switchEl = screen.getByRole("switch");
     expect(switchEl.props.accessibilityState?.disabled ?? switchEl.props.disabled).toBe(true);
+    expect(screen.getByText("A full-power device is required")).toBeTruthy();
   });
 
   test("With the gate on, enable opens a confirm, and confirm calls enable once", async () => {
@@ -513,6 +542,7 @@ describe("P4-U2 Apps UI (CLI apps, MCP, plugins)", () => {
   });
 
   test("A failing handleSave shows a toast", async () => {
+    mockPrivileged = true;
     const mockEnable = jest.fn().mockRejectedValueOnce(new Error("Network error"));
     mockSettingsData.runtime_config["tools.webui_allow_remote_package_install"] = true;
     mockUseMcp.mockReturnValue({
@@ -623,6 +653,7 @@ describe("P4-U2 Apps UI (CLI apps, MCP, plugins)", () => {
   });
 
   test("I7: McpSheet uses enable and tools passed down as props", async () => {
+    mockPrivileged = true;
     const mockEnable = jest.fn().mockResolvedValue({});
     const mockTools = jest.fn().mockResolvedValue({});
 

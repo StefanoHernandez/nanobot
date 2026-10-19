@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { usePrivileged } from "../../../ecosystem/privilege";
 import { useT } from "../../../i18n";
 import { Button, Dialog, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
@@ -12,7 +13,9 @@ import { McpSheet } from "./McpSheet";
 import { McpOAuthSheet } from "./McpOAuthSheet";
 import type { McpPresetInfo } from "@/lib/types";
 
-export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
+// MCP changes may start host commands: the server allows them from the local browser or a full-power device.
+export function McpTab() {
+  const privileged = usePrivileged();
   const t = useT();
   const th = useTheme();
   const { presets, loading, refresh, enable, disable, remove, test: testPreset, reconnect, tools } = useMcp();
@@ -131,7 +134,8 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       const cmdMatch = rawMsg.match(/`([^`]+)`/);
       return t("apps.lockUnsupportedEnv", { command: cmdMatch ? cmdMatch[1] : "" });
     }
-    return null; // the screen banner already explains a closed install gate
+    if (!privileged) return t("apps.lockFullPower");
+    return null;
   };
 
   const filteredPresets = filterEcosystemItems(presets, searchQuery);
@@ -165,7 +169,6 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
           filteredPresets.map((preset) => {
             const isOAuth = preset.auth === "oauth" || preset.transport === "oauth";
             const toolCount = preset.tool_count ?? preset.tool_names?.length ?? 0;
-            const switchDisabled = !gateAllowed && !preset.enabled;
             const failureReason = (preset as any).failure_reason || preset.error;
             const isFailed = preset.runtime_status === "failed" || !!failureReason;
             const isNpxCacheBroken =
@@ -250,7 +253,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
                   </View>
                   <Switch
                     value={!!preset.enabled}
-                    disabled={switchDisabled}
+                    disabled={!privileged}
                     onValueChange={(val) => void handleToggle(preset, val)}
                     trackColor={{ false: th.colors.muted, true: th.colors.primary }}
                   />
@@ -326,7 +329,6 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       <McpSheet
         open={!!selectedPreset}
         preset={selectedPreset}
-        gateAllowed={gateAllowed}
         enable={enable}
         test={testPreset}
         tools={tools}
