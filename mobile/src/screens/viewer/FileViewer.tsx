@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -20,8 +20,13 @@ import { File, Paths } from "expo-file-system";
 import { useT } from "../../i18n";
 import { kv } from "../../platform/storage";
 import { useTheme } from "../../ui/ThemeProvider";
-import { Button, Dialog, IconButton, TextField, toast } from "../../ui/components";
+import { Button, Dialog, IconButton, ListItem, Sheet, TextField, toast } from "../../ui/components";
 import { artifactFixText, freshArtifactId } from "../../artifacts/fix";
+import {
+  clearArtifactState,
+  flushArtifactState,
+  hasArtifactState,
+} from "../../artifacts/artifactState";
 import { printDocument, writePng, writePreview } from "./exportArtifact";
 import { lockViewer } from "./orientation";
 import { isWritable } from "../../state/chatsStore";
@@ -107,6 +112,67 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
   const { session } = useSession();
   const threadLoaded = useStore(threadStore, (s) => !!chatKey && !!s.threads[chatKey]);
   const canAsk = !uri && !!chatKey && threadLoaded && isWritable(chatKey) && !!session;
+  const artifactId = opened?.id || undefined;
+  const [hasSavedState, setHasSavedState] = useState(() => hasArtifactState(chatKey, artifactId));
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sendDialog, setSendDialog] = useState<{ text: string; resolve: (ok: boolean) => void } | null>(null);
+  const sendPendingRef = useRef(false);
+
+  useEffect(() => {
+    setHasSavedState(hasArtifactState(chatKey, artifactId));
+  }, [chatKey, artifactId]);
+
+  const updateSavedState = useCallback(() => {
+    setHasSavedState(hasArtifactState(chatKey, artifactId));
+  }, [chatKey, artifactId]);
+
+  useEffect(() => {
+    return () => {
+      flushArtifactState(chatKey, artifactId);
+    };
+  }, [chatKey, artifactId]);
+
+  const handleSendRequest = useCallback((text: string): Promise<boolean> => {
+    if (!chatKey || !artifactId) return Promise.resolve(false);
+    if (!text || text.length > 4000) return Promise.resolve(false);
+    if (!canAsk) return Promise.resolve(false);
+    if (sendPendingRef.current) return Promise.resolve(false);
+
+    sendPendingRef.current = true;
+    return new Promise<boolean>((resolve) => {
+      setSendDialog({
+        text,
+        resolve: (ok: boolean) => {
+          sendPendingRef.current = false;
+          setSendDialog(null);
+          resolve(ok);
+        },
+      });
+    });
+  }, [chatKey, artifactId, canAsk]);
+
+  const handleConfirmSend = () => {
+    if (!sendDialog) return;
+    const { text, resolve } = sendDialog;
+    if (!session) {
+      resolve(false);
+      return;
+    }
+    try {
+      sending.current = true;
+      const ok = threadStore.getState().send(session, chatKey, text, { steer: true });
+      sending.current = false;
+      resolve(!!ok);
+    } catch {
+      sending.current = false;
+      resolve(false);
+    }
+  };
+
+  const handleCancelSend = () => {
+    if (!sendDialog) return;
+    sendDialog.resolve(false);
+  };
   const [fixError, setFixError] = useState<{ message: string; line?: number } | null>(null);
   const [ask, setAsk] = useState("");
   const sending = useRef(false);
@@ -675,6 +741,10 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                     name={name}
                     fit={fit}
                     network={network}
+                    chatKey={chatKey}
+                    artifactId={artifactId}
+                    onSendRequest={handleSendRequest}
+                    onStateChange={updateSavedState}
                     onError={canAsk ? setFixError : undefined}
                     onFallback={() => setArtifactFallback(true)}
                   />
@@ -690,6 +760,10 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                     network={network}
                     pngTicket={pngTicket}
                     onPng={acceptPng}
+                    chatKey={chatKey}
+                    artifactId={artifactId}
+                    onSendRequest={handleSendRequest}
+                    onStateChange={updateSavedState}
                     onError={canAsk ? setFixError : undefined}
                     onFallback={() => setArtifactFallback(true)}
                   />
@@ -706,6 +780,10 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
                 network={canNetwork ? network : false}
                 pngTicket={pngTicket}
                 onPng={acceptPng}
+                chatKey={chatKey}
+                artifactId={artifactId}
+                onSendRequest={handleSendRequest}
+                onStateChange={updateSavedState}
                 onError={canAsk ? setFixError : undefined}
                 onFallback={() => setArtifactFallback(true)}
               />
@@ -1060,6 +1138,14 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
               onPress={handleOpenWith}
               accessibilityLabel={t("viewer.openWith")}
             />
+            {hasSavedState ? (
+              <IconButton
+                icon="dots-vertical"
+                size={22}
+                onPress={() => setMenuOpen(true)}
+                accessibilityLabel={t("artifact.menu") || "Altro"}
+              />
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -1081,6 +1167,34 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
         onCancel={() => setAskNetwork(false)}
       />
       {fixBar}
+      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title={t("thread.more")}>
+        {hasSavedState ? (
+          <ListItem
+            title={t("artifact.resetData")}
+            left={<MaterialCommunityIcons name="delete-outline" size={22} color={th.colors.destructive} />}
+            onPress={() => {
+              setMenuOpen(false);
+              clearArtifactState(chatKey, artifactId);
+              setHasSavedState(false);
+              toast.show(t("artifact.dataReset"));
+            }}
+          />
+        ) : null}
+      </Sheet>
+      <Dialog
+        open={!!sendDialog}
+        title={t("artifact.sendPrompt")}
+        confirmLabel={t("artifact.sendConfirm")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={handleConfirmSend}
+        onCancel={handleCancelSend}
+      >
+        <ScrollView style={{ maxHeight: 240 }}>
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 14 }}>
+            {sendDialog?.text}
+          </Text>
+        </ScrollView>
+      </Dialog>
       </KeyboardAvoidingView>
     </View>
   );

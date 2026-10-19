@@ -4,7 +4,8 @@ export type HostCommand =
   | { type: "setHtmlFit"; fit: boolean }
   | { type: "exportPng" }
   | { type: "chunk"; offset: number; b64: string }
-  | { type: "chunkError"; offset: number };
+  | { type: "chunkError"; offset: number }
+  | { type: "nanobotResponse"; response: any };
 
 /** Scripts only. Same-origin would let the preview read the page secret. */
 export function previewSandbox(): string {
@@ -24,5 +25,13 @@ export function hostCommandFromInject(script: string): HostCommand | null {
   if (chunk) return { type: "chunk", offset: Number(chunk[1]), b64: chunk[2] };
   const failed = script.match(/^window\.__chunkError\((\d+)\); true;$/);
   if (failed) return { type: "chunkError", offset: Number(failed[1]) };
+  const nanobot = script.match(/^window\.__nanobotBridgeCallback&&window\.__nanobotBridgeCallback\(([\s\S]+)\);true;$/);
+  if (nanobot) {
+    try {
+      return { type: "nanobotResponse", response: JSON.parse(nanobot[1]) };
+    } catch {
+      return null;
+    }
+  }
   return null;
 }

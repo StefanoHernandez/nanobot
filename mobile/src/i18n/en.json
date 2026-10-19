@@ -506,7 +506,12 @@
     "openDocument": "Open as document",
     "page": "Page {{current}} of {{total}}",
     "prevPage": "Previous page",
-    "nextPage": "Next page"
+    "nextPage": "Next page",
+    "resetData": "Reset data",
+    "sendPrompt": "The artifact wants to send to the bot:",
+    "sendConfirm": "Send",
+    "dataReset": "Artifact data reset",
+    "menu": "More"
   },
   "models": {
     "title": "Call order",

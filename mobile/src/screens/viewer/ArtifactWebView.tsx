@@ -15,6 +15,7 @@ import {
   type ViewerLibName,
 } from "./viewerLibs";
 import { pngBase64 } from "./exportArtifact";
+import { getArtifactState, setArtifactState } from "../../artifacts/artifactState";
 
 // Keep in sync with mobile/scripts/fetch-viewer-libs.mjs. The bytes are
 // shipped in mobile/assets/viewers and inlined at view time (no CDN).
@@ -164,6 +165,10 @@ export type ArtifactWebViewProps = {
   isLightPreview?: boolean;
   /** This render only. Does not load remote scripts. */
   network?: boolean;
+  chatKey?: string;
+  artifactId?: string;
+  onSendRequest?: (text: string) => Promise<boolean>;
+  onStateChange?: () => void;
 };
 
 export function escapeHtml(str: string): string {
@@ -1048,6 +1053,79 @@ code {
 }`;
 }
 
+function getNanobotBridgeScript(): string {
+  return `<script id="nanobot-bridge">
+  (function() {
+    var reqId = 0;
+    var pending = {};
+
+    window.__nanobotBridgeCallback = function(msg) {
+      if (!msg || typeof msg !== "object") return;
+      var id = msg.id;
+      var p = pending[id];
+      if (!p) return;
+      delete pending[id];
+      if (msg.error) {
+        p.reject(new Error(msg.error));
+      } else {
+        p.resolve(msg.result);
+      }
+    };
+
+    function callBridge(type, payload) {
+      return new Promise(function(resolve, reject) {
+        var id = "nb_" + (++reqId) + "_" + Math.random().toString(36).slice(2, 8);
+        pending[id] = { resolve: resolve, reject: reject };
+        var msg = Object.assign({ type: type, id: id }, payload);
+        postHost(msg);
+      });
+    }
+
+    window.nanobot = {
+      state: {
+        get: function() {
+          return callBridge("nanobotStateGet", {});
+        },
+        set: function(value) {
+          var serialized;
+          try {
+            serialized = JSON.stringify(value);
+          } catch (e) {
+            return Promise.reject(new Error("Cannot serialize state to JSON: " + (e && e.message ? e.message : e)));
+          }
+          if (typeof serialized !== "string") {
+            return Promise.reject(new Error("State must be serializable JSON"));
+          }
+          var byteLen = typeof Blob !== "undefined" ? new Blob([serialized]).size : unescape(encodeURIComponent(serialized)).length;
+          if (byteLen > 65536) {
+            return Promise.reject(new Error("State size exceeds 64 KB limit (" + byteLen + " bytes)"));
+          }
+          return callBridge("nanobotStateSet", { state: serialized });
+        }
+      },
+      send: function(text) {
+        if (typeof text !== "string") {
+          return Promise.resolve(false);
+        }
+        return callBridge("nanobotSend", { text: text });
+      }
+    };
+
+    window.addEventListener("message", function(e) {
+      if (e.source !== window.parent) return;
+      var m = e.data;
+      if (typeof m === "string") {
+        try { m = JSON.parse(m); } catch (err) { return; }
+      }
+      if (!m || m.source !== "nanobot-host") return;
+      if (m.type === "nanobotResponse" && window.__nanobotBridgeCallback) {
+        window.__nanobotBridgeCallback(m.response);
+      }
+    });
+  })();
+</script>`;
+}
+
 export function buildShellHtml({
   kind,
   html = "",
@@ -1327,12 +1405,14 @@ ${exportPngScript}
 </script>`;
 
   if (kind === "html") {
+    const bridgeScript = getNanobotBridgeScript();
     if (!html && fileSize > 0) {
       return `<!DOCTYPE html>
 <html>
 ${commonHead}
 <body>
   <div id="container"></div>
+  ${bridgeScript}
   ${loadAllChunksScript}
   <script>
     loadAllChunks(${fileSize}, null).then(function(bytes) {
@@ -1350,6 +1430,7 @@ ${commonHead}
 <html>
 ${commonHead}
 <body>
+  ${bridgeScript}
   <div id="container">
     ${html}
   </div>
@@ -1534,11 +1615,13 @@ ${leafletStyle}
   }
 
   if (kind === "react") {
+    const bridgeScript = getNanobotBridgeScript();
     const reactBodyStart = `<!DOCTYPE html>
 <html>
 ${commonHead}
 <body>
   <div id="container"></div>
+  ${bridgeScript}
   ${inlineScript(libs?.react)}
   ${inlineScript(libs?.reactDom)}
   ${inlineScript(libs?.babel)}`;
@@ -1958,6 +2041,10 @@ export function ArtifactWebView({
   fit = true,
   isLightPreview = false,
   network = false,
+  chatKey,
+  artifactId,
+  onSendRequest,
+  onStateChange,
 }: ArtifactWebViewProps) {
   const t = useT();
   const th = useTheme();
@@ -1973,6 +2060,19 @@ export function ArtifactWebView({
   const fitRef = useRef(fit);
   fitRef.current = fit;
   const isReadyRef = useRef(false);
+  const onSendRequestRef = useRef(onSendRequest);
+  onSendRequestRef.current = onSendRequest;
+  const onStateChangeRef = useRef(onStateChange);
+  onStateChangeRef.current = onStateChange;
+  const chatKeyRef = useRef(chatKey);
+  chatKeyRef.current = chatKey;
+  const artifactIdRef = useRef(artifactId);
+  artifactIdRef.current = artifactId;
+
+  const sendBridgeResponse = (res: { id: string; result?: any; error?: string }) => {
+    const script = `window.__nanobotBridgeCallback&&window.__nanobotBridgeCallback(${JSON.stringify(res)});true;`;
+    webViewRef.current?.injectJavaScript(script);
+  };
 
   const [loading, setLoading] = useState(true);
   const [lightMode, setLightMode] = useState(isLightPreview);
@@ -2213,6 +2313,51 @@ export function ArtifactWebView({
       } catch {
         webViewRef.current?.injectJavaScript(`window.__chunkError(${offset}); true;`);
       }
+      return;
+    }
+
+    if (data.type === "nanobotStateGet") {
+      const id = String(data.id || "");
+      if (!id) return;
+      try {
+        const val = await getArtifactState(chatKeyRef.current, artifactIdRef.current);
+        sendBridgeResponse({ id, result: val });
+      } catch (err: any) {
+        sendBridgeResponse({ id, error: err?.message || String(err) });
+      }
+      return;
+    }
+
+    if (data.type === "nanobotStateSet") {
+      const id = String(data.id || "");
+      if (!id) return;
+      try {
+        const raw = typeof data.state === "string" ? data.state : JSON.stringify(data.state);
+        const parsed = JSON.parse(raw);
+        await setArtifactState(chatKeyRef.current, artifactIdRef.current, parsed);
+        sendBridgeResponse({ id, result: undefined });
+        onStateChangeRef.current?.();
+      } catch (err: any) {
+        sendBridgeResponse({ id, error: err?.message || String(err) });
+      }
+      return;
+    }
+
+    if (data.type === "nanobotSend") {
+      const id = String(data.id || "");
+      if (!id) return;
+      const text = typeof data.text === "string" ? data.text : "";
+      if (!text || text.length > 4000 || !onSendRequestRef.current) {
+        sendBridgeResponse({ id, result: false });
+        return;
+      }
+      onSendRequestRef.current(text)
+        .then((ok) => {
+          sendBridgeResponse({ id, result: !!ok });
+        })
+        .catch(() => {
+          sendBridgeResponse({ id, result: false });
+        });
       return;
     }
 
