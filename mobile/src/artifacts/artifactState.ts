@@ -1,5 +1,4 @@
 import { kv } from "../platform/storage";
-import { chatsStore } from "../state/chatsStore";
 
 export const MAX_STATE_BYTES = 64 * 1024; // 64 KB = 65,536 bytes
 
@@ -66,7 +65,7 @@ export async function setArtifactState(
     throw new Error("State must be serializable JSON");
   }
 
-  const byteLength = Buffer.from(serialized, "utf8").length;
+  const byteLength = new TextEncoder().encode(serialized).length;
   if (byteLength > MAX_STATE_BYTES) {
     throw new Error(`State size exceeds 64 KB limit (${byteLength} bytes)`);
   }
@@ -191,18 +190,5 @@ export function clearArtifactStateForChat(chatKey: string): void {
     }
   } catch {
     // Storage error
-  }
-}
-
-// Hook chatsStore to automatically delete artifact state when a chat is deleted
-if (chatsStore && typeof chatsStore.getState === "function") {
-  const origRemove = chatsStore.getState().remove;
-  if (origRemove) {
-    chatsStore.setState({
-      remove: async (key: string) => {
-        clearArtifactStateForChat(key);
-        return origRemove(key);
-      },
-    });
   }
 }

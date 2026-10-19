@@ -2,6 +2,7 @@ import { createStore, useStore } from "zustand";
 import { ApiError, deleteSession, listSessions } from "@/lib/api";
 import type { ChatSummary, SidebarStatePayload, WorkspaceScopePayload } from "@/lib/types";
 import type { NanobotSession } from "../core/session";
+import { clearArtifactStateForChat } from "../artifacts/artifactState";
 
 export const isWritable = (key: string): boolean => key.startsWith("websocket:");
 export const chatIdOf = (key: string): string => key.slice("websocket:".length);
@@ -182,6 +183,7 @@ export function createChatsStore() {
           return;
         }
         await deleteSession(need().client, key);
+        clearArtifactStateForChat(key);
         optimisticKeys.delete(key);
         set((x) => ({ chats: x.chats.filter((c) => c.key !== key) }));
       },

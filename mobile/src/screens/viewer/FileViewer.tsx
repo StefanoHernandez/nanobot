@@ -132,11 +132,14 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
     };
   }, [chatKey, artifactId]);
 
+  const sendCooldownUntil = useRef(0);
   const handleSendRequest = useCallback((text: string): Promise<boolean> => {
     if (!chatKey || !artifactId) return Promise.resolve(false);
     if (!text || text.length > 4000) return Promise.resolve(false);
     if (!canAsk) return Promise.resolve(false);
     if (sendPendingRef.current) return Promise.resolve(false);
+    // A page that re-asks right after "Annulla" could keep the dialog up forever: refuse for a while.
+    if (Date.now() < sendCooldownUntil.current) return Promise.resolve(false);
 
     sendPendingRef.current = true;
     return new Promise<boolean>((resolve) => {
@@ -171,6 +174,7 @@ export function FileViewer({ uri, name, chatKey = "" }: FileViewerProps) {
 
   const handleCancelSend = () => {
     if (!sendDialog) return;
+    sendCooldownUntil.current = Date.now() + 10_000;
     sendDialog.resolve(false);
   };
   const [fixError, setFixError] = useState<{ message: string; line?: number } | null>(null);
