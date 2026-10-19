@@ -12,6 +12,7 @@ import { useSession } from "../../state/sessionStore";
 import { useThreadSlice } from "../../state/threadStore";
 import { useChats } from "../../state/chatsStore";
 import { outboxStore } from "../../extras/outbox";
+import { useOutboxFlush } from "../../extras/OutboxBar";
 import { IconButton } from "../../ui/components/IconButton";
 import { ListItem } from "../../ui/components/ListItem";
 import { Sheet } from "../../ui/components/Sheet";
@@ -28,7 +29,7 @@ import { isVoiceAvailable } from "../../extras/sttEngine";
 import { DEFAULT_LIMITS } from "../../core/session";
 import { prepareImage, validateFiles, type LocalFile } from "../../core/upload";
 import { AttachmentBar } from "./AttachmentBar";
-import { QueuedMessages } from "./QueuedMessages";
+import { PendingBar } from "./PendingBar";
 import { ReplyBar } from "./ReplyBar";
 import { toLocalFile, type RawPickerAsset } from "./attachments";
 import { MentionMenu } from "./MentionMenu";
@@ -79,6 +80,8 @@ export function Composer({ chatKey }: { chatKey: string }) {
     uploading = false,
     clearSendError = () => {},
   } = useThreadSlice(chatKey);
+
+  useOutboxFlush(chatKey, sessionState, profile?.id ?? null);
 
   const audioRepliesEnabled = useStore(speechStore, (s) => s.enabled);
 
@@ -421,9 +424,9 @@ export function Composer({ chatKey }: { chatKey: string }) {
 
     return (
       <View onLayout={(e) => toast.setLift(e.nativeEvent.layout.height)}>
-        <QueuedMessages
+        <PendingBar
           chatKey={chatKey}
-          onModify={(item) => {
+          onModifyQueued={(item) => {
             modifyQueued(item.id);
             if (item.opts?.files) {
               setPendingFiles(item.opts.files);

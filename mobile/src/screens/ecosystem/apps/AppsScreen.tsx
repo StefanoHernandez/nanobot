@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
-import { IconButton, goBackOr } from "../../../ui/components";
+import { IconButton, SegmentedTabs, goBackOr } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { useSettings } from "../../../settings/store";
 import { installGate } from "../../../ecosystem/common";
@@ -56,71 +56,15 @@ export function AppsScreen() {
         </View>
       ) : null}
 
-      <View style={[styles.tabBar, { backgroundColor: th.colors.muted, borderRadius: 999 }]}>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: tab === "cli" }}
-          onPress={() => setTab("cli")}
-          style={[
-            styles.tabSegment,
-            {
-              backgroundColor: tab === "cli" ? th.colors.card : "transparent",
-            },
-          ]}
-        >
-          <Text
-            style={{
-              color: tab === "cli" ? th.colors.foreground : th.colors.mutedForeground,
-              fontFamily: tab === "cli" ? th.font.medium : th.font.regular,
-              fontSize: 15,
-            }}
-          >
-            {t("apps.tabs.cli", "CLI")}
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: tab === "mcp" }}
-          onPress={() => setTab("mcp")}
-          style={[
-            styles.tabSegment,
-            {
-              backgroundColor: tab === "mcp" ? th.colors.card : "transparent",
-            },
-          ]}
-        >
-          <Text
-            style={{
-              color: tab === "mcp" ? th.colors.foreground : th.colors.mutedForeground,
-              fontFamily: tab === "mcp" ? th.font.medium : th.font.regular,
-              fontSize: 15,
-            }}
-          >
-            {t("apps.tabs.mcp", "MCP")}
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: tab === "plugin" }}
-          onPress={() => setTab("plugin")}
-          style={[
-            styles.tabSegment,
-            {
-              backgroundColor: tab === "plugin" ? th.colors.card : "transparent",
-            },
-          ]}
-        >
-          <Text
-            style={{
-              color: tab === "plugin" ? th.colors.foreground : th.colors.mutedForeground,
-              fontFamily: tab === "plugin" ? th.font.medium : th.font.regular,
-              fontSize: 15,
-            }}
-          >
-            {t("apps.tabs.plugin", "Plugin")}
-          </Text>
-        </Pressable>
-      </View>
+      <SegmentedTabs
+        tabs={[
+          { value: "cli", label: t("apps.tabs.cli", "CLI") },
+          { value: "mcp", label: t("apps.tabs.mcp", "MCP") },
+          { value: "plugin", label: t("apps.tabs.plugin", "Plugin") },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       <View style={styles.tabContent}>
         {tab === "cli" ? (
@@ -156,20 +100,6 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
-  },
-  tabBar: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 4,
-    flexDirection: "row",
-    gap: 4,
-  },
-  tabSegment: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
   },
   tabContent: {
     flex: 1,

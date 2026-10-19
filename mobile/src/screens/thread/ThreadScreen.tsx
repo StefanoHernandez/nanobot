@@ -15,7 +15,6 @@ import { Button } from "../../ui/components/Button";
 import { toast } from "../../ui/components";
 import { BotFace, faceStateOf } from "../../ui/BotFace";
 import { CommandDrawerButton } from "../../extras/CommandDrawer";
-import { OutboxBar } from "../../extras/OutboxBar";
 import { exportChat } from "../../extras/exportChat";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
@@ -201,7 +200,6 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
         <View style={{ flex: 1 }}><MessageList chatKey={chatKey} forkBoundary={forkBoundary} messages={messages} running={running} notices={notices} /></View>
         {isWritable(chatKey) ? (
           <>
-            <OutboxBar chatKey={chatKey} />
             <Composer chatKey={chatKey} key={chatKey} />
           </>
         ) : (

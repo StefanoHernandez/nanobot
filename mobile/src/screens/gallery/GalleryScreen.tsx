@@ -25,7 +25,7 @@ import {
   openGalleryArtifactPreview,
   writeGalleryArtifactUpload,
 } from "./galleryArtifacts";
-import { Dialog, IconButton, Sheet, toast } from "../../ui/components";
+import { Dialog, IconButton, SegmentedTabs, Sheet, toast } from "../../ui/components";
 import { useTheme } from "../../ui/ThemeProvider";
 import { withAlpha } from "../../ui/theme";
 import { artifactStore } from "../viewer/artifactStore";
@@ -485,94 +485,15 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
         </Text>
       </View>
 
-      {/* Companion-style pill tabs */}
-      <View
-        style={[
-          styles.tabBar,
-          {
-            backgroundColor: th.colors.muted,
-            borderRadius: 999,
-          },
+      <SegmentedTabs
+        tabs={[
+          { value: "images", label: t("gallery.tabImages") },
+          { value: "files", label: t("gallery.tabFiles") },
+          { value: "artifacts", label: t("gallery.tabArtifacts") },
         ]}
-      >
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === "images" }}
-          accessibilityLabel={t("gallery.tabImages")}
-          onPress={() => setManualTab("images")}
-          style={[
-            styles.tabButton,
-            activeTab === "images" && [
-              styles.tabButtonActive,
-              { backgroundColor: th.colors.card },
-            ],
-          ]}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              {
-                color: activeTab === "images" ? th.colors.foreground : th.colors.mutedForeground,
-                fontFamily: activeTab === "images" ? th.font.medium : th.font.regular,
-              },
-            ]}
-          >
-            {t("gallery.tabImages")}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === "files" }}
-          accessibilityLabel={t("gallery.tabFiles")}
-          onPress={() => setManualTab("files")}
-          style={[
-            styles.tabButton,
-            activeTab === "files" && [
-              styles.tabButtonActive,
-              { backgroundColor: th.colors.card },
-            ],
-          ]}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              {
-                color: activeTab === "files" ? th.colors.foreground : th.colors.mutedForeground,
-                fontFamily: activeTab === "files" ? th.font.medium : th.font.regular,
-              },
-            ]}
-          >
-            {t("gallery.tabFiles")}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === "artifacts" }}
-          accessibilityLabel={t("gallery.tabArtifacts")}
-          onPress={() => setManualTab("artifacts")}
-          style={[
-            styles.tabButton,
-            activeTab === "artifacts" && [
-              styles.tabButtonActive,
-              { backgroundColor: th.colors.card },
-            ],
-          ]}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              {
-                color: activeTab === "artifacts" ? th.colors.foreground : th.colors.mutedForeground,
-                fontFamily: activeTab === "artifacts" ? th.font.medium : th.font.regular,
-              },
-            ]}
-          >
-            {t("gallery.tabArtifacts")}
-          </Text>
-        </Pressable>
-      </View>
+        value={activeTab}
+        onChange={setManualTab}
+      />
 
       {/* Tab Content */}
       {activeTab === "images" ? (
@@ -819,25 +740,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
     marginLeft: 8,
-  },
-  tabBar: {
-    flexDirection: "row",
-    padding: 4,
-    marginHorizontal: 16,
-    marginVertical: 8,
-  },
-  tabButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabButtonActive: {
-    // Background styled with th.colors.card
-  },
-  tabText: {
-    fontSize: 14,
   },
   gridContainer: {
     padding: 16,

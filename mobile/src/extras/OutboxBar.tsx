@@ -10,37 +10,39 @@ import { outboxStore, type OutboxItem } from "./outbox";
 
 const EMPTY_QUEUE: OutboxItem[] = [];
 
-export function OutboxBar({ chatKey }: { chatKey: string }) {
-  const t = useT();
-  const th = useTheme();
-
-  const profile = useStore(sessionStore, (s) => s.profile);
-  const state = useStore(sessionStore, (s) => s.state);
-
+/** Sends the head of this chat's outbox once the connection is up and the chat is idle. Lives in the composer so it runs while the list is hidden. */
+export function useOutboxFlush(chatKey: string, state: string, profileId: string | null) {
   const loaded = useStore(threadStore, (s) => !!s.threads[chatKey]?.loaded);
   const running = useStore(threadStore, (s) => !!s.threads[chatKey]?.running);
   const uploading = useStore(threadStore, (s) => !!s.threads[chatKey]?.uploading);
   const hydrating = useStore(threadStore, (s) => !!s.threads[chatKey]?.hydrating);
 
-  const queue = useStore(outboxStore, (s) => s.queues[chatKey] ?? EMPTY_QUEUE);
-  const head = queue[0];
+  const head = useStore(outboxStore, (s) => s.queues[chatKey]?.[0]);
 
   useEffect(() => {
-    outboxStore.getState().syncProfile(profile?.id ?? null);
-  }, [profile?.id]);
+    outboxStore.getState().syncProfile(profileId);
+  }, [profileId]);
 
   useEffect(() => {
     if (state === "open" && loaded && !hydrating && !running && !uploading && head && !head.paused) {
       outboxStore.getState().flushNext(chatKey);
     }
   }, [chatKey, state, loaded, hydrating, running, uploading, head?.id, head?.paused]);
+}
+
+/** The messages waiting for a connection, one row each; PendingBar shows it when expanded. */
+export function OutboxBar({ chatKey }: { chatKey: string }) {
+  const t = useT();
+  const th = useTheme();
+  const state = useStore(sessionStore, (s) => s.state);
+  const queue = useStore(outboxStore, (s) => s.queues[chatKey] ?? EMPTY_QUEUE);
 
   if (queue.length === 0) {
     return null;
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: th.colors.card, borderTopColor: th.colors.border }]}>
+    <View>
       {queue.map((item) => (
         <View key={item.id} style={[styles.row, { borderBottomColor: th.colors.border }]}>
           <View style={styles.contentCol}>
@@ -100,10 +102,6 @@ export function OutboxBar({ chatKey }: { chatKey: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    maxHeight: 160,
-  },
   row: {
     flexDirection: "row",
     alignItems: "center",

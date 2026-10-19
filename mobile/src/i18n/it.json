@@ -854,6 +854,15 @@
     "boardDescription": "Descrizione",
     "maxConcurrent": "In parallelo",
     "modelPreset": "Modello",
+    "action": {
+      "startNow": "Avvia ora",
+      "sendBack": "Rimanda indietro",
+      "markDone": "Sposta in Fatto",
+      "block": "Blocca"
+    },
+    "cardHint": "Tieni premuto per le azioni rapide",
+    "watchBot": "Guarda il bot",
+    "moveInvalid": "Correggi titolo, tentativi o ripetizione prima di spostare la scheda.",
     "error": {
       "invalid_recurrence": "Ripetizione non valida.",
       "invalid_scheduled_at": "Data non valida.",
@@ -1130,6 +1139,10 @@
     "filesCount_other": "{{count}} file"
   },
   "outbox": {
+    "waiting_one": "{{count}} messaggio in attesa — tocca per gestire",
+    "waiting_other": "{{count}} messaggi in attesa — tocca per gestire",
+    "notSentTitle": "Non ancora inviati",
+    "queuedTitle": "In coda finché il bot ha finito",
     "pending": "In attesa",
     "paused": "In attesa — tocca per inviare",
     "cancel": "Annulla",
