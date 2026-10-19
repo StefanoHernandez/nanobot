@@ -7,7 +7,6 @@ import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useCliApps } from "../../../ecosystem/apps";
 import { toastEcosystemError } from "../../../ecosystem/common";
-import { usePrivileged } from "../../../ecosystem/privilege";
 import { filterEcosystemItems } from "./search";
 import type { CliAppInfo } from "@/lib/types";
 
@@ -15,7 +14,6 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
   const t = useT();
   const th = useTheme();
   const { apps, loading, refresh, install, update, uninstall, test: testApp } = useCliApps();
-  const privileged = usePrivileged();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [inFlightApps, setInFlightApps] = useState<Set<string>>(new Set());
@@ -97,7 +95,6 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
   };
 
   const getLockReason = (app: CliAppInfo): string | null => {
-    const isInstalled = app.installed || app.status === "installed";
     const err = appErrors[app.name];
     const code = err?.code;
     if (code === "full_power_required") return t("apps.lockFullPower");
@@ -107,11 +104,7 @@ export function CliAppsTab({ gateAllowed }: { gateAllowed: boolean }) {
       const cmdMatch = rawMsg.match(/`([^`]+)`/);
       return t("apps.lockUnsupportedEnv", { command: cmdMatch ? cmdMatch[1] : "" });
     }
-    if (!isInstalled) {
-      if (!privileged) return t("apps.lockFullPower");
-      if (!gateAllowed) return t("apps.lockRemoteDisabled");
-    }
-    return null;
+    return null; // the screen banner already explains a closed install gate
   };
 
   const appName = confirmDialog.app?.display_name || confirmDialog.app?.name || "";

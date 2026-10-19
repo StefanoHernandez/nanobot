@@ -8,7 +8,6 @@ import { toast } from "../../../ui/components/Toast";
 import { useRestart } from "../../../settings/store";
 import { useFeatures } from "../../../ecosystem/apps";
 import { toastEcosystemError } from "../../../ecosystem/common";
-import { usePrivileged } from "../../../ecosystem/privilege";
 import { filterEcosystemItems } from "./search";
 import type { NanobotFeatureInfo } from "@/lib/types";
 
@@ -17,7 +16,6 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
   const th = useTheme();
   const { features, requiresRestart, loading, refresh, enable, disable } = useFeatures();
   const { run: runRestart, state: restartState } = useRestart();
-  const privileged = usePrivileged();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmFeature, setConfirmFeature] = useState<NanobotFeatureInfo | null>(null);
@@ -99,9 +97,7 @@ export function PluginsTab({ gateAllowed }: { gateAllowed: boolean }) {
       const cmdMatch = rawMsg.match(/`([^`]+)`/);
       return t("apps.lockUnsupportedEnv", { command: cmdMatch ? cmdMatch[1] : "" });
     }
-    if (!privileged) return t("apps.lockFullPower");
-    if (!gateAllowed) return t("apps.lockRemoteDisabled");
-    return null;
+    return null; // the screen banner already explains a closed install gate
   };
 
   const isRestarting = restartState === "restarting";

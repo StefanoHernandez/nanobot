@@ -677,11 +677,12 @@ def _install_feature_dependencies(
         if (
             "externally-managed-environment" in out_lower
             or "no module named pip" in out_lower
+            or "ensurepip is disabled" in out_lower
             or missing_pip(subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=result.output or ""))
         ):
             manual_cmd = (
                 f"uv tool install --upgrade --with 'nanobot-ai[{name}]' nanobot-ai"
-                if "uv" in sys.executable
+                if (Path(sys.prefix) / "uv-receipt.toml").is_file()
                 else f"pip install 'nanobot-ai[{name}]'"
             )
             raise OptionalFeatureError(

@@ -70,10 +70,10 @@ _SECRET_QUERY_RE = re.compile(
     re.IGNORECASE,
 )
 _SECRET_ASSIGNMENT_RE = re.compile(
-    r"((?:api[_-]?key|token|secret|password|bearer)(?:[=:]|\s+))[^,\s'\"&]+",
+    r"((?:api[_-]?key|token|secret|password|bearer)[\"']?(?:\s*[=:]\s*|\s+)[\"']?)[^,\s'\"&]+",
     re.IGNORECASE,
 )
-_BEARER_RE = re.compile(r"(Bearer\s+)[A-Za-z0-9_\-\.~+/]+=*", re.IGNORECASE)
+_BEARER_RE = re.compile(r"((?:Bearer|Basic)\s+)[A-Za-z0-9_\-\.~+/]+=*", re.IGNORECASE)
 _BASIC_AUTH_URL_RE = re.compile(r"(://[^:]+:)[^@]+(@)", re.IGNORECASE)
 
 
@@ -84,13 +84,40 @@ _SECRET_KEYWORD_RE = re.compile(
 
 
 # Fork: scrub secrets from MCP error messages and cap length at 300 chars
-def scrub_mcp_error(text: str, max_chars: int = 300) -> str:
-    scrubbed = _SECRET_QUERY_RE.sub(r"\1<redacted>", text.strip())
+def scrub_mcp_error(text: str, max_chars: int | None = 300, secrets: Iterable[str] = ()) -> str:
+    scrubbed = text.strip()
+    # Known values first: they may sit anywhere, with no keyword next to them.
+    for value in sorted({v for v in secrets if len(v) >= 4}, key=len, reverse=True):
+        scrubbed = scrubbed.replace(value, "<redacted>")
+    scrubbed = _SECRET_QUERY_RE.sub(r"\1<redacted>", scrubbed)
     scrubbed = _SECRET_ASSIGNMENT_RE.sub(r"\1<redacted>", scrubbed)
     scrubbed = _BEARER_RE.sub(r"\1<redacted>", scrubbed)
     scrubbed = _BASIC_AUTH_URL_RE.sub(r"\1<redacted>\2", scrubbed)
     scrubbed = _SECRET_KEYWORD_RE.sub("<redacted>", scrubbed)
-    return scrubbed[:max_chars] if scrubbed else "Connection failed."
+    if not scrubbed:
+        return "Connection failed."
+    return scrubbed if max_chars is None else scrubbed[:max_chars]
+
+
+def mcp_secret_values(cfg: MCPServerConfig) -> list[str]:
+    """Values in a server config that must never appear in an error shown to a client."""
+    values: list[str] = []
+    for text in cfg.headers.values():
+        values.append(text)
+        values.append(text.split(" ", 1)[-1])  # the token behind "Bearer " / "Basic "
+    values.extend(cfg.env.values())
+    args = list(cfg.args)
+    for i, arg in enumerate(args):
+        flag, eq, val = arg.partition("=")
+        if re.search(r"key|token|secret|password", flag, re.IGNORECASE) and flag.startswith("-"):
+            if eq:
+                values.append(val)
+            elif i + 1 < len(args):
+                values.append(args[i + 1])
+    url = cfg.url or ""
+    if url:
+        values.extend(v for _k, v in urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
+    return values
 
 
 # Fork: global store of last MCP failure details
@@ -108,9 +135,10 @@ def record_mcp_failure(
     *,
     error_hint: str | None = None,
     hint_message: str | None = None,
+    secrets: Iterable[str] = (),
 ) -> None:
     # Fork: record MCP connection failure details (scrubbed, <= 300 chars)
-    scrubbed = scrub_mcp_error(reason, 300)
+    scrubbed = scrub_mcp_error(reason, 300, secrets)
     _LAST_MCP_FAILURES[name] = {
         "failure_reason": scrubbed,
         "error": scrubbed,
@@ -1350,36 +1378,28 @@ async def connect_mcp_servers(
                     pass
 
             combined_err = f"{text}\n{stderr_tail}".strip()
-            error_hint = None
-            hint_message = None
-            if any(
-                marker in combined_err
-                for marker in (
-                    "ERR_MODULE_NOT_FOUND",
-                    "npm ERR! code ENOENT",
-                    "npm ERR! code E404",
-                    "npm ERR!",
-                )
-            ):
-                error_hint = "npx_cache_broken"
-                hint_message = (
-                    "Cache npx corrotta o modulo mancante. Prova a svuotare ~/.npm o reinstallare il pacchetto."
-                )
-
-            if stderr_tail and not text:
-                chosen_err = stderr_tail
-            elif stderr_tail and text:
-                chosen_err = f"{text}: {stderr_tail[-200:]}"
+            lowered = combined_err.lower()
+            # A broken npx cache, not a wrong package name (npm 10+ prints "npm error").
+            error_hint = (
+                "npx_cache_broken"
+                if "err_module_not_found" in lowered
+                or (("npm err!" in lowered or "npm error" in lowered) and "_npx" in lowered)
+                else None
+            )
+            secrets = mcp_secret_values(cfg)
+            # Scrub before cutting, so a cut never leaves half a secret.
+            tail = scrub_mcp_error(stderr_tail, None, secrets)[-200:] if stderr_tail else ""
+            if tail:
+                logger.warning("MCP server '{}': stderr tail: {}", name, tail)
+            if tail and not text:
+                chosen_err = tail
+            elif tail:
+                chosen_err = f"{text}: {tail}"
             else:
                 chosen_err = text or "Connection failed."
 
             # Fork: record failure details for server
-            record_mcp_failure(
-                name,
-                chosen_err,
-                error_hint=error_hint,
-                hint_message=hint_message,
-            )
+            record_mcp_failure(name, chosen_err, error_hint=error_hint, secrets=secrets)
 
             if any(
                 marker in combined_err.lower()

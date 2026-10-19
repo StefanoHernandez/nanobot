@@ -7,7 +7,6 @@ import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useMcp } from "../../../ecosystem/mcp";
 import { toastEcosystemError } from "../../../ecosystem/common";
-import { usePrivileged } from "../../../ecosystem/privilege";
 import { filterEcosystemItems } from "./search";
 import { McpSheet } from "./McpSheet";
 import { McpOAuthSheet } from "./McpOAuthSheet";
@@ -17,7 +16,6 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
   const t = useT();
   const th = useTheme();
   const { presets, loading, refresh, enable, disable, remove, test: testPreset, reconnect, tools } = useMcp();
-  const privileged = usePrivileged();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<McpPresetInfo | null>(null);
@@ -133,10 +131,7 @@ export function McpTab({ gateAllowed }: { gateAllowed: boolean }) {
       const cmdMatch = rawMsg.match(/`([^`]+)`/);
       return t("apps.lockUnsupportedEnv", { command: cmdMatch ? cmdMatch[1] : "" });
     }
-    if (!preset.enabled && !gateAllowed) {
-      return !privileged ? t("apps.lockFullPower") : t("apps.lockRemoteDisabled");
-    }
-    return null;
+    return null; // the screen banner already explains a closed install gate
   };
 
   const filteredPresets = filterEcosystemItems(presets, searchQuery);

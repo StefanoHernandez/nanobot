@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 import json
 import os
 import re
@@ -235,8 +234,24 @@ def cli_app_skill_relative_path(workspace: Path, name: str) -> str:
 
 
 # Fork: cache package manager global bin directories to locate installed CLI apps
-@functools.lru_cache(maxsize=1)
+_CLI_PATH_CACHE: dict[str, Any] = {}
+_CLI_PATH_RETRY_S = 60.0
+
+
 def _resolved_cli_search_path() -> str:
+    """PATH plus the npm/uv global bin dirs; a failed lookup is retried after a minute, not cached forever."""
+    cached = _CLI_PATH_CACHE.get("value")
+    if cached is not None and (_CLI_PATH_CACHE.get("ok") or time.monotonic() < _CLI_PATH_CACHE["retry_at"]):
+        return cached
+    value, ok = _compute_cli_search_path()
+    _CLI_PATH_CACHE.update(value=value, ok=ok, retry_at=time.monotonic() + _CLI_PATH_RETRY_S)
+    return value
+
+
+_resolved_cli_search_path.cache_clear = _CLI_PATH_CACHE.clear  # type: ignore[attr-defined]
+
+
+def _compute_cli_search_path() -> tuple[str, bool]:
     if sys.platform == "win32":
         sr = os.environ.get("SYSTEMROOT", r"C:\Windows")
         current_path = os.environ.get("PATH", f"{sr}\\system32;{sr}")
@@ -280,7 +295,7 @@ def _resolved_cli_search_path() -> str:
         pass
 
     if not extra_dirs:
-        return current_path
+        return current_path, False
 
     seen: set[str] = set()
     ordered_dirs: list[str] = []
@@ -292,16 +307,12 @@ def _resolved_cli_search_path() -> str:
         if p and p not in seen:
             seen.add(p)
             ordered_dirs.append(p)
-    return os.pathsep.join(ordered_dirs)
+    return os.pathsep.join(ordered_dirs), True
 
 
-# Fork: robust which helper that passes resolved cli search path but tolerates 1-arg mock lambdas in tests
+# Fork: which over the resolved CLI search path (npm/uv global bins included)
 def _which(cmd: str, path: str | None = None) -> str | None:
-    search_path = path if path is not None else _resolved_cli_search_path()
-    try:
-        return shutil.which(cmd, path=search_path)
-    except TypeError:
-        return shutil.which(cmd)
+    return shutil.which(cmd, path=path if path is not None else _resolved_cli_search_path())
 
 
 def _has_shell_meta(command: str) -> bool:
@@ -937,7 +948,7 @@ class CliAppManager:
         pip_available = self._pip_available()
         if pip_available:
             prefix = [sys.executable, "-m", "pip", "install"]
-        elif shutil.which("uv"):
+        elif _which("uv"):
             prefix = ["uv", "pip", "install", "--python", sys.executable]
         else:
             raise CliAppError("pip is not available and uv is not installed")
@@ -955,7 +966,7 @@ class CliAppManager:
     ) -> list[str]:
         if self._pip_available():
             prefix = [sys.executable, "-m", "pip", "uninstall", "-y"]
-        elif shutil.which("uv"):
+        elif _which("uv"):
             prefix = ["uv", "pip", "uninstall", "--python", sys.executable]
         else:
             raise CliAppError("pip is not available and uv is not installed")
@@ -973,7 +984,7 @@ class CliAppManager:
         return [*prefix, package]
 
     def _npm_argv(self, app: dict[str, Any], action: str) -> list[str]:
-        npm = shutil.which("npm")
+        npm = _which("npm")
         if not npm:
             raise CliAppError("npm is not installed")
         package = str(app.get("npm_package") or "")
@@ -986,7 +997,7 @@ class CliAppManager:
         return [npm, "uninstall", "-g", package]
 
     def _cleanup_stale_npm_install(self, app: dict[str, Any]) -> bool:
-        npm = shutil.which("npm")
+        npm = _which("npm")
         package = str(app.get("npm_package") or "").strip()
         if not npm or not package or "/" in package or _SAFE_NPM_DIR_RE.match(package) is None:
             return False

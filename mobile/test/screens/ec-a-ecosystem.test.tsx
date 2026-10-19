@@ -154,34 +154,23 @@ describe("EC-A Search & Ecosystem Features", () => {
   });
 
   describe("Refusal codes and lock indicators", () => {
-    test("PluginsTab shows full power lock explanation when not privileged", async () => {
+    test("PluginsTab shows the full power lock only after the server refuses with that code", async () => {
       mockPrivileged = false;
+      const mockEnable = jest.fn().mockRejectedValue({ status: 403, code: "full_power_required", message: "no" });
       mockUseFeatures.mockReturnValue({
         features: [{ name: "feishu", display_name: "Feishu", enabled: false }] as NanobotFeatureInfo[],
         requiresRestart: false,
         loading: false,
         refresh: jest.fn(),
-        enable: jest.fn(),
+        enable: mockEnable,
         disable: jest.fn(),
       });
 
-      await renderWithTheme(<PluginsTab gateAllowed={false} />);
-      expect(screen.getByText("Serve un dispositivo con pieno controllo")).toBeTruthy();
-    });
-
-    test("PluginsTab shows remote install disabled lock explanation when gate is off but privileged", async () => {
-      mockPrivileged = true;
-      mockUseFeatures.mockReturnValue({
-        features: [{ name: "feishu", display_name: "Feishu", enabled: false }] as NanobotFeatureInfo[],
-        requiresRestart: false,
-        loading: false,
-        refresh: jest.fn(),
-        enable: jest.fn(),
-        disable: jest.fn(),
-      });
-
-      await renderWithTheme(<PluginsTab gateAllowed={false} />);
-      expect(screen.getByText("Installazione da remoto disattivata: attivala dal browser sul server, in Impostazioni")).toBeTruthy();
+      await renderWithTheme(<PluginsTab gateAllowed={true} />);
+      expect(screen.queryByText("Serve un dispositivo con pieno controllo")).toBeNull();
+      await fireEvent(screen.getByRole("switch"), "valueChange", true);
+      await fireEvent.press(screen.getByText("Conferma"));
+      expect(await screen.findByText("Serve un dispositivo con pieno controllo")).toBeTruthy();
     });
 
     test("PluginsTab shows unsupported_install_env manual command after failed enable", async () => {

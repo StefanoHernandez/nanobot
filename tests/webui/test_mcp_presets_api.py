@@ -1040,3 +1040,30 @@ async def test_mcp_test_action_npx_cache_broken_hint(
     row = next(item for item in payload["presets"] if item["name"] == "playwright")
     assert row.get("error_hint") == "npx_cache_broken"
 
+
+
+# Fork: the arduino case: an HTTP entry with leftover stdio args, re-enabled from the preset
+def test_preset_over_http_entry_drops_stray_args_and_keeps_the_key(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use_config(tmp_path, monkeypatch)
+    cfg = load_config()
+    cfg.tools.mcp_servers["context7"] = MCPServerConfig(
+        type="streamableHttp",
+        url="https://mcp.context7.com/mcp",
+        headers={"Authorization": "Bearer ctx7_saved"},
+        args=["--api-key", "ctx7_saved"],
+    )
+    save_config(cfg)
+    mcp_presets_action("enable", {"name": ["context7"]})
+    server = load_config().tools.mcp_servers["context7"]
+    assert server.args == [] and server.command == ""
+    assert server.headers.get("Authorization") == "Bearer ctx7_saved"
+
+
+def test_scrub_covers_spaced_json_basic_and_known_values() -> None:
+    from nanobot.agent.tools.mcp import mcp_secret_values, scrub_mcp_error
+
+    cfg = MCPServerConfig(headers={"X-Key": "hdr-secret"}, env={"T": "env-secret"}, args=["--token=arg-secret"])
+    text = 'X-API-Key: abc123 "api_key": "q1w2" Authorization: Basic Zm9v hdr-secret env-secret arg-secret'
+    out = scrub_mcp_error(text, None, mcp_secret_values(cfg))
+    for leaked in ("abc123", "q1w2", "Zm9v", "hdr-secret", "env-secret", "arg-secret"):
+        assert leaked not in out

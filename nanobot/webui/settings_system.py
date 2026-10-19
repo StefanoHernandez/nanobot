@@ -612,13 +612,6 @@ class SystemSettingsHandler:
             and (query_first(request.query, "install_only") or "").strip().lower()
             in {"1", "true", "yes"}
         )
-        # Fork: enabling features requires full power / local browser
-        if action == "enable" and not install_only and not request.local_browser:
-            return SettingsRouteResult.failure(
-                403,
-                "Enabling features requires full power.",
-                code="full_power_required",
-            )
         try:
             payload = await asyncio.to_thread(
                 self._nanobot_features_action,

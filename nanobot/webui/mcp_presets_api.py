@@ -306,8 +306,13 @@ def _materialize_server(
     if preset.server is None or not preset.install_supported:
         raise McpPresetError(f"{preset.display_name} is not supported yet", status=409)
 
-    # Fork: if existing server has a different transport, start fresh from preset.server
-    if existing is not None and existing.type != preset.server.type:
+    # Fork: if existing server has a different transport, start fresh from preset.server.
+    # `type` may be unset (auto-detected), so compare the transport it would actually use.
+    def _transport(server: MCPServerConfig) -> str:
+        return server.type or ("stdio" if server.command else "streamableHttp")
+
+    preset_transport = _transport(preset.server)
+    if existing is not None and _transport(existing) != preset_transport:
         cfg = _clone_server(preset.server)
         cfg.tool_timeout = existing.tool_timeout
         cfg.enabled_tools = list(existing.enabled_tools)
@@ -315,6 +320,10 @@ def _materialize_server(
     else:
         cfg = _clone_server(existing or preset.server)
         existing_for_fields = existing
+        if preset_transport != "stdio":
+            # Leftovers from an earlier stdio preset (seen: --api-key args on an HTTP entry).
+            cfg.command = ""
+            cfg.args = []
 
     for field_spec in preset.fields:
         value = _resolve_field_value(field_spec, query, existing_for_fields)

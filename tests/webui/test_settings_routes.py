@@ -682,13 +682,13 @@ async def test_image_switch_round_trip_clears_restart(tmp_path, enabled):
 
 
 @pytest.mark.asyncio
-async def test_features_enable_without_full_power_returns_403_and_code(tmp_path):
+async def test_features_enable_of_an_installed_feature_needs_no_full_power(tmp_path, monkeypatch):
+    # As on main: only installing packages depends on the local browser / full power.
     router = _router(config_path=tmp_path / "config.json")
+    monkeypatch.setattr("nanobot.optional_features.extra_installed", lambda *args: True)
     path = "/api/settings/nanobot-features/enable"
     resp = await router.dispatch(None, _mutation_request(path, {"name": "feishu"}), path)
-    assert resp.status_code == 403
-    data = json.loads(resp.body)
-    assert data["code"] == "full_power_required"
+    assert resp.status_code != 403
 
 
 @pytest.mark.asyncio
