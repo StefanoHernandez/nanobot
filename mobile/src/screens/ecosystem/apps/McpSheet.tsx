@@ -6,6 +6,7 @@ import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { HintSecretField } from "../../settings/common";
 import { toastEcosystemError } from "../../../ecosystem/common";
+import { mcpIsOn } from "../../../ecosystem/mcpState";
 import { usePrivileged } from "../../../ecosystem/privilege";
 import type { McpPresetInfo } from "@/lib/types";
 
@@ -103,7 +104,7 @@ export function McpSheet({
   };
 
   const handleSaveClick = () => {
-    if (!preset.enabled) {
+    if (!mcpIsOn(preset)) {
       setShowConfirmEnable(true);
     } else {
       void doSave();

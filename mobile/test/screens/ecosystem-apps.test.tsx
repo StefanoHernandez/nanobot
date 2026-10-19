@@ -252,6 +252,34 @@ describe("P4-U2 Apps UI (CLI apps, MCP, plugins)", () => {
     expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/Enable remote installs on your computer/i));
   });
 
+  test("An installed, configured preset without `enabled` shows ON; switching off asks to remove it", async () => {
+    mockPrivileged = true;
+    const mockRemove = jest.fn().mockResolvedValueOnce({});
+    const mockDisable = jest.fn();
+    const { enabled: _drop, ...noEnabled } = samplePreset as McpPresetInfo & { enabled?: boolean };
+    mockUseMcp.mockReturnValue({
+      presets: [{ ...noEnabled, installed: true, configured: true }],
+      loading: false,
+      error: null,
+      refresh: jest.fn(),
+      enable: jest.fn(),
+      disable: mockDisable,
+      remove: mockRemove,
+      test: jest.fn(),
+      reconnect: jest.fn(),
+      tools: jest.fn(),
+    });
+    await renderWithTheme(<AppsScreen />);
+    await fireEvent.press(screen.getByText("MCP"));
+    const switchEl = screen.getByRole("switch");
+    expect(switchEl.props.value).toBe(true);
+    await fireEvent(switchEl, "valueChange", false);
+    expect(screen.getByText(/Remove MCP preset GitHub/i)).toBeTruthy();
+    await fireEvent.press(screen.getByText("Confirm"));
+    expect(mockRemove).toHaveBeenCalledTimes(1);
+    expect(mockDisable).not.toHaveBeenCalled();
+  });
+
   test("MCP Remove opens a confirm, and confirm calls remove once", async () => {
     const mockRemove = jest.fn().mockResolvedValueOnce({});
     mockUseMcp.mockReturnValue({

@@ -7,6 +7,7 @@ import { Button, Dialog, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useMcp } from "../../../ecosystem/mcp";
+import { mcpIsOn, mcpToggleable } from "../../../ecosystem/mcpState";
 import { toastEcosystemError } from "../../../ecosystem/common";
 import { filterEcosystemItems } from "./search";
 import { McpSheet } from "./McpSheet";
@@ -30,6 +31,8 @@ export function McpTab() {
   const handleToggle = async (preset: McpPresetInfo, value: boolean) => {
     if (value) {
       setEnableTarget(preset);
+    } else if (!mcpToggleable(preset)) {
+      setRemoveTarget(preset); // presets and custom servers turn off by removal, after a confirm
     } else {
       try {
         await disable(preset.name);
@@ -202,7 +205,7 @@ export function McpTab() {
                         style={[
                           styles.badge,
                           {
-                            backgroundColor: preset.enabled ? th.colors.brandSoft : th.colors.muted,
+                            backgroundColor: mcpIsOn(preset) ? th.colors.brandSoft : th.colors.muted,
                             borderRadius: th.radius.sm,
                           },
                         ]}
@@ -211,14 +214,14 @@ export function McpTab() {
                           style={[
                             styles.badgeText,
                             {
-                              color: preset.enabled
+                              color: mcpIsOn(preset)
                                 ? th.colors.brandSoftForeground
                                 : th.colors.mutedForeground,
                               fontFamily: th.font.medium,
                             },
                           ]}
                         >
-                          {preset.enabled ? t("mcp.enabled") : t("mcp.disabled")}
+                          {mcpIsOn(preset) ? t("mcp.enabled") : t("mcp.disabled")}
                         </Text>
                       </View>
                       <View
@@ -252,7 +255,7 @@ export function McpTab() {
                     </View>
                   </View>
                   <Switch
-                    value={!!preset.enabled}
+                    value={!!mcpIsOn(preset)}
                     disabled={!privileged}
                     onValueChange={(val) => void handleToggle(preset, val)}
                     trackColor={{ false: th.colors.muted, true: th.colors.primary }}
