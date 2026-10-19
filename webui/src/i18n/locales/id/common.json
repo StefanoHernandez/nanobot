@@ -1563,13 +1563,12 @@
     "pin": "Sematkan",
     "unpin": "Lepas sematan",
     "rename": "Ganti nama",
-    "renameTitle": "Ubah nama topik",
-    "renameDescription": "Ubah nama tampilan topik di WebUI.",
     "renamePlaceholder": "Nama topik",
     "renameProjectTitle": "Ubah nama proyek",
     "renameProjectDescription": "Ubah hanya nama proyek di sidebar WebUI.",
     "renameProjectPlaceholder": "Nama proyek",
     "renameSave": "Simpan",
+    "renameFailed": "Nama tidak dapat disimpan. Coba lagi.",
     "archive": "Arsipkan",
     "unarchive": "Batalkan arsip",
     "showArchived": "Tampilkan yang diarsipkan",
@@ -1797,7 +1796,7 @@
         "guide": "Kirim sekarang",
         "delete": "Hapus pesan",
         "edit": "Ubah pesan",
-        "drag": "Seret untuk mengurutkan"
+        "tooManyMentions": "Satu pesan dapat menyebut hingga {{max}} percakapan"
       },
       "attachImage": "Lampirkan file",
       "imageMode": {
@@ -2211,6 +2210,25 @@
     "dismiss": "Abaikan",
     "continue": "Lanjutkan"
   },
+  "diagram": {
+    "graph": "Diagram",
+    "source": "Sumber",
+    "copy": "Salin sumber",
+    "enlarge": "Perbesar diagram",
+    "title": "Diagram Mermaid",
+    "preparing": "Menyiapkan diagram…",
+    "errors": {
+      "syntax": "Periksa sintaks diagram pada sumber.",
+      "unsupported": "Jenis diagram ini belum didukung. Lihat sumber.",
+      "policy": "Diagram memakai gaya atau sumber daya yang tidak didukung. Lihat sumber.",
+      "limit": "Diagram melampaui batas perenderan. Lihat sumber.",
+      "load": "Tidak dapat memuat perender diagram. Coba lagi.",
+      "deadline": "Perenderan diagram terlalu lama. Sederhanakan sumber atau coba lagi.",
+      "worker": "Tidak dapat merender diagram. Coba lagi.",
+      "image": "Tidak dapat menampilkan diagram. Coba lagi.",
+      "capability": "Browser ini tidak dapat merender diagram. Lihat sumber."
+    }
+  },
   "lightbox": {
     "viewAll": "Lihat semua {{count}} gambar",
     "zoomIn": "Perbesar",
@@ -2237,6 +2255,9 @@
     "gatewayPath": "Jalur merujuk ke komputer gateway."
   },
   "filePreview": {
+    "displayMode": "Mode tampilan",
+    "preview": "Pratinjau",
+    "source": "Sumber",
     "aria": "Pratinjau file",
     "breadcrumb": "Jalur file",
     "close": "Tutup pratinjau file",

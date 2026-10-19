@@ -1563,13 +1563,12 @@
     "pin": "Épingler",
     "unpin": "Désépingler",
     "rename": "Renommer",
-    "renameTitle": "Renommer le sujet",
-    "renameDescription": "Changez le nom du sujet affiché dans WebUI.",
     "renamePlaceholder": "Nom du sujet",
     "renameProjectTitle": "Renommer le projet",
     "renameProjectDescription": "Changez seulement le nom du projet dans la barre latérale WebUI.",
     "renameProjectPlaceholder": "Nom du projet",
     "renameSave": "Enregistrer",
+    "renameFailed": "Impossible d’enregistrer le nom. Réessayez.",
     "archive": "Archiver",
     "unarchive": "Désarchiver",
     "showArchived": "Afficher les archives",
@@ -1797,7 +1796,7 @@
         "guide": "Envoyer",
         "delete": "Supprimer le message",
         "edit": "Modifier le message",
-        "drag": "Faire glisser pour réordonner"
+        "tooManyMentions": "Un message peut mentionner jusqu’à {{max}} conversations"
       },
       "attachImage": "Joindre des fichiers",
       "imageMode": {
@@ -2211,6 +2210,25 @@
     "dismiss": "Ignorer",
     "continue": "Continuer"
   },
+  "diagram": {
+    "graph": "Diagramme",
+    "source": "Source",
+    "copy": "Copier la source",
+    "enlarge": "Agrandir le diagramme",
+    "title": "Diagramme Mermaid",
+    "preparing": "Préparation du diagramme…",
+    "errors": {
+      "syntax": "Vérifiez la syntaxe du diagramme dans la source.",
+      "unsupported": "Ce type de diagramme n'est pas pris en charge. Consultez la source.",
+      "policy": "Ce diagramme utilise des styles ou ressources non pris en charge. Consultez la source.",
+      "limit": "Ce diagramme dépasse la limite de rendu. Consultez la source.",
+      "load": "Impossible de charger le moteur de diagrammes. Réessayez.",
+      "deadline": "Le rendu a pris trop de temps. Simplifiez la source ou réessayez.",
+      "worker": "Impossible de générer le diagramme. Réessayez.",
+      "image": "Impossible d'afficher le diagramme. Réessayez.",
+      "capability": "Ce navigateur ne peut pas générer le diagramme. Consultez la source."
+    }
+  },
   "lightbox": {
     "viewAll": "Voir les {{count}} images",
     "zoomIn": "Agrandir",
@@ -2237,6 +2255,9 @@
     "gatewayPath": "Les chemins désignent la machine de la passerelle."
   },
   "filePreview": {
+    "displayMode": "Mode d’affichage",
+    "preview": "Aperçu",
+    "source": "Source",
     "aria": "Aperçu du fichier",
     "breadcrumb": "Chemin du fichier",
     "close": "Fermer l’aperçu du fichier",

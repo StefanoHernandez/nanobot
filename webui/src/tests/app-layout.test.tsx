@@ -257,6 +257,7 @@ vi.mock("@/lib/nanobot-client", async (importOriginal) => {
     onRuntimeModelUpdate = () => () => {};
     onError = () => () => {};
     onChat = () => () => {};
+    onTranscript = () => () => {};
     onSessionUpdate = (handler: (
       chatId: string,
       scope?: string,
@@ -369,15 +370,16 @@ describe("App layout", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows only layout shadows while bootstrap is pending", () => {
-    vi.mocked(fetchBootstrap).mockReturnValueOnce(new Promise(() => {}));
-    render(<App />);
-    expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveClass("startup-status");
-    expect(screen.queryByText("Loading nanobot…")).not.toBeInTheDocument();
-  });
+  it.each(["skills", "apps", "channels", "automations", "settings", "chat"]) (
+    "keeps the %s document skeleton while bootstrap is pending", (surface) => {
+      window.history.replaceState(null, "", `/#/${surface}`);
+      vi.mocked(fetchBootstrap).mockReturnValueOnce(new Promise(() => {}));
+      render(<App />);
+      expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
+      expect(screen.getByRole("main")).toHaveAttribute("data-startup-surface", surface);
+      expect(screen.getByRole("status")).toHaveTextContent("Loading nanobot…");
+    },
+  );
 
   it.each([false, true])("enables task controls only when bootstrap advertises support: %s", async (supported) => {
     mockSessions = [{
@@ -2574,6 +2576,64 @@ describe("App layout", () => {
       expect(screen.getByText("Delete this topic?")).toBeInTheDocument(),
     );
   }, 15_000);
+
+  it("renames inline in the mobile drawer without dismissing it and reloads the saved title", async () => {
+    restoreBrowserFocus = mockBrowserFocus();
+    const user = userEvent.setup();
+    mockSessions = [{
+      key: "websocket:chat-a", channel: "websocket", chatId: "chat-a",
+      createdAt: null, updatedAt: null, title: "Existing chat", preview: "",
+    }];
+    vi.stubGlobal("matchMedia", vi.fn().mockImplementation((query: string) => ({
+      matches: !query.includes("1024px"), media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(),
+      removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })));
+    let persisted: SidebarStatePayload | null = null;
+    mockFetchRoutes({ "/api/webui/sidebar-state": () => persisted ?? {} });
+    setSidebarStateSpy.mockImplementation(async (state: SidebarStatePayload) => {
+      persisted = state;
+      return state;
+    });
+    const firstRender = render(<App />);
+    await waitFor(() => expect(connectSpy).toHaveBeenCalled());
+    act(() => statusHandlers.forEach((handler) => handler("open")));
+    const route = window.location.hash;
+    await user.click(await screen.findByRole("button", { name: "Toggle sidebar" }));
+    const sheet = await screen.findByRole("dialog");
+    const startRename = async () => {
+      await user.click(within(sheet).getByRole("button", { name: "Topic actions for Existing chat" }));
+      await user.click(await within(sheet).findByRole("menuitem", { name: "Rename", exact: true }));
+      return within(sheet).getByRole("textbox", { name: "Topic name" });
+    };
+    const firstInput = await startRename();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.compositionStart(firstInput);
+    fireEvent.keyDown(firstInput, { key: "Escape" });
+    expect(firstInput).toBeInTheDocument();
+    expect(sheet).toBeInTheDocument();
+    fireEvent.compositionEnd(firstInput);
+    fireEvent.keyDown(firstInput, { key: "Escape" });
+    expect(within(sheet).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(sheet).toBeInTheDocument();
+
+    const input = await startRename();
+    await user.clear(input);
+    await user.type(input, "Renamed topic");
+    setSidebarStateSpy.mockRejectedValueOnce(new Error("Disk full"));
+    await user.keyboard("{Enter}");
+    expect(await within(sheet).findByRole("alert")).toHaveTextContent("Couldn't save the name. Try again.");
+    expect(input).toHaveValue("Renamed topic");
+    expect(persisted?.title_overrides["websocket:chat-a"]).toBeUndefined();
+    await user.keyboard("{Enter}");
+    expect(await within(sheet).findByRole("button", { name: "Renamed topic", exact: true })).toBeInTheDocument();
+    expect(persisted?.title_overrides["websocket:chat-a"]).toBe("Renamed topic");
+    expect(window.location.hash).toBe(route);
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    firstRender.unmount();
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Renamed topic", exact: true })).toBeInTheDocument();
+  });
 
   it("retries a failed sidebar read before enabling edits without losing saved state", async () => {
     mockSessions = [

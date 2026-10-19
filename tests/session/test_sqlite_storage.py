@@ -55,6 +55,29 @@ def test_import_is_once_and_private_sources_are_unchanged(tmp_path):
     assert SessionManager(workspace).read_session_snapshot("websocket:old") is None
 
 
+@pytest.mark.parametrize(("newline", "trailing_newline"), [
+    ("\n", True), ("\r\n", True), ("\n", False), ("\r\n", False),
+], ids=["lf", "crlf", "lf-no-final-newline", "crlf-no-final-newline"])
+def test_migration_preserves_unicode_separators(tmp_path, newline, trailing_newline):
+    workspace = tmp_path / "workspace"
+    path = legacy(workspace, content="中文🙂\u0085NEL\u2028LS\u2029PS\nLF\rCR")
+    records = [json.loads(line) for line in path.read_text(encoding="utf-8").split("\n")
+               if line.strip()]
+    records.append({"role": "assistant", "content": "reply\u2029\u2028\u0085"})
+    lines = [json.dumps(record, ensure_ascii=False) for record in records]
+    lines[1:1] = ["", " \t"]
+    original = (newline.join(lines) + (newline if trailing_newline else "")).encode("utf-8")
+    path.write_bytes(original)
+
+    manager = SessionManager(workspace)
+    expected = records[1:]
+    assert manager.read_session_snapshot("websocket:old").messages == expected
+    assert not path.exists()
+    assert (manager.sessions_dir / WORKSPACE_BACKUP_DIR / path.name).read_bytes() == original
+    reopened = SessionManager(workspace)
+    assert reopened.read_session_snapshot("websocket:old").messages == expected
+
+
 def test_invalid_source_rolls_back_entire_migration(tmp_path):
     workspace = tmp_path / "workspace"
     path = legacy(workspace)
@@ -293,15 +316,27 @@ async def test_detached_reads_do_not_publish_mutations(tmp_path):
 async def test_checkpoint_does_not_rewrite_messages(tmp_path):
     manager = SessionManager(tmp_path)
     state = manager.state
-    draft = await state.get("chat:a")
-    draft.add_message("user", "hello")
-    await state.prepare_input(draft)
-    path = manager.sessions_dir / "sessions.sqlite3"
-    with sqlite3.connect(path) as db:
-        db.execute("CREATE TRIGGER prohibit_rewrite BEFORE UPDATE ON messages BEGIN SELECT RAISE(ABORT, 'rewritten'); END")
-    await state.checkpoint_view(draft, {"step": 1})
-    assert (await state.get(draft.key)).metadata["runtime_checkpoint"] == {"step": 1}
-    await state.aclose()
+    try:
+        draft = await state.import_messages("chat:a", [
+            {"role": "user", "content": "earlier question"},
+            {"role": "assistant", "content": "earlier answer"},
+        ])
+        draft.add_message("user", "hello")
+        await state.prepare_input(draft)
+        accepted = manager.read_session_snapshot(draft.key).messages
+        assert accepted == draft.messages
+        path = manager.sessions_dir / "sessions.sqlite3"
+        with sqlite3.connect(path) as db:
+            for operation in ("INSERT", "UPDATE", "DELETE"):
+                db.execute(f"""CREATE TRIGGER prohibit_{operation.lower()} BEFORE {operation} ON messages
+                               BEGIN SELECT RAISE(ABORT, 'rewritten'); END""")
+        await state.checkpoint_view(draft, {"step": 1})
+    finally:
+        await state.aclose()
+
+    stored = manager.read_session_snapshot(draft.key)
+    assert stored.messages == accepted
+    assert stored.metadata["runtime_checkpoint"] == {"step": 1}
 
 
 async def test_database_lock_does_not_block_event_loop(tmp_path):
@@ -725,3 +760,32 @@ async def test_delivery_requires_explicit_nonempty_generation(tmp_path):
         "current",
     ]
     await state.aclose()
+
+
+def test_committed_version_tracks_history_and_session_replacement(tmp_path, monkeypatch):
+    manager = SessionManager(tmp_path)
+    key = "websocket:version"
+    assert manager.read_session_version(key) is None
+    session = manager.get_or_create(key)
+    session.messages = [{"role": "user", "content": "first"}]
+    manager.save(session)
+    first = manager.read_session_version(key)
+    assert first == (session.generation, session.revision)
+    # Administrative edits may preserve updated_at, so it is not a version token.
+    session.messages[0]["content"] = "edited"
+    manager.save(session)
+    second = manager.read_session_version(key)
+    assert second == (first[0], first[1] + 1)
+    assert manager.read_session_metadata(key)["updated_at"] == session.updated_at.isoformat()
+    manager.delete_session(key)
+    assert manager.read_session_version(key) is None
+    replacement = manager.get_or_create(key)
+    manager.save(replacement)
+    assert manager.read_session_version(key) == (replacement.generation, first[1])
+    assert replacement.generation != first[0]
+
+    def unexpected_decode(*args, **kwargs):
+        pytest.fail("version read decoded history or metadata")
+
+    monkeypatch.setattr("nanobot.session.sqlite_store._object", unexpected_decode)
+    assert manager.read_session_version(key) == (replacement.generation, replacement.revision)

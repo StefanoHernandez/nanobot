@@ -1577,13 +1577,12 @@
     "pin": "Fixar",
     "unpin": "Desafixar",
     "rename": "Renomear",
-    "renameTitle": "Renomear tópico",
-    "renameDescription": "Altere o nome do tópico exibido no WebUI.",
     "renamePlaceholder": "Nome do tópico",
     "renameProjectTitle": "Renomear projeto",
     "renameProjectDescription": "Altere apenas o nome do projeto na barra lateral WebUI.",
     "renameProjectPlaceholder": "Nome do projeto",
     "renameSave": "Salvar",
+    "renameFailed": "Não foi possível salvar o nome. Tente novamente.",
     "archive": "Arquivar",
     "unarchive": "Desarquivar",
     "showArchived": "Mostrar arquivadas",
@@ -1811,7 +1810,7 @@
         "guide": "Enviar agora",
         "delete": "Excluir mensagem",
         "edit": "Editar mensagem",
-        "drag": "Arraste para reordenar"
+        "tooManyMentions": "Uma mensagem pode mencionar até {{max}} conversas"
       },
       "attachImage": "Anexar imagem",
       "imageMode": {
@@ -2225,6 +2224,25 @@
     "dismiss": "Descartar",
     "continue": "Continuar"
   },
+  "diagram": {
+    "graph": "Diagrama",
+    "source": "Código-fonte",
+    "copy": "Copiar código-fonte",
+    "enlarge": "Ampliar diagrama",
+    "title": "Diagrama Mermaid",
+    "preparing": "Preparando diagrama…",
+    "errors": {
+      "syntax": "Confira a sintaxe do diagrama no código-fonte.",
+      "unsupported": "Este tipo de diagrama não é compatível. Consulte o código-fonte.",
+      "policy": "O diagrama usa estilos ou recursos incompatíveis. Consulte o código-fonte.",
+      "limit": "O diagrama excede o limite de renderização. Consulte o código-fonte.",
+      "load": "Não foi possível carregar o renderizador. Tente novamente.",
+      "deadline": "A renderização demorou demais. Simplifique o código-fonte ou tente novamente.",
+      "worker": "Não foi possível gerar o diagrama. Tente novamente.",
+      "image": "Não foi possível exibir o diagrama. Tente novamente.",
+      "capability": "Este navegador não pode gerar diagramas. Consulte o código-fonte."
+    }
+  },
   "lightbox": {
     "viewAll": "Ver todas as {{count}} imagens",
     "zoomIn": "Ampliar",
@@ -2251,6 +2269,9 @@
     "gatewayPath": "Os caminhos se referem à máquina do gateway."
   },
   "filePreview": {
+    "displayMode": "Modo de exibição",
+    "preview": "Prévia",
+    "source": "Código-fonte",
     "aria": "Pré-visualização de arquivo",
     "breadcrumb": "Caminho do arquivo",
     "close": "Fechar pré-visualização de arquivo",
