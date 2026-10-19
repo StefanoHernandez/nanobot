@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { Text, View } from "react-native";
 import { Button, IconButton, TextField } from "../../ui/components";
 import { useT } from "../../i18n";
+import { useTheme } from "../../ui/ThemeProvider";
 
 export type ProfileFormValues = { name: string; url: string; secret: string };
 
@@ -11,10 +13,22 @@ export type ProfileFormProps = {
   secretError?: string;
   loading: boolean;
   onSubmit: () => void;
+  insecureWarning?: boolean;
+  onConfirmInsecure?: () => void;
 };
 
-export function ProfileForm({ values, onChange, urlError, secretError, loading, onSubmit }: ProfileFormProps) {
+export function ProfileForm({
+  values,
+  onChange,
+  urlError,
+  secretError,
+  loading,
+  onSubmit,
+  insecureWarning,
+  onConfirmInsecure,
+}: ProfileFormProps) {
   const t = useT();
+  const th = useTheme();
   const [show, setShow] = useState(false);
   return (
     <>
@@ -50,6 +64,31 @@ export function ProfileForm({ values, onChange, urlError, secretError, loading, 
           />
         }
       />
+      {insecureWarning ? (
+        <View
+          testID="insecure-http-warning"
+          style={{
+            padding: 12,
+            borderRadius: th.radius.md,
+            backgroundColor: th.colors.muted,
+            borderLeftWidth: 4,
+            borderLeftColor: th.colors.brand,
+            gap: 10,
+            marginVertical: 4,
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 14, lineHeight: 20 }}>
+            {t("connect.insecureHttpWarning")}
+          </Text>
+          <Button
+            title={t("connect.continueAnyway")}
+            variant="secondary"
+            onPress={() => onConfirmInsecure?.()}
+            disabled={loading}
+          />
+        </View>
+      ) : null}
       <Button title={t("connect.submit")} onPress={onSubmit} loading={loading} />
     </>
   );

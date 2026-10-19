@@ -1,6 +1,8 @@
 import React, { useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { Dimensions, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaInsetsContext } from "react-native-safe-area-context";
+import { useStore } from "zustand";
+import { lockStore } from "../../extras/lockStore";
 import { useTheme } from "../ThemeProvider";
 
 export const SNACKBAR_MS = 4000;
@@ -54,9 +56,19 @@ let currentToast: { message: string; action?: ToastAction; expiresAt: number } |
 let liftPx = 0;
 
 function shownNow(): Shown {
+  const lock = lockStore?.getState ? lockStore.getState() : { enabled: false, locked: false };
+  if (lock.enabled && lock.locked) return null;
   if (!currentToast || currentToast.expiresAt <= Date.now()) return null;
   return { message: currentToast.message, action: currentToast.action };
 }
+
+lockStore?.subscribe?.((state) => {
+  if (state?.enabled && state?.locked) {
+    currentToast = null;
+    clearTimeout(timer);
+    listeners.forEach((l) => l(null));
+  }
+});
 
 /** Distance from the bottom of the host. Keyboard overlap is only the part that still covers the window. */
 export function snackbarBottom(opts: {
@@ -79,6 +91,10 @@ export const toast = {
       currentToast = null;
       clearTimeout(timer);
       listeners.forEach((l) => l(null));
+      return;
+    }
+    const lock = lockStore?.getState ? lockStore.getState() : { enabled: false, locked: false };
+    if (lock.enabled && lock.locked) {
       return;
     }
     const action = options?.action?.label ? options.action : undefined;
@@ -117,6 +133,7 @@ function useKeyboardHeight(): number {
 
 export function ToastHost() {
   const th = useTheme();
+  const isLocked = useStore(lockStore, (s) => s.enabled && s.locked);
   const insets = useContext(SafeAreaInsetsContext) ?? { top: 0, bottom: 0, left: 0, right: 0 };
   const [shown, setShown] = useState<Shown>(shownNow);
   const [id] = useState(() => ++nextHostId);
@@ -146,7 +163,7 @@ export function ToastHost() {
     };
   }, []);
 
-  if (currentTop !== id || !shown) return null;
+  if (isLocked || currentTop !== id || !shown) return null;
 
   const bottom = snackbarBottom({
     insetBottom: insets.bottom,

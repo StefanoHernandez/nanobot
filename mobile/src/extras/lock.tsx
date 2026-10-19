@@ -5,21 +5,19 @@ import { allowScreenCaptureAsync, preventScreenCaptureAsync } from "expo-screen-
 import { createStore, useStore } from "zustand";
 import { useT } from "../i18n";
 import { kv } from "../platform/storage";
-import { Button } from "../ui/components";
+import { Button } from "../ui/components/Button";
 import { useTheme } from "../ui/ThemeProvider";
 import { BotFace } from "../ui/BotFace";
 
-const KEY = "lock.enabled";
+import { lockStore, LOCK_KEY as KEY } from "./lockStore";
+
+export { lockStore };
+
 const RELOCK_MS = 300_000;
 
 /** True after > 5 min in background, and on cold start (no background timestamp yet). */
 export const isRelockDue = (lastBackgroundAt: number | null, now: number): boolean =>
   lastBackgroundAt === null || now - lastBackgroundAt > RELOCK_MS;
-
-export const lockStore = createStore<{ enabled: boolean; locked: boolean }>(() => {
-  const enabled = kv.get(KEY) === "1";
-  return { enabled, locked: enabled }; // cold start with lock on -> locked
-});
 
 export const lockSettings = {
   enabled: (): boolean => kv.get(KEY) === "1",

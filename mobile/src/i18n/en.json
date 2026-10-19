@@ -180,7 +180,9 @@
     "pairUnreachable": "Can't reach {{url}}: it must be the server's address, with Tailscale on",
     "badSecret": "Incorrect server secret",
     "tooManyAttempts": "Too many attempts. Please try again later.",
-    "webSessionEnded": "Session expired or revoked. Please sign in again."
+    "webSessionEnded": "Session expired or revoked. Please sign in again.",
+    "insecureHttpWarning": "Unencrypted connection: the secret travels in clear text. Use https or Tailscale.",
+    "continueAnyway": "Continue anyway"
   },
   "settings": {
     "title": "Settings",

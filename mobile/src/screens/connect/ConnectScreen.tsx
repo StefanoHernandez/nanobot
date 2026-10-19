@@ -11,6 +11,7 @@ import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { Button, Dialog, ListItem, toast } from "../../ui/components";
 import { ProfileForm, type ProfileFormValues } from "./ProfileForm";
+import { isInsecureHttpUrl } from "./insecureHttp";
 
 export function ConnectScreen() {
   const t = useT();
@@ -28,7 +29,14 @@ export function ConnectScreen() {
   const [loading, setLoading] = useState(false);
   const [toDelete, setToDelete] = useState<Profile | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [showInsecureWarning, setShowInsecureWarning] = useState(false);
+  const [insecureWarnedUrl, setInsecureWarnedUrl] = useState<string | null>(null);
   const busy = useRef(false);
+
+  const onValuesChange = (next: ProfileFormValues) => {
+    setValues(next);
+    if (showInsecureWarning) setShowInsecureWarning(false);
+  };
 
   const open = (id: string) => {
     profiles.setActive(id);
@@ -82,12 +90,18 @@ export function ConnectScreen() {
     }
   };
 
-  const submit = async () => {
+  const submit = async (forceInsecure = false) => {
     if (busy.current) return;
     setUrlError(undefined);
     setSecretError(undefined);
     const baseUrl = normalizeBaseUrl(values.url);
     if (!baseUrl) return setUrlError(t("connect.invalidUrl"));
+    if (!forceInsecure && insecureWarnedUrl !== baseUrl && isInsecureHttpUrl(baseUrl)) {
+      setShowInsecureWarning(true);
+      return;
+    }
+    setShowInsecureWarning(false);
+    setInsecureWarnedUrl(baseUrl);
     busy.current = true;
     setLoading(true);
     try {
@@ -151,7 +165,16 @@ export function ConnectScreen() {
         <View style={{ gap: 12, marginBottom: 12 }}>
           <Button title={t("connect.scan")} variant="secondary" onPress={() => setScanOpen(true)} disabled={loading} />
         </View>
-        <ProfileForm values={values} onChange={setValues} urlError={urlError} secretError={secretError} loading={loading} onSubmit={submit} />
+        <ProfileForm
+          values={values}
+          onChange={onValuesChange}
+          urlError={urlError}
+          secretError={secretError}
+          loading={loading}
+          onSubmit={() => void submit()}
+          insecureWarning={showInsecureWarning}
+          onConfirmInsecure={() => void submit(true)}
+        />
       </ScrollView>
       <PairScanModal open={scanOpen} onClose={() => setScanOpen(false)} onPayload={(raw) => void onPairPayload(raw)} loading={loading} />
       <Dialog
