@@ -568,11 +568,11 @@ describe("BK-A: Backup and Export", () => {
       workspace_included: true,
     };
 
-    test("SettingsScreen includes backup section after system", () => {
-      const sysIdx = SECTIONS.indexOf("system" as any);
+    test("SettingsScreen includes backup section after server", () => {
+      const srvIdx = SECTIONS.indexOf("server" as any);
       const bkIdx = SECTIONS.indexOf("backup" as any);
-      expect(sysIdx).toBeGreaterThan(-1);
-      expect(bkIdx).toBeGreaterThan(sysIdx);
+      expect(srvIdx).toBeGreaterThan(-1);
+      expect(bkIdx).toBeGreaterThan(srvIdx);
     });
 
     test("Backup list renders newest first with the 'più recente' badge on the first item", async () => {

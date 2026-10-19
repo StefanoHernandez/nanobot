@@ -148,8 +148,8 @@ test("change server pushes /connect; secret never read", async () => {
 
 test("section list navigates", async () => {
   await render(<SettingsScreen />);
-  await fireEvent.press(screen.getByText("Appearance"));
-  expect(router.push).toHaveBeenCalledWith("/settings/appearance");
+  await fireEvent.press(screen.getByText("App"));
+  expect(router.push).toHaveBeenCalledWith("/settings/app");
   expect(screen.getByText("Models")).toBeTruthy();
 });
 
@@ -160,7 +160,7 @@ test("unknown section shows the placeholder", async () => {
 
 test("system section renders real content", async () => {
   await show("system");
-  expect(screen.getByText("Restart nanobot")).toBeTruthy();
+  expect(screen.getByText("Restart gateway")).toBeTruthy();
   expect(screen.queryByText("Coming soon")).toBeNull();
 });
 
@@ -215,7 +215,7 @@ test("overview without usage renders and rows navigate", async () => {
   mockGet.mockRejectedValue(new Error("x"));
   await show("overview");
   await fireEvent.press(screen.getByText("Web"));
-  expect(router.push).toHaveBeenCalledWith("/settings/capabilities");
+  expect(router.push).toHaveBeenCalledWith("/settings/features");
   await fireEvent.press(screen.getByText("m"));
   expect(router.push).toHaveBeenCalledWith("/settings/models");
 });

@@ -23,14 +23,14 @@ describe("runtime fields", () => {
     expect(coerceRuntimeValue({ ...f("tools.exec.path_prepend"), kind: "nullable" }, "")).toEqual({ ok: true, value: null });
   });
   it("applies when and enabledBy", () => {
-    const tz = (v: Record<string, string | boolean>) => visibleFields("runtime", v).some((x) => x.path === "agents.defaults.timezone");
+    const tz = (v: Record<string, string | boolean>) => visibleFields("behavior", v).some((x) => x.path === "agents.defaults.timezone");
     expect(tz({})).toBe(false);
     expect(tz({ "agents.defaults.timezone_mode": "manual" })).toBe(true);
-    const sh = (v: Record<string, string | boolean>) => visibleFields("advanced", v).some((x) => x.path === "tools.exec.timeout");
+    const sh = (v: Record<string, string | boolean>) => visibleFields("security", v).some((x) => x.path === "tools.exec.timeout");
     expect(sh({})).toBe(false);
     expect(sh({ "tools.exec.enable": true })).toBe(true);
-    expect(visibleFields("advanced", { "tools.exec.enable": true }).some((x) => x.path === "tools.exec.sandbox_ro_binds")).toBe(false);
-    expect(visibleFields("advanced", { "tools.exec.enable": true, "tools.exec.sandbox": "bwrap" }).some((x) => x.path === "tools.exec.sandbox_ro_binds")).toBe(true);
+    expect(visibleFields("security", { "tools.exec.enable": true }).some((x) => x.path === "tools.exec.sandbox_ro_binds")).toBe(false);
+    expect(visibleFields("security", { "tools.exec.enable": true, "tools.exec.sandbox": "bwrap" }).some((x) => x.path === "tools.exec.sandbox_ro_binds")).toBe(true);
   });
   it("rejects hex/exponent numbers; trims list arrays", () => {
     expect(coerceRuntimeValue(f("gateway.port"), "0x10")).toEqual({ ok: false, code: "invalid_number" });

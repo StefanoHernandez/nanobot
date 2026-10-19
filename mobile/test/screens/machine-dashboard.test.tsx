@@ -139,10 +139,9 @@ describe("MD-A: Machine Dashboard", () => {
   });
 
   // 3. SettingsScreen wiring
-  test("SettingsScreen includes machine section after system", () => {
-    const sysIdx = SECTIONS.indexOf("system" as any);
-    const machIdx = SECTIONS.indexOf("machine" as any);
-    expect(machIdx).toBe(sysIdx + 1);
+  test("SettingsScreen includes server section", () => {
+    const serverIdx = SECTIONS.indexOf("server" as any);
+    expect(serverIdx).toBeGreaterThan(-1);
   });
 
   // 4. Rendering GET payload: CPU, RAM, disk, temperature, load

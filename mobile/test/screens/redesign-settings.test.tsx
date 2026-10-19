@@ -95,7 +95,7 @@ describe("R-S1 Compagno redesign of settings screens", () => {
     }
   });
 
-  test.each(["overview", "appearance", "about", "system", "advanced", "capabilities"])("settings %s section: no Text has fontWeight, every Text has fontFamily", async (section) => {
+  test.each(["overview", "features", "behavior", "security", "server", "app", "appearance", "about", "system", "advanced", "capabilities"])("settings %s section: no Text has fontWeight, every Text has fontFamily", async (section) => {
     const res = await render(
       <SafeAreaProvider initialMetrics={metrics}>
         <ThemeProvider>

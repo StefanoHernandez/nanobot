@@ -12,7 +12,6 @@ import { isOfflineLocaleInstalled } from "../../extras/sttEngine";
 import { Button, ListItem, toast } from "../../ui/components";
 import { useThemePreference, useTheme, type ThemePref } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
-import { ApprovalsCard } from "./ApprovalsCard";
 
 const THEMES: ThemePref[] = ["system", "light", "dark"];
 const LANGS: Language[] = ["system", "it", "en"];
@@ -207,8 +206,8 @@ export function AppearanceSection() {
           />
         </View>
       </View>
-
-      <ApprovalsCard />
     </>
   );
 }
+
+export const AppSection = AppearanceSection;

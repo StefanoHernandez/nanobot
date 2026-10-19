@@ -222,11 +222,11 @@ describe("OverviewSection (ST-A Part 4)", () => {
       expect(screen.getByText("Online")).toBeTruthy();
     });
 
-    // Details on Stato -> /settings/machine
+    // Details on Stato -> /settings/server
     const detailsButtons = screen.getAllByText("Dettagli");
     expect(detailsButtons.length).toBeGreaterThanOrEqual(2);
     await fireEvent.press(detailsButtons[0]);
-    expect(router.push).toHaveBeenCalledWith("/settings/machine");
+    expect(router.push).toHaveBeenCalledWith("/settings/server");
 
     // Details on Spesa -> /settings/costs
     await fireEvent.press(detailsButtons[1]);
@@ -244,9 +244,9 @@ describe("OverviewSection (ST-A Part 4)", () => {
     await fireEvent.press(screen.getByLabelText("Lavagna"));
     expect(router.push).toHaveBeenCalledWith("/ecosystem/kanban");
 
-    // Press capability chip -> /settings/capabilities
+    // Press capability chip -> /settings/features
     await fireEvent.press(screen.getByText("Web"));
-    expect(router.push).toHaveBeenCalledWith("/settings/capabilities");
+    expect(router.push).toHaveBeenCalledWith("/settings/features");
   });
 
   test("one failing source shows 'non disponibile' while others still render normally", async () => {

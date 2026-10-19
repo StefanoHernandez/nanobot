@@ -17,6 +17,7 @@ import { useTheme } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 import { ProvidersPanel } from "./ProvidersPanel";
 import { TaskModels } from "./TaskModels";
+import { Features } from "./Features";
 
 const jsonText = (v: Record<string, unknown> | null | undefined) => (v && Object.keys(v).length ? JSON.stringify(v, null, 2) : "");
 const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -187,6 +188,7 @@ export function ModelsSection() {
       </View>
       {editing ? <PresetEditor key={editing === "new" ? "new" : editing.name} preset={editing === "new" ? null : editing} onClose={() => setEditing(null)} /> : null}
       <ProvidersPanel />
+      <Features names={["azure", "bedrock"]} />
     </>
   );
 }
