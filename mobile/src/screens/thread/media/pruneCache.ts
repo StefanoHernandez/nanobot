@@ -31,13 +31,16 @@ export async function pruneCache(opts: {
   const retention = opts.retentionMs ?? RETENTION_MS;
   const maxBytes = opts.maxSizeBytes ?? MAX_MEDIA_CACHE_BYTES;
   const cutoff = now - retention;
+  // No mtime (some filesystems) or touched in the last hour (a download in progress): never prune.
+  // ponytail: age is the first download, not the last open; touch the dir on reuse if often-used media gets evicted.
+  const prunable = (it: PruneItem) => it.modificationTime > 0 && it.modificationTime < now - 60 * 60 * 1000;
 
   let deletedExports = 0;
   let deletedMedia = 0;
 
   // 1. Delete exports older than 14 days
   for (const item of opts.exportsFiles) {
-    if (item.modificationTime < cutoff) {
+    if (prunable(item) && item.modificationTime < cutoff) {
       await opts.onDelete(item);
       item.deleted = true;
       deletedExports++;
@@ -47,7 +50,7 @@ export async function pruneCache(opts: {
   // 2. Delete media entries older than 14 days
   const remainingMedia: PruneItem[] = [];
   for (const item of opts.mediaDirs) {
-    if (item.modificationTime < cutoff) {
+    if (prunable(item) && item.modificationTime < cutoff) {
       await opts.onDelete(item);
       item.deleted = true;
       deletedMedia++;
@@ -62,6 +65,7 @@ export async function pruneCache(opts: {
     remainingMedia.sort((a, b) => a.modificationTime - b.modificationTime);
     for (const item of remainingMedia) {
       if (totalMediaBytes <= maxBytes) break;
+      if (!prunable(item)) continue;
       await opts.onDelete(item);
       item.deleted = true;
       totalMediaBytes -= item.size || 0;

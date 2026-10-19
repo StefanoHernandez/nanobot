@@ -188,7 +188,7 @@ export function ModelsSection() {
       </View>
       {editing ? <PresetEditor key={editing === "new" ? "new" : editing.name} preset={editing === "new" ? null : editing} onClose={() => setEditing(null)} /> : null}
       <ProvidersPanel />
-      <Features names={["azure", "bedrock"]} />
+      <Features place="models" />
     </>
   );
 }

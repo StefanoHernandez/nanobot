@@ -61,7 +61,8 @@ afterEach(async () => { await act(async () => {}); });
 const settle = async () => { await act(async () => {}); };
 
 test("indicator shows 50% and hides on null usage", async () => {
-  (useThreadSlice as jest.Mock).mockReturnValue({ messages: [asst("a", { usage: { context_tokens: 64000 }, contextWindowTokens: 128000 })] });
+  const slice = { messages: [asst("a", { usage: { context_tokens: 64000 }, contextWindowTokens: 128000 })] };
+  (useThreadSlice as jest.Mock).mockImplementation((_key: string, pick?: (s: any) => any) => (pick ? pick(slice) : slice));
   await wrap(<ContextIndicator chatKey={KEY} />);
   expect(screen.getByText("50%")).toBeTruthy();
 });

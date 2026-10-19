@@ -59,9 +59,9 @@ export function CapabilitiesSection() {
     <KeyboardAvoidingView behavior="padding">
       <ImageCard />
       <WebCard />
-      <Features names={["olostep"]} />
+      <Features place="features" names={["olostep"]} />
       <TranscriptionCard />
-      <Features names={["documents", "pdf"]} title={t("system.documentsTitle", { defaultValue: "Documenti e PDF" })} />
+      <Features place="features" names={["documents", "pdf"]} title={t("system.documentsTitle", { defaultValue: "Documenti e PDF" })} />
       <MemoryCard />
     </KeyboardAvoidingView>
   );

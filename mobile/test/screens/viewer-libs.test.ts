@@ -68,12 +68,13 @@ describe("viewerLibs", () => {
     expect(libs.pako).toBe("/* lib content */");
   });
 
-  test("LRU: keeps at most 2 most recently used libraries in memory; others are re-read", async () => {
+  test("LRU: keeps at most 3 most recently used libraries in memory; others are re-read", async () => {
     Object.defineProperty(Platform, "OS", { value: "ios", configurable: true });
     (FileSystem.readAsStringAsync as jest.Mock)
       .mockResolvedValueOnce("/* pako */")
       .mockResolvedValueOnce("/* pdfjs */")
       .mockResolvedValueOnce("/* jszip */")
+      .mockResolvedValueOnce("/* mermaid */")
       .mockResolvedValueOnce("/* pako re-read */");
 
     // Read 1: pako
@@ -84,18 +85,21 @@ describe("viewerLibs", () => {
     await readViewerLib("pdfjs");
     expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(2);
 
-    // Read 3: jszip -> should evict pako (oldest), keeping pdfjs and jszip
     await readViewerLib("jszip");
     expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(3);
 
-    // Read pdfjs again -> still in cache (MRU)! Should not call readAsStringAsync
+    // Read 4: mermaid -> evicts pako (oldest), keeping pdfjs, jszip, mermaid
+    await readViewerLib("mermaid");
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(4);
+
+    // pdfjs is still cached
     const pdfjsAgain = await readViewerLib("pdfjs");
     expect(pdfjsAgain).toBe("/* pdfjs */");
-    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(3);
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(4);
 
-    // Read pako again -> was evicted! Must re-read from asset
+    // pako was evicted: re-read from the asset
     const pakoAgain = await readViewerLib("pako");
     expect(pakoAgain).toBe("/* pako re-read */");
-    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(4);
+    expect(FileSystem.readAsStringAsync).toHaveBeenCalledTimes(5);
   });
 });

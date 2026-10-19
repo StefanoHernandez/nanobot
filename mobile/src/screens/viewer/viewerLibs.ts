@@ -61,7 +61,7 @@ const MODULES: Record<ViewerLibName, number> = {
   babel,
 };
 
-const MAX_CACHED_LIBS = 2;
+const MAX_CACHED_LIBS = 3; // a viewer needs up to three (vega trio, react + react-dom + babel)
 const memory = new Map<ViewerLibName, string>();
 const loadedOrder: ViewerLibName[] = [];
 
