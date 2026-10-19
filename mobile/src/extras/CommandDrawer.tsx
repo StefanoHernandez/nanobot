@@ -25,7 +25,7 @@ export function CommandDrawerButton({
   const t = useT();
   const th = useTheme();
   const { session } = useSession();
-  const { send } = useThreadSlice(chatKey);
+  const { send } = useThreadSlice(chatKey, () => ({}));
 
   const [inner, setInner] = useState(false);
   const open = openProp ?? inner;

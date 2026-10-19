@@ -288,7 +288,7 @@ export function GalleryScreen({ chatKey }: GalleryScreenProps) {
   const th = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { messages } = useThreadSlice(chatKey);
+  const { messages } = useThreadSlice(chatKey, (s) => ({ messages: s.messages }));
   const { profile, session } = useSession();
   const baseUrl = profile?.baseUrl ?? "";
 

@@ -24,10 +24,10 @@ export function ContextPopover({ open, onClose, messages, chatKey }: { open: boo
   const t = useT();
   const th = useTheme();
   const { session } = useSession();
-  const thread = useThreadSlice(chatKey ?? "");
+  const { send } = useThreadSlice(chatKey ?? "", () => ({}));
   const canCompact = !!chatKey && !!session && isWritable(chatKey);
   const compactChat = () => {
-    if (!canCompact || !thread.send("/compact")) {
+    if (!canCompact || !send("/compact")) {
       toast.show(t("context.compactFailed"));
       return;
     }

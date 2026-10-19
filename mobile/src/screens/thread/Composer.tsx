@@ -60,26 +60,34 @@ export function markComposerForFocus(chatKey: string) {
   focusTargets.add(chatKey);
 }
 
-export function Composer({ chatKey }: { chatKey: string }) {
+export function Composer({ chatKey, onRender }: { chatKey: string; onRender?: () => void }) {
+  onRender?.();
   const t = useT();
   const th = useTheme();
   const { session, state: sessionState, profile } = useSession();
   const chats = useChats((s) => s.chats);
   const {
     draft,
-    setDraft,
-    send,
+    setDraft = () => {},
+    send = () => false,
     modifyQueued = () => {},
     replyingTo = null,
     setReplyingTo = () => {},
     running,
-    stop,
+    stop = () => {},
     pendingFiles = [],
     setPendingFiles = () => {},
     sendError = null,
     uploading = false,
     clearSendError = () => {},
-  } = useThreadSlice(chatKey);
+  } = useThreadSlice(chatKey, (s) => ({
+    draft: s.draft,
+    running: s.running,
+    pendingFiles: s.pendingFiles,
+    sendError: s.sendError,
+    uploading: s.uploading,
+    replyingTo: s.replyingTo ?? null,
+  }));
 
   useOutboxFlush(chatKey, sessionState, profile?.id ?? null);
 

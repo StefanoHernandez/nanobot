@@ -61,7 +61,9 @@ const MODULES: Record<ViewerLibName, number> = {
   babel,
 };
 
+const MAX_CACHED_LIBS = 2;
 const memory = new Map<ViewerLibName, string>();
+const loadedOrder: ViewerLibName[] = [];
 
 // Tests render the viewer without the multi-megabyte assets. An empty string
 // means "present, but do not inject". Production never stores an empty string.
@@ -70,13 +72,35 @@ if (typeof jest !== "undefined") {
   for (const name of VIEWER_LIB_NAMES) memory.set(name, "");
 }
 
+function touchLoaded(name: ViewerLibName, text?: string): void {
+  const idx = loadedOrder.indexOf(name);
+  if (idx !== -1) loadedOrder.splice(idx, 1);
+  loadedOrder.push(name);
+  if (text !== undefined) memory.set(name, text);
+  while (loadedOrder.length > MAX_CACHED_LIBS) {
+    const oldest = loadedOrder.shift()!;
+    if (typeof jest !== "undefined") {
+      memory.set(oldest, "");
+    } else {
+      memory.delete(oldest);
+    }
+  }
+}
+
 /** Test hook: override a cached library content. */
 export function setViewerLibForTest(name: ViewerLibName, content: string): void {
-  memory.set(name, content);
+  if (content.length > 0) {
+    touchLoaded(name, content);
+  } else {
+    memory.set(name, content);
+    const idx = loadedOrder.indexOf(name);
+    if (idx !== -1) loadedOrder.splice(idx, 1);
+  }
 }
 
 /** Test hook: reset cached libraries to test defaults. */
 export function clearViewerLibsForTest(): void {
+  loadedOrder.length = 0;
   memory.clear();
   if (typeof jest !== "undefined") {
     for (const name of VIEWER_LIB_NAMES) memory.set(name, "");
@@ -90,6 +114,16 @@ export function takeCached(names: readonly ViewerLibName[]): ViewerLibMap | null
     const hit = memory.get(name);
     if (hit == null) return null;
     out[name] = hit;
+  }
+  for (const name of names) {
+    const hit = memory.get(name);
+    if (hit && hit.length > 0) {
+      const idx = loadedOrder.indexOf(name);
+      if (idx !== -1) {
+        loadedOrder.splice(idx, 1);
+        loadedOrder.push(name);
+      }
+    }
   }
   return out;
 }
@@ -106,7 +140,10 @@ export async function loadViewerLibs(names: readonly ViewerLibName[]): Promise<V
 
 export async function readViewerLib(name: ViewerLibName): Promise<string> {
   const hit = memory.get(name);
-  if (hit != null && hit.length > 0) return hit;
+  if (hit != null && hit.length > 0) {
+    touchLoaded(name);
+    return hit;
+  }
   const asset = Asset.fromModule(MODULES[name]);
   if (Platform.OS === "web") {
     const uri = asset.uri;
@@ -114,14 +151,14 @@ export async function readViewerLib(name: ViewerLibName): Promise<string> {
     const res = await fetch(uri);
     if (!res.ok) throw new Error(`viewer library unavailable: ${name}`);
     const text = await res.text();
-    memory.set(name, text);
+    touchLoaded(name, text);
     return text;
   }
   if (!asset.localUri) await asset.downloadAsync();
   const uri = asset.localUri;
   if (!uri) throw new Error(`viewer library unavailable: ${name}`);
   const text = await FileSystem.readAsStringAsync(uri);
-  memory.set(name, text);
+  touchLoaded(name, text);
   return text;
 }
 

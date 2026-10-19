@@ -13,11 +13,13 @@ import { QueuedMessages } from "./QueuedMessages";
  * One line above the composer for everything that is waiting to be sent: messages held back until the
  * connection returns (outbox) and messages held back until the bot finishes (queued). Tap to manage them.
  */
+const EMPTY_QUEUED: QueuedMessage[] = [];
+
 export function PendingBar({ chatKey, onModifyQueued }: { chatKey: string; onModifyQueued: (item: QueuedMessage) => void }) {
   const t = useT();
   const th = useTheme();
   const outboxCount = useStore(outboxStore, (s) => s.queues[chatKey]?.length ?? 0);
-  const { queuedMessages = [] } = useThreadSlice(chatKey);
+  const { queuedMessages = EMPTY_QUEUED } = useThreadSlice(chatKey, (s) => ({ queuedMessages: s.queuedMessages ?? EMPTY_QUEUED }));
   const queuedCount = queuedMessages.length;
   const count = outboxCount + queuedCount;
   const [expanded, setExpanded] = useState(false);

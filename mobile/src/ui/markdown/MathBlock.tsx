@@ -1,13 +1,16 @@
 import React, { useMemo } from "react";
-import { ScrollView, Text } from "react-native";
+import { Platform, ScrollView, Text } from "react-native";
 import { WebView } from "react-native-webview";
 import { useTheme } from "../ThemeProvider";
 import { katexHtml } from "./katex";
+import { ensureKatexCache } from "./katexCache";
 import { heightFor } from "./mathFrame";
 
 export function MathBlock({ tex }: { tex: string }) {
   const th = useTheme();
   const html = useMemo(() => katexHtml(tex, th.colors.foreground), [tex, th.colors.foreground]);
+  const baseUrl = useMemo(() => (Platform.OS === "web" ? "about:blank" : ensureKatexCache()), []);
+
   if (html === null)
     // invalid TeX: raw monospace fallback
     return (
@@ -17,12 +20,19 @@ export function MathBlock({ tex }: { tex: string }) {
     );
   return (
     <WebView
-      originWhitelist={["about:blank"]}
-      source={{ html, baseUrl: "about:blank" }}
+      testID="webview"
+      originWhitelist={Platform.OS === "web" ? ["about:blank"] : ["about:blank", "file://*"]}
+      source={{
+        html,
+        baseUrl,
+        allowingReadAccessToURL: Platform.OS === "web" ? undefined : baseUrl,
+      }}
       javaScriptEnabled={false}
-      allowFileAccess={false}
+      allowFileAccess={Platform.OS !== "web"}
+      allowFileAccessFromFileURLs={false}
+      allowUniversalAccessFromFileURLs={false}
       setSupportMultipleWindows={false}
-      onShouldStartLoadWithRequest={(r) => r.url === "about:blank"}
+      onShouldStartLoadWithRequest={(r) => r.url === "about:blank" || (baseUrl !== "" && r.url.startsWith(baseUrl))}
       style={{ height: heightFor(tex), backgroundColor: "transparent", marginVertical: 4 }}
     />
   );

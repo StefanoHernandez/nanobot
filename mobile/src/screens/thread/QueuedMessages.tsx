@@ -4,6 +4,8 @@ import { useT } from "../../i18n";
 import { useTheme } from "../../ui/ThemeProvider";
 import { useThreadSlice, type QueuedMessage } from "../../state/threadStore";
 
+const EMPTY_QUEUED: QueuedMessage[] = [];
+
 export function QueuedMessages({
   chatKey,
   onModify,
@@ -13,7 +15,10 @@ export function QueuedMessages({
 }) {
   const t = useT();
   const th = useTheme();
-  const { queuedMessages = [], sendQueuedNow, modifyQueued, removeQueued } = useThreadSlice(chatKey);
+  const { queuedMessages = EMPTY_QUEUED, sendQueuedNow, modifyQueued, removeQueued } = useThreadSlice(
+    chatKey,
+    (s) => ({ queuedMessages: s.queuedMessages ?? EMPTY_QUEUED }),
+  );
 
   if (!queuedMessages.length) return null;
 
