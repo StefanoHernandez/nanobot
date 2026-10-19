@@ -86,6 +86,27 @@ def runtime_config_payload(config: Config) -> dict[str, Any]:
     }
 
 
+# Fork: privileged settings requiring local browser or full power
+PRIVILEGED_RUNTIME_PATHS = (
+    "tools.exec.enable",
+    "tools.exec.sandbox",
+    "tools.exec.sandbox_ro_binds",
+    "tools.exec.sandbox_rw_binds",
+    "tools.exec.allowed_env_keys",
+    "tools.exec.allow_patterns",
+    "tools.exec.deny_patterns",
+    "tools.exec.path_prepend",
+    "tools.exec.path_append",
+    "tools.restrict_to_workspace",
+    "tools.ssrf_whitelist",
+    "tools.my.allow_set",
+    "tools.cli_apps.enable",
+    "tools.webui_allow_remote_package_install",
+    "gateway.host",
+    "gateway.port",
+)
+
+
 def update_runtime_config(
     config: Config, values: dict[str, Any], *, local_browser: bool,
 ) -> bool:
@@ -93,13 +114,16 @@ def update_runtime_config(
     unknown = values.keys() - set(RUNTIME_CONFIG_PATHS)
     if unknown:
         raise WebUISettingsError("Unknown runtime setting: " + sorted(unknown)[0])
-    remote_install = "tools.webui_allow_remote_package_install"
-    if remote_install in values and not local_browser:
-        if values[remote_install] != config.tools.webui_allow_remote_package_install:
-            raise WebUISettingsError(
-                "Change remote installation access from a browser on the gateway host.",
-                status=403,
-            )
+    # Fork: deny changes to privileged settings from non-local/non-full-power clients
+    if not local_browser:
+        for path in PRIVILEGED_RUNTIME_PATHS:
+            if path in values:
+                parent, leaf = _parent(config, path)
+                if values[path] != getattr(parent, leaf):
+                    raise WebUISettingsError(
+                        "Change this setting from a browser on the gateway host or a device with full power.",
+                        status=403,
+                    )
     candidate = config.model_copy(deep=True)
     for path, value in values.items():
         parent, leaf = _parent(candidate, path)

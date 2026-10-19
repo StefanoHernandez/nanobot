@@ -52,6 +52,29 @@ def is_path_within(path: str | Path, root: str | Path) -> bool:
         return False
 
 
+def safe_workspace_file(root: str | Path, path: str | Path) -> Path | None:
+    """Return *path* as a Path if it is a regular file within *root* and not a symlink.
+
+    Returns None if *path* does not exist, is a symlink, is not a regular file,
+    or resolves outside of *root*.
+    """
+    try:
+        r = Path(root).expanduser().resolve(strict=False)
+        p = Path(path).expanduser()
+        if not p.is_absolute():
+            p = r / p
+        if p.is_symlink():
+            return None
+        resolved = p.resolve(strict=False)
+        if not resolved.is_relative_to(r):
+            return None
+        if not p.is_file():
+            return None
+        return p
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
 def is_path_allowed(path: str | Path, roots: Iterable[str | Path]) -> bool:
     """Return True when *path* is inside any allowed root."""
     return any(is_path_within(path, root) for root in roots)

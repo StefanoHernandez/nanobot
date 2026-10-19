@@ -192,3 +192,81 @@ async def test_settings_and_forget_require_privileged(gate, tmp_path, monkeypatc
         allowed_local = await handler(local_req)
         assert allowed_local.status == 200
 
+
+async def test_exec_session_input_is_gated_and_empty_is_not(gate, monkeypatch):
+    from nanobot.agent.tools.exec_session import ExecSessionTool
+
+    gate.set_enabled(True)
+    ran: list[str | None] = []
+
+    async def fake_original(self, session_id, input=None, **kwargs):
+        ran.append(input)
+        return "ok"
+
+    monkeypatch.setattr(ExecSessionTool, "execute", fake_original)
+    ap.install()
+    tool = object.__new__(ExecSessionTool)
+    token = bind_request_context(RequestContext(channel="websocket", chat_id="c1", session_key="websocket:c1"))
+    try:
+        # 1) Non-empty input -> gated
+        task = asyncio.create_task(tool.execute("s1", input="rm -rf /"))
+        pending = await _wait_pending(gate)
+        assert pending["tool"] == "exec_session"
+        assert "rm -rf /" in pending["summary"] and "s1" in pending["summary"]
+        gate.decide(pending["id"], allow=False, always=False)
+        result = await task
+        assert ran == [] and "denied" in str(result)
+
+        # 2) Empty input (None or "") -> not gated
+        res_none = await tool.execute("s1", input=None)
+        assert res_none == "ok" and ran == [None]
+        res_empty = await tool.execute("s1", input="")
+        assert res_empty == "ok" and ran == [None, ""]
+    finally:
+        reset_request_context(token)
+
+
+async def test_cli_apps_tool_is_gated(gate, monkeypatch):
+    from nanobot.agent.tools.cli_apps import CliAppsTool
+
+    gate.set_enabled(True)
+    ran: list[list[str]] = []
+
+    async def fake_original(self, name, args=None, **kwargs):
+        ran.append([name, *(args or [])])
+        return "ok"
+
+    monkeypatch.setattr(CliAppsTool, "execute", fake_original)
+    ap.install()
+    tool = object.__new__(CliAppsTool)
+    token = bind_request_context(RequestContext(channel="websocket", chat_id="c1", session_key="websocket:c1"))
+    try:
+        task = asyncio.create_task(tool.execute("gimp", args=["--version"]))
+        pending = await _wait_pending(gate)
+        assert pending["tool"] == "run_cli_app"
+        assert pending["summary"] == "gimp --version"
+        gate.decide(pending["id"], allow=False, always=False)
+        result = await task
+        assert ran == [] and "denied" in str(result)
+    finally:
+        reset_request_context(token)
+
+
+async def test_summary_over_cap_is_denied_without_asking(gate):
+    gate.set_enabled(True)
+    huge = "a" * (ap.MAX_SUMMARY + 1)
+    allowed = await gate.request("websocket:c1", "exec", huge)
+    assert allowed is False
+    assert gate.pending() == []
+
+
+def test_load_corrupt_file_enables_and_missing_defaults(tmp_path):
+    missing_file = tmp_path / "does_not_exist.json"
+    default_state = ap._load(missing_file)
+    assert default_state == {"enabled": False, "allow": {}}
+
+    corrupt_file = tmp_path / "corrupt.json"
+    corrupt_file.write_text("{not valid json", encoding="utf-8")
+    corrupt_state = ap._load(corrupt_file)
+    assert corrupt_state == {"enabled": True, "allow": {}}
+

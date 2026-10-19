@@ -469,7 +469,7 @@ def update_transcription_settings(
 
 
 def update_runtime_config_settings(
-    values: dict[str, Any], *, local_browser: bool = False, config_path: Path | None = None,
+    values: dict[str, Any], *, local_browser: bool = True, config_path: Path | None = None,
 ) -> dict[str, Any]:
     config = _load_settings_config(config_path)
     changed = runtime.update_runtime_config(config, values, local_browser=local_browser)

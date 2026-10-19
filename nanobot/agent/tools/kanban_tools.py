@@ -150,14 +150,6 @@ def _put_every(body: dict[str, Any], raw: Any) -> None:
     body["recurrence_expr"] = _every_to_expr(raw) if isinstance(raw, str) else raw
 
 
-def _assignee_for_start(store: KanbanStore, kwargs: dict[str, Any], task_id: str) -> str | None | ToolResult:
-    if "bot" in kwargs:
-        return _resolve_bot(store, str(kwargs.get("bot") or ""))
-    if not task_id:
-        return None
-    task = cast(dict[str, Any], store.get_task_detail(task_id).get("task", {}))
-    assignee = task.get("assignee_bot_id")
-    return str(assignee) if assignee else None
 
 
 def _list_board(store: KanbanStore, board_id: Any) -> str:
@@ -191,13 +183,6 @@ def _fill_card(store: KanbanStore, body: dict[str, Any], kwargs: dict[str, Any],
         return failed
     if "every" in kwargs:
         _put_every(body, kwargs.get("every"))
-    if kwargs.get("start") is True:
-        assignee = _assignee_for_start(store, kwargs, task_id)
-        if isinstance(assignee, ToolResult):
-            return assignee
-        if not assignee:
-            return ToolResult.error("kanban error: needs_bot")
-        body["status"] = "ready"
     return None
 
 
@@ -214,23 +199,61 @@ def _create_task(store: KanbanStore, kwargs: dict[str, Any]) -> str | ToolResult
         body["priority"] = kwargs.get("priority")
     if (failed := _fill_card(store, body, kwargs, "")) is not None:
         return failed
+    body["status"] = "todo"
     task = store.save_task(body)
-    return _json_payload({"task_id": task["id"], "status": task["status"]})
+    note = (
+        "The user must start this card from the Kanban screen."
+        if kwargs.get("start") is True or kwargs.get("status") == "ready" or "every" in kwargs
+        else None
+    )
+    payload: dict[str, Any] = {"task_id": task["id"], "status": task["status"]}
+    if note:
+        payload["note"] = note
+    return _json_payload(payload)
 
 
 def _update_task(store: KanbanStore, task_id: str, kwargs: dict[str, Any]) -> str | ToolResult:
     # Raises not_found for an unknown id; save_task would treat it as a new card and say invalid_board_id.
     current = cast(dict[str, Any], store.get_task_detail(task_id)["task"])
-    if kwargs.get("start") is True and current.get("status") in ("running", "review"):
+    current_status = current.get("status")
+    if kwargs.get("start") is True and current_status in ("running", "review"):
         return ToolResult.error("kanban error: already_working")
     body: dict[str, Any] = {"id": task_id}
-    for key in ("title", "description", "priority", "status"):
+    for key in ("title", "description", "priority"):
         if key in kwargs:
             body[key] = kwargs.get(key)
+
+    user_start_needed = False
+    if "status" in kwargs:
+        status_val = str(kwargs.get("status"))
+        if status_val == "ready":
+            user_start_needed = True
+            if current_status != "ready":
+                body["status"] = "todo"
+            else:
+                body["status"] = "ready"
+        else:
+            body["status"] = status_val
+    elif kwargs.get("start") is True:
+        user_start_needed = True
+        if current_status != "ready":
+            body["status"] = "todo"
+        else:
+            body["status"] = "ready"
+
     if (failed := _fill_card(store, body, kwargs, task_id)) is not None:
         return failed
+
+    if "every" in kwargs:
+        if current_status != "ready" and body.get("status") != "ready":
+            user_start_needed = True
+            body["status"] = "todo"
+
     task = store.save_task(body)
-    return _json_payload({"task_id": task["id"], "status": task["status"]})
+    payload: dict[str, Any] = {"task_id": task["id"], "status": task["status"]}
+    if user_start_needed:
+        payload["note"] = "The user must start this card from the Kanban screen."
+    return _json_payload(payload)
 
 
 _PARAMETERS = tool_parameters_schema(
@@ -247,7 +270,7 @@ _PARAMETERS = tool_parameters_schema(
         reviewer=StringSchema("Reviewer id or name; empty clears"),
         when=StringSchema("Local ISO time; empty clears"),
         every=StringSchema("Repeat as 30m, 1h, 1d, or 1w; empty clears"),
-        start=BooleanSchema(description="Ready to run once a bot is set"),
+        start=BooleanSchema(description="Request card start (saved as todo; user must start from the Kanban screen)"),
         summary=StringSchema("complete / request_review: outcome summary"),
         artifacts=StringSchema("complete / request_review: JSON array of artifact paths or URLs"),
         approved=BooleanSchema(description="verdict: whether the review is approved"),
@@ -272,7 +295,7 @@ class KanbanTool(Tool):
     def description(self) -> str:
         return (
             "Kanban board: list cards, create or update a card for a bot "
-            "(when = local ISO time, every = 30m/1h/1d/1w, start = run when ready); "
+            "(when = local ISO time, every = 30m/1h/1d/1w; new cards stay todo until started from the Kanban screen); "
             "from a task run: complete / request review / verdict / block your own task."
         )
 

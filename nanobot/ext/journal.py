@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sqlite3
@@ -21,6 +22,7 @@ from nanobot.cron.service import CronService
 from nanobot.cron.types import CronJob, CronPayload, CronSchedule
 from nanobot.ext.devices import admin_authorized
 from nanobot.ext.kanban import kanban_db_path
+from nanobot.security.workspace_policy import safe_workspace_file
 from nanobot.session.history_visibility import is_hidden_history_message
 from nanobot.session.manager import SessionManager
 from nanobot.webui.http_utils import http_error, http_json_response
@@ -54,8 +56,11 @@ def day_path(workspace: Path, day: date) -> Path:
 
 
 def load_settings(workspace: Path) -> dict[str, Any]:
+    safe = safe_workspace_file(workspace, settings_path(workspace))
+    if safe is None:
+        return {"enabled": False, "hour": 3, "model": None}
     try:
-        parsed: object = json.loads(settings_path(workspace).read_text(encoding="utf-8"))
+        parsed: object = json.loads(safe.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {"enabled": False, "hour": 3, "model": None}
     if not isinstance(parsed, dict):
@@ -217,11 +222,28 @@ def _cap(pieces: list[tuple[int, str]], limit: int) -> str:
 
 def _chat_pieces(day: date, sessions: SessionManager, zone: ZoneInfo | None) -> list[tuple[int, str]]:
     pieces: list[tuple[int, str]] = []
+    if zone is not None:
+        day_start = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=zone)
+    else:
+        day_start = datetime(day.year, day.month, day.day, 0, 0, 0).astimezone()
+
     for info in sessions.list_sessions():
         key = str(info.get("key") or "")
         if not key or _is_system_session(key):
             continue
-        session = sessions.get_or_create(key)
+        raw_updated = info.get("updated_at")
+        if isinstance(raw_updated, str) and raw_updated:
+            try:
+                updated_dt = datetime.fromisoformat(raw_updated.replace("Z", "+00:00"))
+                if updated_dt.tzinfo is None:
+                    updated_dt = updated_dt.replace(tzinfo=zone) if zone is not None else updated_dt.astimezone()
+                if updated_dt < day_start:
+                    continue
+            except ValueError:
+                pass
+        session = sessions.get_existing(key)
+        if session is None:
+            continue
         for message in session.messages:
             msg_day = _message_day(message.get("timestamp"), zone)
             if msg_day != day:
@@ -305,12 +327,12 @@ def journal_prompt(day: date, material: str) -> str:
 
 def list_days(workspace: Path) -> list[str]:
     folder = workspace / "memory" / "journal"
-    if not folder.is_dir():
+    if not folder.is_dir() or folder.is_symlink():
         return []
     days = [
         path.stem
         for path in folder.glob("*.md")
-        if _DATE_RE.fullmatch(path.stem)
+        if _DATE_RE.fullmatch(path.stem) and safe_workspace_file(workspace, path)
     ]
     days.sort(reverse=True)
     return days
@@ -318,10 +340,11 @@ def list_days(workspace: Path) -> list[str]:
 
 def read_day(workspace: Path, day: date) -> str:
     path = day_path(workspace, day)
-    if not path.is_file():
+    safe = safe_workspace_file(workspace, path)
+    if safe is None:
         raise JournalError(404, "not_found")
     try:
-        return path.read_text(encoding="utf-8")
+        return safe.read_text(encoding="utf-8")
     except OSError:
         raise JournalError(404, "not_found") from None
 
@@ -344,7 +367,7 @@ async def execute_day(
     *,
     tz_name: str | None = None,
 ) -> dict[str, Any]:
-    material = collect_day(day, sessions, tz_name=tz_name)
+    material = await asyncio.to_thread(collect_day, day, sessions, tz_name=tz_name)
     if not material.strip():
         return {"date": day.isoformat(), "written": False}
     text = await turn(journal_prompt(day, material))
