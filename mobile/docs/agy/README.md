@@ -15,7 +15,7 @@
 The goal is to match the full nanobot WebUI (chat, reasoning, tools, settings, skills…) and add a few features of our own: a per-chat reasoning-effort slider, a command drawer, a status panel, notifications, share-to-nanobot, and a biometric lock. The look follows the **nanobot WebUI identity**, adapted to mobile. If the app works well, we may propose it to the nanobot maintainers (HKUDS), so code quality and consistency matter.
 
 Key design points (full spec: `mobile/docs/superpowers/specs/2026-10-13-nanobot-mobile-design.md`):
-- **Never modify the nanobot server.** The app speaks nanobot's existing protocol: `/webui/bootstrap`, `/api/*`, WebSocket frames.
+- **Server features go in `nanobot/ext/`** with thin `# Fork` hooks in upstream files (ADR-004). The app still speaks `/webui/bootstrap`, `/api/*`, WebSocket frames, plus fork `/api/ext/*` routes.
 - **nanobot's own WebUI TypeScript code is copied unmodified** into `mobile/vendor/nanobot/` and imported as `@/lib/...`. Never edit it. Browser-vs-RN differences are handled in `mobile/src/platform/`.
 - Work is split into phases. **Phase 1 = core chat.** Plan: `mobile/docs/superpowers/plans/2026-10-13-nanobot-mobile-phase1.md`. You don't need to read all of it; your brief has what you need.
 
@@ -24,7 +24,7 @@ Key design points (full spec: `mobile/docs/superpowers/specs/2026-10-13-nanobot-
 |---|---|
 | **Stefano** (owner) | Decides scope; passes briefs to agy; approves agy's permissions; tests on the phone |
 | **Claude** (Claude Code) | Architecture, spec, plans, hard parts (connection/session, protocol, streaming thread, effort logic, security). Writes every agy brief. **Reviews all of agy's work and is the only one who merges into `main`** |
-| **agy** (you) | Medium/simple tasks with a closed spec: screens, forms, lists, UI components, i18n, component tests. One brief = one task |
+| **Cursor / agy** (you) | Medium/simple tasks with a closed spec: screens, forms, lists, UI components, i18n, component tests, doc briefs. One brief = one task |
 
 The work happens **in parallel in separate folders**:
 - Claude works in `nanobot/` on branch `main`.

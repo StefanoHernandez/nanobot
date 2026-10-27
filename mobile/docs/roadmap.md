@@ -4,13 +4,9 @@
 - **The phone is a dashboard only.** Everything executes on nanobot on the Arduino UNO Q. There are no phone-as-node features: the agent never drives the camera, SMS, contacts or notifications.
 - **We run our own nanobot fork**, `StefanoHernandez/nanobot`. A weekly GitHub Action merges upstream and opens a PR.
   - Development happens on the Mac. The UNO Q installs with `pip install git+https://github.com/StefanoHernandez/nanobot@main`.
-  - **Keep upstream conflicts small.** New features live in their own packages or modules (MCP server, plugin, separate dir). The fork carries only thin integration: config wiring, WebUI pages, gateway hooks. Never rewrite upstream files when an extension point exists.
-- **Every new server feature exposes two faces from one process and one SQLite DB:**
-  - an **MCP face** for agents;
-  - an **HTTP+WS face** for the app and WebUI.
-
-  It is reached from the phone via `tailscale serve` on a path, with its own secret stored in SecureStore.
-- Workflow: Claude writes briefs (`mobile/docs/agy/briefs/`) and reviews on request; agy implements.
+  - **Keep upstream conflicts small.** New features live in `nanobot/ext/` (ADR-004). The fork carries only thin `# Fork` hooks in upstream files. Never rewrite upstream files when an extension point exists.
+- **Fork server features:** in-process agent tools plus HTTP/WS under `/api/ext/*`, with separate SQLite or JSON stores per extension (ADR-005, ADR-006). No per-feature MCP server on the board.
+- Workflow: Claude writes briefs (`mobile/docs/agy/briefs/`) and reviews on request; Cursor or agy implement in worktrees.
 
 ## Decision (2026-10-15): the app replaces the legacy WebUI
 
@@ -28,25 +24,25 @@ Phase 6 is parked. Dream stays the only memory writer. The phone memory screen i
 | # | Scope | Where | Status |
 |---|---|---|---|
 | 1–3 | Chat, media, settings | app | done |
-| 4 | Ecosystem: channels, apps/MCP/plugins, skills, automations | app | done; final review fixes FIX-A/FIX-B in progress |
-| 5 | Interactive artifacts + PDF/docx/pptx/xlsx previews (P5-V1, running); share-to-nanobot, offline outbox, read-aloud replies, widget, quick tile | app | in progress |
-| 5b | **QR device pairing** (fork + app). An already connected phone shows a one-time QR (code expires in 5 min; it carries the URL plus the pairing code, never the master secret). The second phone scans in the app (no deep link), claims a revocable device token, and stores it in SecureStore. The phone lists devices with Revoke. Bootstrap accepts the device token next to the secret. The computer page arrives with the web export, not as a page in the legacy WebUI. | fork + app | done on the phone |
+| 4 | Ecosystem: channels, apps/MCP/plugins, skills, automations | app | done |
+| 5 | Interactive artifacts + document previews; share-to-nanobot, offline outbox, read-aloud replies, widget, quick tile | app | done |
+| 5b | **QR device pairing** (fork + app). An already connected phone shows a one-time QR (code expires in 5 min; it carries the URL plus the pairing code, never the master secret). The second phone scans in the app (no deep link), claims a revocable device token, and stores it in SecureStore. The phone lists devices with Revoke. Bootstrap accepts the device token next to the secret. The computer page arrives with the web export, not as a page in the legacy WebUI. | fork + app | done |
 | 6 | Hybrid memory (vectors, graph, second fact store) | — | parked 2026-10-15. Dream and the read-only memory screen stay |
 | 7 | **Kanban.** Store, HTTP, phone board, chat, bots, review, and the in-process runner (one ready card or one mention per tick). No git worktrees. The computer page arrives with the web export of the app, not as a page in the legacy WebUI. | fork + app | done for this scope |
 | — | iOS | — | postponed |
 
 ## Feature backlog chosen by the user (2026-10-15)
-In progress:
-- **Projects** (spec `superpowers/specs/2026-10-15-projects-design.md`; server done, app screens with agy);
-- **Chat "Media e file"**.
+Done on `main` (verify in code before extending):
+- **Projects** (`nanobot/ext/projects.py`, `mobile/src/screens/projects/`).
+- **Chat media and files** (thread media, gallery, viewer).
+- **Approvals from the phone** (`nanobot/ext/approvals.py`, settings security).
+- **Machine dashboard** (`nanobot/ext/system.py`, `MachineSection`).
+- **Costs and usage** (`nanobot/ext/costs.py`, `CostsSection`).
+- **Prompt library** (`nanobot/ext/prompts.py`, `PromptsSection`).
+- **Export and backup** (`nanobot/ext/backup.py`, `BackupSection`, `exportChat.ts`).
+- **Continuous voice** (`mobile/src/extras/voiceLoop.ts` and related).
 
-Next, each one needs a short design pass first:
-- **Approvals from the phone:** Allow/Deny for risky agent actions (shell, deletes, big spend). Upstream has no tool-approval mechanism, so this needs a fork hook in the tool runner.
-- **Machine dashboard:** CPU, RAM, temperature, disk, gateway uptime, recent log errors, restart.
-- **Costs and usage:** daily spend per model, a budget cap and alerts. Builds on upstream `nanobot/llm_usage`.
-- **Prompt library:** saved prompts, recalled with one tap or from `/`, also per project.
-- **Export and backup:** a chat or project to Markdown/PDF, plus a scheduled backup of `~/.nanobot`.
-- **Continuous voice conversation:** dictate, get the reply read aloud, repeat.
+Next (needs design or upstream work):
 
 Also noted: webhooks and checkpoints (ideas from Hermes/OpenClaw), then Phases 5b, 6 and 7.
 
@@ -95,7 +91,7 @@ Also noted: webhooks and checkpoints (ideas from Hermes/OpenClaw), then Phases 5
 - API service;
 - editing the remote-install flag.
 
-**Planned:** share-to-nanobot, offline outbox, read-aloud replies, widget, quick tile, QR device pairing (5b), hybrid memory (6), multi-bot kanban (7).
+**On main:** share-to-nanobot, offline outbox, read-aloud, widget, quick tile, device pairing (5b), kanban (7). **Parked:** hybrid memory (6).
 
 ## Hermes kanban notes (from docs, source not read)
 Docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban
@@ -176,12 +172,7 @@ Docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban
 
 
 ## Next features (user list, 2026-10-15), one at a time
-1. **Approvals from the phone:** Allow/Deny for shell commands, deletions and large spends. Upstream has no hook for this yet, so it needs a fork module and a thin hook in the tool-execution path.
-2. **Machine dashboard:** CPU, RAM, temperature, disk, uptime, log errors, restart.
-3. **Costs:** daily spend per model, a cap and an alert.
-4. **Prompt library**, also per project.
-5. **Backup:** a chat or a project as Markdown or PDF, plus a copy of `~/.nanobot`.
-6. **Continuous voice:** dictate, the reply is read aloud, and it listens again.
+Items 1–6 from the 2026-10-15 list (approvals, machine dashboard, costs, prompts, backup, continuous voice) are implemented on `main`; see the backlog section above. Pick new work from open briefs or upstream sync gaps (`mobile/docs/webui-coverage.md`).
 
 **Deliberately out:**
 - vector memory;
