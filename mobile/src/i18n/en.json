@@ -617,7 +617,7 @@
     "show": "Show key",
     "hide": "Hide key",
     "apiBase": "API base URL",
-    "proxy": "Proxy",
+    "proxy": "Use the shared proxy",
     "thinkingStyle": "Thinking style",
     "region": "Region",
     "profile": "Profile",

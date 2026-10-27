@@ -98,7 +98,6 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
     if (k === "apiBase") return true;
     if (k === "apiKey") return !oauth;
     if (k === "displayName") return !!p.is_custom;
-    if (k === "proxy") return af.includes("proxy");
     if (k === "thinkingStyle") return af.includes("thinking_style");
     if (k === "region") return af.includes("region");
     if (k === "profile") return af.includes("profile");
@@ -178,7 +177,12 @@ function ProviderSheet({ p, onClose }: { p: Provider; onClose: () => void }) {
               <Chips options={supported.map((a) => ({ value: a, label: a }))} value={preferred} onChange={(a) => setApi(supported, a)} />
             </>
           ) : null}
-          {af.includes("proxy") ? text("proxy", t("providers.proxy")) : null}
+          {af.includes("use_proxy") ? (
+            <ListItem
+              title={t("providers.proxy")}
+              right={<Switch accessibilityLabel={t("providers.proxy")} value={f.useProxy} onValueChange={(on) => setF((x) => ({ ...x, useProxy: on }))} />}
+            />
+          ) : null}
           {af.includes("thinking_style") ? text("thinkingStyle", t("providers.thinkingStyle")) : null}
           {af.includes("region") ? text("region", t("providers.region")) : null}
           {af.includes("profile") ? text("profile", t("providers.profile")) : null}

@@ -7,7 +7,7 @@ export type ProviderForm = {
   apiKey: string;
   apiBase: string;
   api: ModelAPIConfig | null;
-  proxy: string;
+  useProxy: boolean;
   extraHeaders: string;
   extraBody: string;
   extraQuery: string;
@@ -26,7 +26,7 @@ export function providerFormFromRow(p: Provider): ProviderForm {
     apiKey: "",
     apiBase: p.api_base ?? p.default_api_base ?? "",
     api: p.api ?? null,
-    proxy: p.proxy ?? "",
+    useProxy: !!p.use_proxy,
     extraHeaders: json(p.extra_headers),
     extraBody: json(p.extra_body),
     extraQuery: json(p.extra_query),
@@ -44,8 +44,12 @@ export function providerUpdatePayload(p: Provider, f: ProviderForm): Record<stri
   if (p.is_custom) out.display_name = f.displayName.trim();
   if (p.provider_api_configurable) out.api = f.api;
   for (const field of p.advanced_fields ?? []) {
+    if (field === "use_proxy") {
+      out.use_proxy = f.useProxy;
+      continue;
+    }
     const v = {
-      proxy: f.proxy, extra_headers: f.extraHeaders, extra_body: f.extraBody, extra_query: f.extraQuery,
+      extra_headers: f.extraHeaders, extra_body: f.extraBody, extra_query: f.extraQuery,
       thinking_style: f.thinkingStyle, region: f.region, profile: f.profile,
     }[field];
     if (v == null) continue;

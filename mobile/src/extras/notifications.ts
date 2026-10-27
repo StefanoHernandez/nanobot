@@ -119,10 +119,10 @@ export function startTurnNotifications(
     const unsubs: (() => void)[] = [];
 
     unsubs.push(
-      session.client.onRunStatus((rawChatId, startedAt) => {
+      session.client.onRunStatus((rawChatId, state) => {
         const chatId = normalizeChatId(rawChatId);
-        if (startedAt !== null) {
-          running.set(chatId, startedAt);
+        if (state.active) {
+          running.set(chatId, state.startedAt ?? state.generation);
           return;
         }
         const at = running.get(chatId);

@@ -146,12 +146,13 @@ function WebCard() {
   });
   const [f, setF] = useState<WebSearchForm>(initF);
   const [nums, setNums] = useState({ maxResults: String(w.max_results), timeout: String(w.timeout) });
-  const [proxy, setProxy] = useState(web.proxy ?? "");
+  const sharedProxy = String(data!.runtime_config?.["network.proxy"] ?? "");
+  const [proxy, setProxy] = useState(sharedProxy);
   const [ua, setUa] = useState(web.user_agent ?? "");
   const [err, setErr] = useState<Record<string, string>>({});
   const { refresh } = useSettings();
-  const { touch, clear } = useResync(JSON.stringify([w, web]), () => (
-    setF(initF()), setNums({ maxResults: String(w.max_results), timeout: String(w.timeout) }), setProxy(web.proxy ?? ""), setUa(web.user_agent ?? "")));
+  const { touch, clear } = useResync(JSON.stringify([w, web, sharedProxy]), () => (
+    setF(initF()), setNums({ maxResults: String(w.max_results), timeout: String(w.timeout) }), setProxy(sharedProxy), setUa(web.user_agent ?? "")));
   const edit = (fn: () => void) => (touch(), fn());
   const [installing, setInstalling] = useState(false);
   const cred = w.providers.find((p) => p.name === f.provider)?.credential ?? "none";
@@ -170,10 +171,12 @@ function WebCard() {
         throw e;
       }
       const values: Record<string, unknown> = {};
-      for (const [path, v, cur] of [["tools.web.proxy", proxy, web.proxy ?? ""], ["tools.web.user_agent", ua, web.user_agent ?? ""]] as const) {
+      for (const [path, v, cur] of [["network.proxy", proxy, sharedProxy], ["tools.web.user_agent", ua, web.user_agent ?? ""]] as const) {
         const c = coerceRuntimeValue(field(path), v);
         if (c.ok && v !== cur) values[path] = c.value;
       }
+      // Upstream splits the proxy: one shared address (network.proxy), a per-service switch.
+      if (!!proxy.trim() !== !!web.use_proxy) values["tools.web.use_proxy"] = !!proxy.trim();
       if (Object.keys(values).length) {
         try {
           await runtime(values);

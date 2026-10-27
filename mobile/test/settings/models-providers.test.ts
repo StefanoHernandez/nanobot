@@ -70,10 +70,10 @@ test("createPresetAndOrder appends created preset", async () => {
 });
 
 test("provider payload omits empty api_key and keeps masks", () => {
-  const p = { name: "x", label: "X", configured: true, advanced_fields: ["extra_headers", "proxy"] } as never;
-  const f = { displayName: "", apiKey: "", apiBase: "http://b", api: null, proxy: "", extraHeaders: '{"a":"••••••••"}' } as never;
+  const p = { name: "x", label: "X", configured: true, advanced_fields: ["extra_headers", "use_proxy"] } as never;
+  const f = { displayName: "", apiKey: "", apiBase: "http://b", api: null, useProxy: false, extraHeaders: '{"a":"••••••••"}' } as never;
   const out = providerUpdatePayload(p, f);
-  expect(out).toEqual({ provider: "x", api_base: "http://b", extra_headers: '{"a":"••••••••"}', proxy: "" });
+  expect(out).toEqual({ provider: "x", api_base: "http://b", extra_headers: '{"a":"••••••••"}', use_proxy: false });
   expect(providerUpdatePayload(p, { ...(f as object), apiKey: " k " } as never).api_key).toBe("k");
 });
 

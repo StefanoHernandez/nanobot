@@ -135,7 +135,7 @@ export function createThreadStore() {
 
   const eventKey = (ev: ThreadProjectionEvent): string => {
     if (ev.projection_id) return ev.projection_id;
-    const anyEv = ev as Record<string, unknown>;
+    const anyEv = ev as unknown as Record<string, unknown>;
     if (anyEv.turn_id && anyEv.event) {
       return `${anyEv.event}:${anyEv.turn_id}:${anyEv.turn_seq ?? anyEv.text ?? anyEv.created_at_ms ?? ""}`;
     }
@@ -452,9 +452,9 @@ export function createThreadStore() {
           let wasDown = false;
           rt.unsubs.push(
             session.client.onChat(chatId, (ev) => (rt.buffer ? rt.buffer.push(ev) : apply(key, ev))),
-            session.client.onRunStatus((id, startedAt) => {
+            session.client.onRunStatus((id, state) => {
               if (id !== chatId) return;
-              if (startedAt !== null) patch(key, () => ({ running: true }));
+              if (state.active) patch(key, () => ({ running: true }));
               else settle(key);
             }),
             session.client.onStatus((st) => {

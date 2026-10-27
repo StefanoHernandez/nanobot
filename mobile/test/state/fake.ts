@@ -1,6 +1,10 @@
 import type { InboundEvent } from "@/lib/types";
 import type { NanobotSession } from "../../src/core/session";
 
+// The client reports a RunState; tests still speak in startedAt-or-null.
+type RunState = { active: boolean; generation: number; latestTurnId: string | null; startedAt: number | null; unsettled: boolean };
+const runState = (startedAt: number | null): RunState => ({ active: startedAt !== null, generation: 0, latestTurnId: null, startedAt, unsettled: false });
+
 type Routes = Record<string, unknown | (() => unknown)>;
 
 export function fakeSession(routes: Routes = {}, pending: Record<string, Record<string, unknown>[]> = {}) {
@@ -9,7 +13,7 @@ export function fakeSession(routes: Routes = {}, pending: Record<string, Record<
   const upd = new Set<(chatId: string, scope?: string, ws?: unknown) => void>();
   const errs = new Set<(e: unknown) => void>();
   const side = new Set<(s: unknown) => void>();
-  const run = new Set<(chatId: string, at: number | null) => void>();
+  const run = new Set<(chatId: string, state: RunState) => void>();
   const sent: { chatId: string; content: string; options?: Record<string, unknown> }[] = [];
   const attached: string[] = [];
   // Realistic run tracking: live from the first user_message/delta until turn_end or reconcile.
@@ -33,7 +37,7 @@ export function fakeSession(routes: Routes = {}, pending: Record<string, Record<
     onStatus: (h: (s: string) => void) => (status.add(h), () => void status.delete(h)),
     onSessionUpdate: (h: (c: string, s?: string, ws?: unknown) => void) => (upd.add(h), () => void upd.delete(h)),
     onSidebarStateUpdate: (h: (s: unknown) => void) => (side.add(h), () => void side.delete(h)),
-    onRunStatus: (h: (c: string, a: number | null) => void) => (run.add(h), () => void run.delete(h)),
+    onRunStatus: (h: (c: string, s: RunState) => void) => (run.add(h), () => void run.delete(h)),
     onError: (h: (e: unknown) => void) => (errs.add(h), () => void errs.delete(h)),
     forkChat: jest.fn(async () => "fork-1"),
     discardTemporaryChat: jest.fn(),
@@ -52,7 +56,7 @@ export function fakeSession(routes: Routes = {}, pending: Record<string, Record<
     reconcileCanonicalCompletion: jest.fn((id: string, _g: number, ids: readonly string[], snap?: { activeTurnId?: string | null; hasPendingToolCalls: boolean }) => {
       ids.forEach((i) => fences.add(i));
       if (snap?.activeTurnId || snap?.hasPendingToolCalls) return false;
-      if (runAt !== null) { runAt = null; runGen++; run.forEach((h) => h(id, null)); }
+      if (runAt !== null) { runAt = null; runGen++; run.forEach((h) => h(id, runState(null))); }
       return true;
     }),
   };
@@ -104,7 +108,7 @@ export function fakeSession(routes: Routes = {}, pending: Record<string, Record<
     sessionUpdated: (chatId: string, ws?: unknown) => upd.forEach((h) => h(chatId, "metadata", ws)),
     error: (e: unknown) => errs.forEach((h) => h(e)),
     sidebar: (s: unknown) => side.forEach((h) => h(s)),
-    runStatus: (c: string, a: number | null) => run.forEach((h) => h(c, a)),
+    runStatus: (c: string, a: number | null) => run.forEach((h) => h(c, runState(a))),
   };
 }
 

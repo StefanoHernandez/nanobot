@@ -19,7 +19,7 @@ const base = (o = {}) => ({
   },
   web_search: { provider: "brave", api_key_hint: null, base_url: "", max_results: 5, timeout: 30, providers: [
     { name: "brave", label: "Brave", credential: "api_key" }, { name: "olostep", label: "Olostep", credential: "api_key" }] },
-  web: { enable: true, proxy: null, user_agent: null, search: { max_results: 5, timeout: 30 }, fetch: { use_jina_reader: false } },
+  web: { enable: true, use_proxy: false, user_agent: null, search: { max_results: 5, timeout: 30 }, fetch: { use_jina_reader: false } },
   advanced: { webui_allow_local_service_access: false, webui_default_access_mode: "default" },
   ...o,
 });
@@ -171,7 +171,7 @@ test("partial web save reports the failed part and refreshes", async () => {
 
 test("card resyncs from data unless there are unsaved edits", async () => {
   await wrap(<SettingsSection section="capabilities" />);
-  const w = (proxy: string) => base({ web: { ...base().web, proxy } }) as never;
+  const w = (proxy: string) => base({ runtime_config: { ...(base() as { runtime_config?: object }).runtime_config, "network.proxy": proxy } }) as never;
   await act(async () => settingsStore.getState().setData(w("http://one")));
   expect(screen.getByDisplayValue("http://one")).toBeTruthy();
   await fireEvent.changeText(screen.getByLabelText("Proxy"), "typed");

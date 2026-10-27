@@ -35,6 +35,7 @@ from nanobot.agent.tools.mcp_oauth import (
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.apps.protocol import app_manifest, compact_dict
 from nanobot.config.loader import load_config, resolve_config_env_vars, save_config
+from nanobot.config.network import NetworkConfig
 from nanobot.config.paths import get_runtime_subdir
 from nanobot.config.schema import MCPServerConfig
 from nanobot.utils.helpers import ensure_dir
@@ -298,6 +299,24 @@ def _resolve_field_value(
     return None
 
 
+def _proxy_enabled(query: QueryParams, current: bool = False) -> bool:
+    raw = _query_first(query, "use_proxy")
+    if raw is None:
+        return current
+    if raw.lower() not in {"true", "false"}:
+        raise McpPresetError("use_proxy must be true or false")
+    return raw.lower() == "true"
+
+
+def _validate_proxy(cfg: MCPServerConfig, network: NetworkConfig) -> None:
+    if cfg.use_proxy and (cfg.command or not cfg.url):
+        raise McpPresetError("The shared proxy is available for HTTP and SSE MCP connections")
+    try:
+        network.resolve_proxy(cfg.use_proxy)
+    except ValueError as exc:
+        raise McpPresetError(str(exc)) from None
+
+
 def _materialize_server(
     preset: McpPreset,
     query: QueryParams,
@@ -316,6 +335,7 @@ def _materialize_server(
         cfg = _clone_server(preset.server)
         cfg.tool_timeout = existing.tool_timeout
         cfg.enabled_tools = list(existing.enabled_tools)
+        cfg.use_proxy = existing.use_proxy
         existing_for_fields = None
     else:
         cfg = _clone_server(existing or preset.server)
@@ -324,6 +344,7 @@ def _materialize_server(
             # Leftovers from an earlier stdio preset (seen: --api-key args on an HTTP entry).
             cfg.command = ""
             cfg.args = []
+    cfg.use_proxy = _proxy_enabled(query, cfg.use_proxy)
 
     for field_spec in preset.fields:
         value = _resolve_field_value(field_spec, query, existing_for_fields)
@@ -516,6 +537,7 @@ def _preset_payload(preset: McpPreset, configured_servers: dict[str, MCPServerCo
         "docs_url": preset.docs_url,
         "transport": preset.transport,
         "auth": (cfg.auth if cfg is not None else (preset.server.auth if preset.server else None)),
+        "use_proxy": cfg.use_proxy if cfg is not None else False,
         "requires": preset.requires,
         "note": preset.note,
         "install_supported": preset.install_supported,
@@ -556,6 +578,7 @@ def _custom_payload(
         "docs_url": "",
         "transport": transport,
         "auth": cfg.auth,
+        "use_proxy": cfg.use_proxy,
         "requires": "",
         "note": "",
         "install_supported": True,
@@ -634,6 +657,7 @@ def mcp_presets_payload(
     ]
     payload: dict[str, Any] = {
         "presets": [*preset_rows, *custom_rows, *plugin_rows],
+        "proxy_configured": bool(config.network.proxy),
         "installed_count": len(config.tools.mcp_servers)
         + sum(int(row["enabled"]) for row in plugin_rows),
     }
@@ -868,7 +892,7 @@ async def mcp_presets_test_action(
     inspection_cfg = cfg.model_copy(update={"enabled_tools": ["*"]})
     try:
         stacks = await asyncio.wait_for(
-            connect_mcp_servers({name: inspection_cfg}, registry),
+            connect_mcp_servers({name: inspection_cfg}, registry, network=config.network),
             timeout=_test_timeout(cfg),
         )
         tool_prefix = f"mcp_{name}_"
@@ -1086,6 +1110,7 @@ def _custom_server_from_query(query: QueryParams) -> tuple[str, MCPServerConfig]
         cwd=(_query_first(query, "cwd") or "").strip() if transport == "stdio" else "",
         url=url if transport in {"sse", "streamableHttp"} else "",
         headers=headers,
+        use_proxy=_proxy_enabled(query),
         tool_timeout=tool_timeout,
         enabled_tools=_parse_enabled_tools(_query_first(query, "enabled_tools")),
     )
@@ -1131,6 +1156,9 @@ def _mcp_server_config(name: str, raw: Any) -> tuple[str, MCPServerConfig]:
     if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
         raise McpPresetError(f"MCP server '{server_name}' headers must be a string object")
     typed_headers = cast(dict[str, str], headers)
+    use_proxy = server.get("useProxy", server.get("use_proxy", False))
+    if not isinstance(use_proxy, bool):
+        raise McpPresetError(f"MCP server '{server_name}' useProxy must be a boolean")
     auth = _normalize_auth(
         server.get("auth"),
         transport=transport,
@@ -1152,6 +1180,7 @@ def _mcp_server_config(name: str, raw: Any) -> tuple[str, MCPServerConfig]:
         cwd=cwd if transport == "stdio" else "",
         url=url if transport in {"sse", "streamableHttp"} else "",
         headers=typed_headers,
+        use_proxy=use_proxy,
         tool_timeout=timeout_int,
         enabled_tools=cast(list[str], enabled_tools_value),
     )
@@ -1194,6 +1223,7 @@ def custom_mcp_action(
     config = load_config(config_path) if config_path is not None else load_config()
     if action == "custom":
         name, cfg = _custom_server_from_query(query)
+        _validate_proxy(cfg, config.network)
         delete_credentials = _oauth_credentials_replaced(config.tools.mcp_servers.get(name), cfg)
         config.tools.mcp_servers[name] = cfg
         save_config(config, config_path)
@@ -1208,6 +1238,8 @@ def custom_mcp_action(
 
     if action in {"import", "import-cursor"}:
         servers = _import_mcp_servers(_query_first(query, "config"))
+        for cfg in servers.values():
+            _validate_proxy(cfg, config.network)
         delete_credentials = [
             name
             for name, cfg in servers.items()
@@ -1249,7 +1281,7 @@ def ensure_mcp_oauth_server(
     query: QueryParams,
     *,
     config_path: Path | None = None,
-) -> tuple[str, MCPServerConfig]:
+) -> tuple[str, MCPServerConfig, NetworkConfig]:
     """Materialize an OAuth preset on first click and return its saved config."""
     name = _validated_server_name((_query_first(query, "name") or "").strip())
     config = load_config(config_path) if config_path is not None else load_config()
@@ -1264,11 +1296,14 @@ def ensure_mcp_oauth_server(
         if preset.server is None or preset.server.auth != "oauth":
             raise McpPresetError("MCP server does not support browser authorization", status=409)
         cfg = _materialize_server(preset, query, cfg)
-        config.tools.mcp_servers[name] = cfg
-        save_config(config, config_path)
+    cfg = _clone_server(cfg)
+    cfg.use_proxy = _proxy_enabled(query, cfg.use_proxy)
+    _validate_proxy(cfg, config.network)
     if cfg.auth != "oauth" or cfg.type not in {"sse", "streamableHttp"} or not cfg.url:
         raise McpPresetError("MCP server is not configured for OAuth", status=409)
-    return name, cfg
+    config.tools.mcp_servers[name] = cfg
+    save_config(config, config_path)
+    return name, cfg, config.network
 
 
 def mcp_presets_action(
@@ -1285,10 +1320,27 @@ def mcp_presets_action(
     config = load_config(config_path) if config_path is not None else load_config()
     existing = config.tools.mcp_servers.get(name)
 
+    if action == "proxy":
+        if existing is None:
+            if preset is None:
+                raise McpPresetError("unknown MCP server", status=404)
+            cfg = _materialize_server(preset, query, None)
+        else:
+            cfg = _clone_server(existing)
+            cfg.use_proxy = _proxy_enabled(query, cfg.use_proxy)
+        _validate_proxy(cfg, config.network)
+        config.tools.mcp_servers[name] = cfg
+        save_config(config, config_path)
+        payload = mcp_presets_payload(config_path=config_path)
+        payload["requires_restart"] = True
+        return payload
+
     if action == "enable":
         if preset is None:
             raise McpPresetError("unknown MCP preset", status=404)
-        config.tools.mcp_servers[preset.name] = _materialize_server(preset, query, existing)
+        cfg = _materialize_server(preset, query, existing)
+        _validate_proxy(cfg, config.network)
+        config.tools.mcp_servers[preset.name] = cfg
         save_config(config, config_path)
         payload = mcp_presets_payload(
             last_action=_action_message(action, preset),

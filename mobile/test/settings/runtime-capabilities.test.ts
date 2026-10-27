@@ -39,7 +39,7 @@ describe("runtime fields", () => {
     expect(coerceRuntimeValue(f("tools.ssrf_whitelist"), [" a ", "", "b"])).toEqual({ ok: true, value: ["a", "b"] });
   });
   it("has card fields, skipped by default", () => {
-    for (const p of ["tools.web.enable", "tools.web.proxy", "tools.web.user_agent", "tools.image_generation.save_dir"]) expect(f(p).card).toBeDefined();
+    for (const p of ["tools.web.enable", "network.proxy", "tools.web.use_proxy", "tools.web.user_agent", "tools.image_generation.save_dir"]) expect(f(p).card).toBeDefined();
     expect(visibleFields("browser", {}).length).toBe(0);
     expect(visibleFields("browser", {}, { excludeCards: false }).map((x) => x.path)).toEqual(["tools.web.enable"]);
     expect(visibleFields("image", {}, { excludeCards: false }).map((x) => x.path)).toEqual(["tools.image_generation.save_dir"]);

@@ -25,6 +25,7 @@ from nanobot.channels.matrix.runtime import (
     MatrixConfig,
     _build_matrix_text_content,
 )
+from nanobot.config.network import NetworkConfig
 
 _ROOM_SEND_UNSET = object()
 
@@ -328,8 +329,9 @@ async def test_start_skips_load_store_when_device_id_missing(
     )
 
     channel = MatrixChannel(
-        _make_config(device_id="", e2ee_enabled=True, proxy="127.0.0.1:7890"),
+        _make_config(device_id="", e2ee_enabled=True, use_proxy=True),
         MessageBus(),
+        network=NetworkConfig(proxy="127.0.0.1:7890"),
     )
     await channel.start()
 
@@ -2779,7 +2781,6 @@ async def test_fetch_media_rejects_missing_declared_size(monkeypatch, tmp_path) 
     )
 
     attachment, marker = await channel._fetch_media_attachment(
-        SimpleNamespace(room_id="!room:matrix.org"),
         event,
     )
 
@@ -2807,7 +2808,6 @@ async def test_fetch_media_rejects_bool_declared_size(monkeypatch, tmp_path) -> 
     )
 
     attachment, marker = await channel._fetch_media_attachment(
-        SimpleNamespace(room_id="!room:matrix.org"),
         event,
     )
 
@@ -2835,7 +2835,6 @@ async def test_fetch_media_rejects_declared_oversized_before_download(monkeypatc
     )
 
     attachment, marker = await channel._fetch_media_attachment(
-        SimpleNamespace(room_id="!room:matrix.org"),
         event,
     )
 
@@ -2863,7 +2862,6 @@ async def test_fetch_media_maps_streaming_cap_to_too_large(monkeypatch, tmp_path
     )
 
     attachment, marker = await channel._fetch_media_attachment(
-        SimpleNamespace(room_id="!room:matrix.org"),
         event,
     )
 
