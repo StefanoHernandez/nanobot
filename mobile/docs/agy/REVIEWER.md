@@ -31,7 +31,7 @@ Rules:
 - **Never push** anything unless the user explicitly asks.
 - **Never touch `main`.**
 - **Never edit `mobile/vendor/**`.**
-- Never modify the nanobot server from the app repo.
+- Fork server features belong in `nanobot/ext/` with `# Fork` hooks (ADR-004), not by rewriting upstream files.
 
 ## 3. Current state (2026-10-14)
 - **`dev`:** Phases 1-4 done, and P5-V1 (interactive artifacts plus document previews) merged. 431 tests green.
