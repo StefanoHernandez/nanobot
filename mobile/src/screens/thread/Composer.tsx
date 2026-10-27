@@ -448,8 +448,18 @@ export function Composer({ chatKey, onRender }: { chatKey: string; onRender?: ()
             onDismiss={() => setReplyingTo(null)}
           />
         ) : null}
-        <View style={[styles.container, th.bezel]}>
-      <View style={[th.surface, { borderRadius: th.radius.lg, padding: 4 }]}>
+        <View style={styles.container}>
+      <View
+        style={[
+          th.surface,
+          {
+            borderRadius: th.radius.xl,
+            padding: 4,
+            borderColor: th.colors.border,
+            backgroundColor: th.colors.card,
+          },
+        ]}
+      >
         {isSlash || isDollar ? (
           <SlashMenu
             query={draft}

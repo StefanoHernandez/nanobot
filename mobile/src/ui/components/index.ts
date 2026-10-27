@@ -6,5 +6,7 @@ export * from "./Toast";
 export * from "./ListItem";
 export * from "./Dialog";
 export * from "./SegmentedTabs";
+export * from "./SectionLabel";
+export * from "./StatusText";
 export * from "../navigation";
 

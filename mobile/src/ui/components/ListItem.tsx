@@ -23,12 +23,16 @@ export function ListItem({ title, subtitle, onPress, onLongPress, right, left, a
       disabled={disabled}
       onPress={disabled ? undefined : onPress}
       onLongPress={disabled ? undefined : onLongPress}
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed && !disabled ? th.colors.accent : "transparent", opacity: disabled ? 0.4 : 1 }]}
+      style={({ pressed }) => [styles.row, { backgroundColor: pressed && !disabled ? th.colors.surface2 : "transparent", opacity: disabled ? 0.4 : 1 }]}
     >
       {left}
       <View style={styles.body}>
-        <Text numberOfLines={1} style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 16 }}>{title}</Text>
-        {subtitle ? <Text numberOfLines={2} style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 14, lineHeight: 19 }}>{subtitle}</Text> : null}
+        <Text numberOfLines={1} style={{ color: th.colors.foreground, fontFamily: th.font.regular, fontSize: 15 }}>{title}</Text>
+        {subtitle ? (
+          <Text numberOfLines={2} style={{ color: th.colors.textMuted, fontFamily: th.font.regular, fontSize: th.type.bodySmall.fontSize, lineHeight: th.type.bodySmall.lineHeight }}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
       {right}
     </Pressable>

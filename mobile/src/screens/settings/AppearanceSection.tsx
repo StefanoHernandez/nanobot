@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useStore } from "zustand";
 import { speechStore } from "../../extras/speech";
-import { Platform, StyleSheet, Switch, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useT } from "../../i18n";
 import { lockSettings } from "../../extras/lock";
@@ -10,7 +10,8 @@ import * as IntentLauncher from "expo-intent-launcher";
 import { keepAlive } from "../../platform/keepAlive";
 import { isOfflineLocaleInstalled } from "../../extras/sttEngine";
 import { Button, ListItem, toast } from "../../ui/components";
-import { useThemePreference, useTheme, type ThemePref } from "../../ui/ThemeProvider";
+import { ACCENT_IDS, ACCENT_STOPS } from "../../ui/theme";
+import { useAccentPreference, useThemePreference, useTheme, type ThemePref } from "../../ui/ThemeProvider";
 import { Chips, Head } from "./common";
 
 const THEMES: ThemePref[] = ["system", "light", "dark"];
@@ -20,6 +21,7 @@ export function AppearanceSection() {
   const t = useT();
   const th = useTheme();
   const [pref, setPref] = useThemePreference();
+  const [accent, setAccent] = useAccentPreference();
   const [lock, setLock] = useState(lockSettings.enabled());
   const [lang, setLang] = useState<Language>(prefs.language());
   const [sound, setSound] = useState(prefs.notificationSound());
@@ -64,6 +66,44 @@ export function AppearanceSection() {
           value={pref}
           onChange={setPref}
         />
+      </View>
+
+      <Head>{t("settings.accent")}</Head>
+      <View style={{ ...th.surface, marginHorizontal: 16, padding: 16, gap: 8 }}>
+        <Text style={{ color: th.colors.textMuted, fontFamily: th.font.regular, fontSize: th.type.bodySmall.fontSize, lineHeight: th.type.bodySmall.lineHeight }}>
+          {t("settings.accentHelp")}
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
+          {ACCENT_IDS.map((id) => {
+            const swatch = th.scheme === "dark" ? ACCENT_STOPS[id].dark : ACCENT_STOPS[id].light;
+            const selected = accent === id;
+            const label = t(`settings.accentColors.${id}`);
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                accessibilityState={{ selected }}
+                onPress={() => setAccent(id)}
+                style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}
+              >
+                <View
+                  style={{
+                    width: selected ? 40 : 36,
+                    height: selected ? 40 : 36,
+                    borderRadius: 20,
+                    borderWidth: selected ? 2 : 0,
+                    borderColor: swatch,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: swatch }} />
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <Head>{t("settings.language")}</Head>

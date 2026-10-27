@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../i18n";
 import { useRestart, useSettings } from "../../settings/store";
 import { Button, Dialog, IconButton } from "../../ui/components";
+import { Halo } from "../../ui/Halo";
 import { useTheme } from "../../ui/ThemeProvider";
 
 /** Header, global restart notice and (on the root list only) the leave-with-restart-pending guard. */
@@ -44,6 +45,7 @@ export function SettingsShell({ title, onBack, guard, children }: { title: strin
   const busy = state === "restarting";
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
+      <Halo />
       <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 4 }}>
         <IconButton icon="arrow-left" accessibilityLabel={t("settings.back")} onPress={onBack} />
         <Text accessibilityRole="header" numberOfLines={1} style={{ flex: 1, color: th.colors.foreground, fontFamily: th.font.display, fontSize: 22, lineHeight: 28 }}>{title}</Text>

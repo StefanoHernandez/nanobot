@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View }
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePrivileged } from "../../../ecosystem/privilege";
 import { useT } from "../../../i18n";
-import { Button, Dialog, TextField } from "../../../ui/components";
+import { Button, Dialog, StatusText, TextField } from "../../../ui/components";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { toast } from "../../../ui/components/Toast";
 import { useMcp } from "../../../ecosystem/mcp";
@@ -143,6 +143,25 @@ export function McpTab() {
 
   const filteredPresets = filterEcosystemItems(presets, searchQuery);
 
+  const statusLine = (preset: McpPresetInfo): { tone: "accent" | "success" | "warning" | "danger" | "muted"; text: string } => {
+    const failureReason = (preset as { failure_reason?: string }).failure_reason || preset.error;
+    const isFailed = preset.runtime_status === "failed" || !!failureReason;
+    if (isFailed && failureReason) {
+      return { tone: "danger", text: t("mcp.failureReason", { reason: failureReason }) };
+    }
+    const on = mcpIsOn(preset);
+    if (on && preset.configured) {
+      return { tone: "accent", text: t("mcp.statusActiveConfigured") };
+    }
+    if (on) {
+      return { tone: "accent", text: t("mcp.statusActive") };
+    }
+    if (!preset.configured) {
+      return { tone: "warning", text: t("mcp.statusNeedsConfig") };
+    }
+    return { tone: "muted", text: t("mcp.statusDisabled") };
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.searchSection}>
@@ -170,6 +189,7 @@ export function McpTab() {
           </View>
         ) : (
           filteredPresets.map((preset) => {
+            const status = statusLine(preset);
             const isOAuth = preset.auth === "oauth" || preset.transport === "oauth";
             // The list never reports tools; only a Test does. Unknown is not zero.
             const toolCount = preset.tool_count ?? preset.tool_names?.length;
@@ -184,10 +204,7 @@ export function McpTab() {
             return (
               <Pressable
                 key={preset.name}
-                style={[
-                  styles.card,
-                  { backgroundColor: th.colors.card, borderColor: th.colors.border, borderRadius: th.radius.md },
-                ]}
+                style={[styles.card, th.surface, { borderRadius: th.radius.lg }]}
                 onPress={() => setSelectedPreset(preset)}
                 accessibilityRole="button"
               >
@@ -202,59 +219,12 @@ export function McpTab() {
                       {preset.display_name || preset.name}
                     </Text>
                     <View style={styles.badgeRow}>
-                      <View
-                        style={[
-                          styles.badge,
-                          {
-                            backgroundColor: mcpIsOn(preset) ? th.colors.brandSoft : th.colors.muted,
-                            borderRadius: th.radius.sm,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.badgeText,
-                            {
-                              color: mcpIsOn(preset)
-                                ? th.colors.brandSoftForeground
-                                : th.colors.mutedForeground,
-                              fontFamily: th.font.medium,
-                            },
-                          ]}
-                        >
-                          {mcpIsOn(preset) ? t("mcp.enabled") : t("mcp.disabled")}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.badge,
-                          {
-                            backgroundColor: preset.configured
-                              ? th.colors.brandSoft
-                              : th.colors.muted,
-                            borderRadius: th.radius.sm,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.badgeText,
-                            {
-                              color: preset.configured
-                                ? th.colors.brandSoftForeground
-                                : th.colors.mutedForeground,
-                              fontFamily: th.font.medium,
-                            },
-                          ]}
-                        >
-                          {preset.configured ? t("mcp.configured") : t("mcp.notConfigured")}
-                        </Text>
-                      </View>
-                      {toolCount !== undefined && (
-                        <Text style={[styles.toolCount, { color: th.colors.mutedForeground, fontFamily: th.font.regular }]}>
+                      <StatusText tone={status.tone}>{status.text}</StatusText>
+                      {toolCount !== undefined ? (
+                        <Text style={[styles.toolCount, { color: th.colors.textMuted, fontFamily: th.font.regular }]}>
                           {t("mcp.toolsCount", { count: toolCount })}
                         </Text>
-                      )}
+                      ) : null}
                     </View>
                   </View>
                   <Switch
@@ -274,17 +244,10 @@ export function McpTab() {
                   </Text>
                 ) : null}
 
-                {isFailed && failureReason ? (
-                  <View style={[styles.failureBox, { backgroundColor: th.colors.muted, borderRadius: th.radius.sm }]}>
-                    <Text style={[styles.failureText, { color: th.colors.destructive, fontFamily: th.font.regular }]}>
-                      {t("mcp.failureReason", { reason: failureReason })}
-                    </Text>
-                    {isNpxCacheBroken ? (
-                      <Text style={[styles.hintText, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
-                        {t("mcp.npxCacheBroken")}
-                      </Text>
-                    ) : null}
-                  </View>
+                {isFailed && failureReason && isNpxCacheBroken ? (
+                  <Text style={[styles.hintText, { color: th.colors.foreground, fontFamily: th.font.medium }]}>
+                    {t("mcp.npxCacheBroken")}
+                  </Text>
                 ) : null}
 
                 {lockReason ? (
@@ -316,7 +279,8 @@ export function McpTab() {
                   />
                   <Button
                     title={t("mcp.remove")}
-                    variant="destructive"
+                    variant="ghost"
+                    color={th.colors.destructive}
                     onPress={() => setRemoveTarget(preset)}
                   />
                 </View>

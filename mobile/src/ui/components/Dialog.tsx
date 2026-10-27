@@ -21,16 +21,25 @@ export function Dialog({ open, title, message, confirmLabel, cancelLabel, onConf
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
       <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
-        <View style={th.bezel}>
-        <View style={[styles.card, th.surface, { backgroundColor: th.colors.popover, borderRadius: th.radius.lg }]}>
+        <View
+          style={[
+            styles.card,
+            th.surface,
+            {
+              backgroundColor: th.colors.popover,
+              borderRadius: th.radius.lg,
+              borderColor: th.colors.border,
+              boxShadow: "0 16px 40px -12px rgba(0,0,0,0.45)",
+            },
+          ]}
+        >
           <Text style={{ color: th.colors.popoverForeground, fontFamily: th.font.display, fontSize: 20 }}>{title}</Text>
-          {message ? <Text style={{ color: th.colors.mutedForeground, fontFamily: th.font.regular, fontSize: 15, lineHeight: 21, marginTop: 8 }}>{message}</Text> : null}
+          {message ? <Text style={{ color: th.colors.textMuted, fontFamily: th.font.regular, fontSize: 15, lineHeight: 21, marginTop: 8 }}>{message}</Text> : null}
           {children ? <View style={{ marginTop: 12 }}>{children}</View> : null}
           <View style={styles.actions}>
             {cancelLabel ? <Button title={cancelLabel} variant="ghost" onPress={onCancel} /> : null}
             <Button title={confirmLabel} variant={destructive ? "destructive" : "primary"} onPress={onConfirm} />
           </View>
-        </View>
         </View>
       </KeyboardAvoidingView>
       {open ? <ToastHost /> : null}

@@ -55,9 +55,9 @@ test("printDocument injects theme CSS variables and base stylesheet for light an
   expect(lightHtml).toContain("--nb-card:");
   expect(lightHtml).toContain("--nb-primary:");
   expect(lightHtml).toContain(".nb-card");
-  expect(lightHtml).toContain("#f3f1f7"); // light background
+  expect(lightHtml).toMatch(/#f7f7f9/i); // light background
 
   const darkHtml = printDocument("<p>Test</p>", { isDark: true });
   expect(darkHtml).toContain("--nb-bg:");
-  expect(darkHtml).toContain("#08070b"); // dark background
+  expect(darkHtml).toMatch(/#0a0a0c/i); // dark background
 });

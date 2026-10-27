@@ -4,6 +4,7 @@ import { router, useNavigation } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useT } from "../../../i18n";
 import { IconButton, SegmentedTabs, goBackOr } from "../../../ui/components";
+import { Halo } from "../../../ui/Halo";
 import { useTheme } from "../../../ui/ThemeProvider";
 import { useSettings } from "../../../settings/store";
 import { installGate } from "../../../ecosystem/common";
@@ -37,6 +38,7 @@ export function AppsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: th.colors.background }]}>
+      <Halo />
       <View style={styles.header}>
         <IconButton
           icon="arrow-left"
