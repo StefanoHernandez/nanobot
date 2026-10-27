@@ -633,80 +633,10 @@ class GatewayHTTPHandler:
         if response is not None:
             return response
 
-        # Fork extensions (nanobot/ext): one hook, imported here so upstream import edits never conflict
-        from nanobot.ext.projects import dispatch_projects_get
+        # Fork (nanobot/ext/router.py): every /api/ext GET route.
+        from nanobot.ext.router import dispatch_ext_get
 
-        # Thread: project listings and file reads (up to 32 MB) must not block the event loop.
-        response = await asyncio.to_thread(dispatch_projects_get, self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.memory_pages import dispatch_memory_get
-
-        response = dispatch_memory_get(self, request, got)
-        if response is not None:
-            return response
-
-        # Fork (nanobot/ext/journal.py): read the daily journal.
-        from nanobot.ext.journal import dispatch_journal_get
-
-        response = dispatch_journal_get(self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.devices import dispatch_devices_get
-
-        response = dispatch_devices_get(self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.kanban import dispatch_kanban_get
-
-        response = dispatch_kanban_get(self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.approvals import dispatch_approvals_get
-
-        response = dispatch_approvals_get(self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.system import dispatch_system_get
-
-        response = dispatch_system_get(self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.costs import dispatch_costs_get
-
-        response = dispatch_costs_get(self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.prompts import dispatch_prompts_get
-
-        response = dispatch_prompts_get(self, request, got)
-        if response is not None:
-            return response
-
-        from nanobot.ext.backup import dispatch_backup_get
-
-        response = dispatch_backup_get(self, request, got)
-        if response is not None:
-            return response
-
-        # Fork (nanobot/ext/search.py): full-text search.
-        from nanobot.ext.search import dispatch_search_get
-
-        response = await dispatch_search_get(self, request, got)
-        if response is not None:
-            return response
-
-        # Fork (nanobot/ext/skill_proposals.py): read proposed skills.
-        from nanobot.ext.skill_proposals import dispatch_skill_proposals_get
-
-        response = dispatch_skill_proposals_get(self, request, got)
+        response = await dispatch_ext_get(self, request, got)
         if response is not None:
             return response
 

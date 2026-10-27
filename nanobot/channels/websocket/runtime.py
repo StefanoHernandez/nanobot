@@ -717,61 +717,10 @@ class WebSocketChannel(BaseChannel):
             except RuntimeMaintenanceError:
                 return web.json_response({"error": "Gateway update is being verified"}, status=503)
 
-        # Fork extensions (nanobot/ext) take their POST paths; the rest stays upstream's.
-        # Imported here, not at the top, so upstream import edits never conflict with the fork.
-        from nanobot.ext.approvals import approvals_post_handler
-        from nanobot.ext.backup import backup_post_handler
-        from nanobot.ext.costs import costs_post_handler
-        from nanobot.ext.devices import devices_post_handler, install_connection_tracking
-        from nanobot.ext.kanban import kanban_post_handler
-        from nanobot.ext.projects import projects_post_handler
-        from nanobot.ext.prompts import prompts_post_handler
+        # Fork (nanobot/ext/router.py): every /api/ext POST route.
+        from nanobot.ext.router import ext_post_handler
 
-        install_connection_tracking()
-        secret = (self.config.token_issue_secret or "").strip() or (self.config.token or "").strip()
-        chain = projects_post_handler(
-            self.gateway.tokens, self.gateway.workspaces, handle_binary
-        )
-        for wrap in (
-            devices_post_handler,
-            kanban_post_handler,
-            approvals_post_handler,
-            costs_post_handler,
-            prompts_post_handler,
-            backup_post_handler,
-        ):
-            chain = wrap(secret, self.gateway.tokens, chain)
-        # Fork (nanobot/ext/journal.py): journal settings and "write today".
-        from nanobot.ext.journal import journal_post_handler
-
-        chain = journal_post_handler(
-            secret,
-            self.gateway.tokens,
-            chain,
-            cron=self.gateway.cron_service,
-            sessions=self.gateway.session_manager,
-        )
-        # Fork (nanobot/ext/automations.py): create an automation from the app.
-        from nanobot.ext.automations import automations_post_handler
-
-        chain = automations_post_handler(
-            secret,
-            self.gateway.tokens,
-            chain,
-            cron=self.gateway.cron_service,
-            sessions=self.gateway.session_manager,
-        )
-        # Fork (nanobot/ext/skill_proposals.py): manage and propose skills.
-        from nanobot.ext.skill_proposals import skill_proposals_post_handler
-
-        chain = skill_proposals_post_handler(
-            secret,
-            self.gateway.tokens,
-            chain,
-            cron=self.gateway.cron_service,
-            sessions=self.gateway.session_manager,
-        )
-        binary_handler = chain
+        binary_handler = ext_post_handler(self, handle_binary)
 
         async def prune_uploads() -> None:
             while not stop_event.is_set():
