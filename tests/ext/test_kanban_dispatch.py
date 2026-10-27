@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
+from loguru import logger
 
 from nanobot.ext import kanban as kb
 from nanobot.ext import kanban_dispatch as dispatch
@@ -434,3 +436,112 @@ async def test_reviewer_verdict_in_turn_still_works(store_path, approved, status
     task = store.get_task_detail("t1")["task"]
     assert task["status"] == status
     assert task["retries"] == 0
+
+
+async def _run_dispatch_loop_briefly(
+    *,
+    interval_s: float = 0.01,
+    dwell_s: float = 0.06,
+) -> None:
+    stop = asyncio.Event()
+
+    async def stop_soon() -> None:
+        await asyncio.sleep(dwell_s)
+        stop.set()
+
+    asyncio.create_task(stop_soon())
+
+    async def run_turn(_session_key: str, _content: str) -> str:
+        return "ok"
+
+    await dispatch.kanban_dispatch_loop(run_turn, interval_s=interval_s, stop=stop)
+
+
+@pytest.mark.asyncio
+async def test_low_memory_skips_dispatch_once(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "t1", assignee="coder")
+
+    dispatch_calls: list[int] = []
+
+    async def counting_dispatch_once(*_args, **_kwargs) -> None:
+        dispatch_calls.append(1)
+
+    monkeypatch.setattr(dispatch, "_memory_available_mb", lambda: 200)
+    monkeypatch.setattr(dispatch, "dispatch_once", counting_dispatch_once)
+
+    await _run_dispatch_loop_briefly()
+
+    assert dispatch_calls == []
+    assert store.get_task_detail("t1")["task"]["status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_enough_memory_calls_dispatch_once(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "t1", assignee="coder")
+
+    mock_dispatch = AsyncMock()
+    monkeypatch.setattr(dispatch, "_memory_available_mb", lambda: 500)
+    monkeypatch.setattr(dispatch, "dispatch_once", mock_dispatch)
+
+    await _run_dispatch_loop_briefly(dwell_s=0.03)
+
+    assert mock_dispatch.await_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_missing_meminfo_dispatches(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+    _bot(store, "coder")
+    _task(store, "t1", assignee="coder")
+
+    mock_dispatch = AsyncMock()
+    monkeypatch.setattr(dispatch, "_memory_available_mb", lambda: None)
+    monkeypatch.setattr(dispatch, "dispatch_once", mock_dispatch)
+
+    await _run_dispatch_loop_briefly(dwell_s=0.03)
+
+    assert mock_dispatch.await_count >= 1
+
+
+def test_memory_available_mb_parses_meminfo(monkeypatch):
+    monkeypatch.setattr(
+        dispatch,
+        "_read_proc_meminfo",
+        lambda: "MemTotal:       16384000 kB\nMemAvailable:   819200 kB\n",
+    )
+    assert dispatch._memory_available_mb() == 800
+
+
+@pytest.mark.asyncio
+async def test_low_memory_logs_waiting_once(store_path, monkeypatch):
+    store = _store(store_path)
+    _board(store)
+
+    tick = 0
+
+    def fake_available() -> int:
+        nonlocal tick
+        tick += 1
+        return 150 if tick <= 8 else 500
+
+    monkeypatch.setattr(dispatch, "_memory_available_mb", fake_available)
+    monkeypatch.setattr(dispatch, "dispatch_once", AsyncMock())
+
+    logs: list[str] = []
+    sink = logger.add(lambda message: logs.append(message.record["message"]), level="INFO")
+    try:
+        await _run_dispatch_loop_briefly(dwell_s=0.12)
+    finally:
+        logger.remove(sink)
+
+    waiting = [line for line in logs if "pausing dispatch" in line]
+    resumed = [line for line in logs if "resuming dispatch" in line]
+    assert len(waiting) == 1
+    assert len(resumed) == 1
