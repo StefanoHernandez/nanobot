@@ -91,7 +91,7 @@ export function VoiceLoopBar({ state, level, onStop, onInterrupt, partialText }:
           style={[
             styles.stopButton,
             {
-              backgroundColor: th.colors.destructive,
+              backgroundColor: th.colors.dangerSoft,
               borderRadius: th.radius.md,
             },
           ]}

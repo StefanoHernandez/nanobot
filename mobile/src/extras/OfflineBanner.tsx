@@ -34,7 +34,7 @@ export function OfflineBanner() {
       style={[
         styles.banner,
         {
-          backgroundColor: th.colors.destructive,
+          backgroundColor: th.colors.dangerSoft,
           paddingTop: insets.top + 8, // sits at the very top of the screen, above the headers
         },
       ]}

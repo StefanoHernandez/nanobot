@@ -21,7 +21,7 @@ The phone is a **dashboard client**: agent work runs on the gateway host (an Ard
 | `devices.py` | QR pairing, device tokens, full-power flag | `/api/ext/devices` | `~/.nanobot/devices.json` |
 | `journal.py` | Daily journal pages and cron | `/api/ext/journal` | workspace `memory/journal/*.md`; reads sessions and kanban for context |
 | `kanban.py` | Boards, tasks, bots, board chat | `/api/ext/kanban` | `~/.nanobot/ext_kanban.db` |
-| `kanban_dispatch.py` | In-process dispatcher (one ready task or one mention per tick) | — | uses `ext_kanban.db` |
+| `kanban_dispatch.py` | In-process dispatcher (one ready task or one mention per tick; waits while free RAM < 400 MB) | — | uses `ext_kanban.db` |
 | `memory_pages.py` | Read-only Dream pages (USER, MEMORY, SOUL) | `/api/ext/memory/pages` | workspace git-tracked files |
 | `model_info.py` | models.dev catalog fallback for settings | — (hooks `settings_models.py`) | `get_data_dir()/cache/models-dev.json` |
 | `projects.py` | Project folders and files API | `/api/ext/projects` | `<workspace>/projects/` per project |
@@ -34,7 +34,7 @@ The phone is a **dashboard client**: agent work runs on the gateway host (an Ard
 | `webapp.py` | CSP headers when serving the app export | — | — |
 | `webui_mode.py` | Choose app vs legacy WebUI; `nanobot ui` | — | `~/.nanobot/ext_webui.json` |
 
-GET routes are dispatched from `nanobot/webui/ws_http.py`; POST routes from `nanobot/channels/websocket/runtime.py`. Consolidation into `nanobot/ext/router.py` is planned (branch `agy/RT-A`).
+Every `/api/ext/*` route is registered in `nanobot/ext/router.py`; `nanobot/webui/ws_http.py` (GET) and `nanobot/channels/websocket/runtime.py` (POST) call it through one hook each. A new module is one line in that file.
 
 Agent-facing features use **in-process tools** under `nanobot/agent/tools/` (for example `kanban_tools.py`, `search_history.py`), not a per-feature MCP server (see ADR-005).
 
@@ -71,10 +71,10 @@ Shared phone-only behavior lives in `mobile/src/extras/` (lock, share, outbox, s
 
 ### Known pytest failures on the dev PC (not regressions from a typical app brief)
 - `tests/channels/test_channel_setup.py` (optional Matrix dependency)
-- `tests/channels/test_channel_contracts.py` — `test_scheduled_delivery` for telegram/slack/matrix
+- `tests/channels/test_scheduled_delivery.py` for telegram/slack/matrix (optional channel dependencies)
 - `tests/webui/test_remote_pairing.py` (local umask)
 - `tests/tools/test_tool_validation.py` — `test_exec_rejects_home_path_without_home_directory` (flaky in full suite)
-- `tests/test_update_backup.py` — `test_benchmark_session_storage`
+- `tests/test_benchmark_session_storage.py`
 - Some tests need network access; treat unexpected failures as investigate-first.
 
 ## Layout and CI (short)

@@ -207,7 +207,7 @@ function accentFor(scheme: Theme["scheme"], id: AccentId) {
 function baseColors(scheme: Theme["scheme"], accentId: AccentId): Theme["colors"] {
   const p = scheme === "light" ? PALETTE.light : PALETTE.dark;
   const a = accentFor(scheme, accentId);
-  const inverse = scheme === "light" ? p.text : p.text;
+  const inverse = p.text;
   const inverseForeground = scheme === "light" ? "#ffffff" : p.bg;
 
   return {

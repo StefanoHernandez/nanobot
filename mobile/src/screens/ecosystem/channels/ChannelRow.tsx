@@ -36,7 +36,7 @@ export function ChannelRow({ channel, onPress, onRefresh }: ChannelRowProps) {
 
   if (isFailed) {
     statusLabel = t("channels.status.failed");
-    statusBg = th.colors.destructive;
+    statusBg = th.colors.dangerSoft;
     statusFg = th.colors.destructiveForeground;
   } else if (isRunning) {
     statusLabel = t("channels.status.running");

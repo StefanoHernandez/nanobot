@@ -10,7 +10,7 @@ Effort is per chat, expressed as model presets named `<base>·<level>` plus the 
 ## ADR-004: Server features live in `nanobot/ext/`
 **Context:** The fork needs approvals, kanban, device pairing, and other gateway features without large edits to HKUDS/nanobot on every upstream merge.
 
-**Decision:** Each feature is a module under `nanobot/ext/`. Upstream files get only small `# Fork` hooks. HTTP GET dispatch is centralized from `nanobot/webui/ws_http.py`; HTTP POST from `nanobot/channels/websocket/runtime.py`. Work is in progress to route both through `nanobot/ext/router.py` (`agy/RT-A`). Sync upstream weekly via `mobile/docs/wiki/updating-nanobot.md`.
+**Decision:** Each feature is a module under `nanobot/ext/`. Upstream files get only small `# Fork` hooks. Every `/api/ext/*` route is listed in `nanobot/ext/router.py`; upstream files hold one hook each: `dispatch_ext_get` in `nanobot/webui/ws_http.py` and `ext_post_handler` in `nanobot/channels/websocket/runtime.py`. Sync upstream weekly via `mobile/docs/wiki/updating-nanobot.md`.
 
 **Consequences:** New server work lands in `ext/` and tests under `tests/ext/`. Merge conflicts stay localized to hook sites.
 ## ADR-005: In-process agent tools, not MCP
@@ -28,7 +28,7 @@ Effort is per chat, expressed as model presets named `<base>·<level>` plus the 
 ## ADR-007: Kanban runs inside the gateway
 **Context:** Hermes-style boards need a dispatcher co-located with sessions and the agent loop.
 
-**Decision:** `nanobot/ext/kanban_dispatch.py` runs in the gateway: one ready card or one board mention per tick, awaited (no fan-out). A memory guard before each tick is specified in brief KB-C (`agy/KB-C`); confirm in code on `main` before relying on it. Split kanban into its own process only if profiling shows it is too heavy on the board.
+**Decision:** `nanobot/ext/kanban_dispatch.py` runs in the gateway: one ready card or one board mention per tick, awaited (no fan-out). Before each tick it skips dispatch while `MemAvailable` is under `MIN_AVAILABLE_MB` (400 MB). Split kanban into its own process only if profiling shows it is too heavy on the board.
 
 **Consequences:** Kanban turns share the same gateway resources as chat; config `agents.defaults.kanban_dispatch` can disable the loop.
 ## ADR-008: App web export replaces the WebUI, with fallback

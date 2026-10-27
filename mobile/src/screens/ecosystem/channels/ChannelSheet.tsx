@@ -201,7 +201,7 @@ export function ChannelSheet({ open, channel, instanceId, onClose, onSaved, onFe
       <KeyboardAvoidingView behavior="padding">
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {serverError ? (
-            <View style={[styles.serverErrorBox, { backgroundColor: th.colors.destructive, borderRadius: th.radius.sm }]}>
+            <View style={[styles.serverErrorBox, { backgroundColor: th.colors.dangerSoft, borderRadius: th.radius.sm }]}>
               <Text style={{ color: th.colors.destructiveForeground, fontFamily: th.font.regular, fontSize: 13 }}>{serverError}</Text>
             </View>
           ) : null}
