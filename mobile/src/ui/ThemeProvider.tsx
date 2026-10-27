@@ -1,34 +1,53 @@
-import React, { createContext, useCallback, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { kv } from "../platform/storage";
-import { darkTheme, lightTheme, type Theme } from "./theme";
+import { getTheme, parseAccentId, type AccentId, type Theme } from "./theme";
 
 export type ThemePref = "system" | "light" | "dark";
-const KEY = "ui.theme";
+const THEME_KEY = "ui.theme";
+const ACCENT_KEY = "ui.accent";
 
 const PrefCtx = createContext<[ThemePref, (p: ThemePref) => void]>(["system", () => {}]);
+const AccentCtx = createContext<[AccentId, (a: AccentId) => void]>(["violet", () => {}]);
 
 function loadPref(): ThemePref {
-  const v = kv.get(KEY);
+  const v = kv.get(THEME_KEY);
   return v === "light" || v === "dark" ? v : "system";
+}
+
+function loadAccent(): AccentId {
+  return parseAccentId(kv.get(ACCENT_KEY));
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme();
   const [pref, setPrefState] = useState<ThemePref>(loadPref);
+  const [accent, setAccentState] = useState<AccentId>(loadAccent);
+
   const setPref = useCallback((p: ThemePref) => {
-    kv.set(KEY, p);
+    kv.set(THEME_KEY, p);
     setPrefState(p);
   }, []);
-  const scheme = pref === "system" ? (system ?? "light") : pref;
+
+  const setAccent = useCallback((a: AccentId) => {
+    kv.set(ACCENT_KEY, a);
+    setAccentState(a);
+  }, []);
+
+  const scheme: "light" | "dark" = pref === "system" ? (system === "dark" ? "dark" : "light") : pref;
+  const theme = useMemo(() => getTheme(scheme, accent), [scheme, accent]);
+
   return (
     <PrefCtx.Provider value={[pref, setPref]}>
-      <ThemeCtx.Provider value={scheme === "dark" ? darkTheme : lightTheme}>{children}</ThemeCtx.Provider>
+      <AccentCtx.Provider value={[accent, setAccent]}>
+        <ThemeCtx.Provider value={theme}>{children}</ThemeCtx.Provider>
+      </AccentCtx.Provider>
     </PrefCtx.Provider>
   );
 }
 
-const ThemeCtx = createContext<Theme>(lightTheme);
+const ThemeCtx = createContext<Theme>(getTheme("light", "violet"));
 
 export const useTheme = (): Theme => useContext(ThemeCtx);
 export const useThemePreference = () => useContext(PrefCtx);
+export const useAccentPreference = () => useContext(AccentCtx);

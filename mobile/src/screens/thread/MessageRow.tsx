@@ -11,6 +11,7 @@ import { useT } from "../../i18n";
 import { IconButton } from "../../ui/components";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { useTheme } from "../../ui/ThemeProvider";
+import { withAlpha } from "../../ui/theme";
 import { ActivityRow } from "./ActivityRow";
 import { MediaList } from "./media/MediaViews";
 import { ReasoningBlock } from "./ReasoningBlock";
@@ -113,7 +114,18 @@ function MessageRowImpl({ unit, live, chatKey, onLongPress, onReply }: Props) {
       >
         <UserWrap
           {...(canEdit ? { onLongPress: () => onLongPress!(m) } : {})}
-          style={{ alignSelf: "flex-end", maxWidth: "85%", marginTop: 22, marginBottom: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: th.radius.md, borderBottomRightRadius: 6, backgroundColor: th.colors.userBubble, opacity: m.deliveryStatus === "sending" ? 0.6 : 1 }}
+          style={{
+            alignSelf: "flex-end",
+            maxWidth: "85%",
+            marginTop: 22,
+            marginBottom: 6,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderRadius: th.radius.lg,
+            backgroundColor: th.colors.userBubble,
+            boxShadow: `0 8px 20px -10px ${withAlpha(th.colors.userBubble, 0.45)}`,
+            opacity: m.deliveryStatus === "sending" ? 0.6 : 1,
+          }}
         >
           <Text selectable style={{ color: th.colors.userBubbleForeground, fontFamily: th.font.regular, fontSize: 16, lineHeight: 23 }}>{m.content}</Text>
           {m.media?.length ? <MediaList media={m.media} /> : null}

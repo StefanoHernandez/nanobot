@@ -188,6 +188,16 @@
     "title": "Settings",
     "back": "Back",
     "theme": "Theme",
+    "accent": "Accent",
+    "accentHelp": "Buttons, links and your own messages.",
+    "accentColors": {
+      "violet": "Violet",
+      "blue": "Blue",
+      "green": "Green",
+      "orange": "Orange",
+      "pink": "Pink",
+      "teal": "Teal"
+    },
     "system": "System",
     "light": "Light",
     "dark": "Dark",
@@ -1073,6 +1083,10 @@
     "save": "Save",
     "empty": "No MCP presets available",
     "failureReason": "Error: {{reason}}",
+    "statusActiveConfigured": "Active · Configured",
+    "statusActive": "Active",
+    "statusDisabled": "Disabled",
+    "statusNeedsConfig": "Needs configuration",
     "npxCacheBroken": "The npx cache is corrupted: run `npm cache clean --force` on the server and try again.",
     "testSuccess": "Test completed successfully"
   },

@@ -107,15 +107,32 @@ export function CodeBlock({
 
   if (!canPreview) {
     return (
-      <View style={{ marginVertical: 6, backgroundColor: th.colors.muted, borderRadius: th.radius.md, overflow: "hidden" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 12 }}>
-          <Text style={{ color: th.colors.mutedForeground, fontSize: 12 }}>{info.title ?? info.lang}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <IconButton icon="content-copy" size={18} onPress={copy} accessibilityLabel={t("thread.copyCode")} />
-          </View>
+      <View
+        style={{
+          marginVertical: 6,
+          backgroundColor: th.colors.well,
+          borderRadius: th.radius.md,
+          borderWidth: 1,
+          borderColor: th.colors.border,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: th.colors.border,
+          }}
+        >
+          <Text style={{ color: th.colors.textMuted, fontFamily: th.font.mono, fontSize: th.type.code.fontSize }}>{info.title ?? info.lang}</Text>
+          <IconButton icon="content-copy" size={18} onPress={copy} accessibilityLabel={t("thread.copyCode")} />
         </View>
         <ScrollView horizontal>
-          <Text selectable style={{ fontFamily: th.font.mono, fontSize: 13, lineHeight: 19, color: th.colors.foreground, padding: 12, paddingTop: 0 }}>
+          <Text selectable style={{ fontFamily: th.font.mono, fontSize: th.type.code.fontSize, lineHeight: th.type.code.lineHeight, color: th.colors.foreground, padding: 12 }}>
             {plain ? code : segs.map((s, i) => (s.kind === "plain" ? s.text : <Text key={i} style={{ color: pal[s.kind] }}>{s.text}</Text>))}
           </Text>
         </ScrollView>

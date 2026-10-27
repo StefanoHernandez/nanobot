@@ -188,6 +188,16 @@
     "title": "Impostazioni",
     "back": "Indietro",
     "theme": "Tema",
+    "accent": "Accento",
+    "accentHelp": "Pulsanti, link e i tuoi messaggi.",
+    "accentColors": {
+      "violet": "Viola",
+      "blue": "Blu",
+      "green": "Verde",
+      "orange": "Arancione",
+      "pink": "Rosa",
+      "teal": "Teal"
+    },
     "system": "Sistema",
     "light": "Chiaro",
     "dark": "Scuro",
@@ -1073,6 +1083,10 @@
     "save": "Salva",
     "empty": "Nessun preset MCP disponibile",
     "failureReason": "Errore: {{reason}}",
+    "statusActiveConfigured": "Attivo · Configurato",
+    "statusActive": "Attivo",
+    "statusDisabled": "Disattivato",
+    "statusNeedsConfig": "Da configurare",
     "npxCacheBroken": "La cache di npx è corrotta: sul server esegui `npm cache clean --force` e riprova.",
     "testSuccess": "Test completato con successo"
   },

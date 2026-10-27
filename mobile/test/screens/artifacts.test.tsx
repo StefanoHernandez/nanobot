@@ -1005,24 +1005,24 @@ test("preview libraries are inlined from the app, never fetched from a CDN", () 
 
 test("buildShellHtml contains CSS variables for light and dark", () => {
   const light = buildShellHtml({ kind: "html", html: "<p>light</p>", isDark: false });
-  expect(light).toContain("--nb-bg: #f3f1f7;");
-  expect(light).toContain("--nb-fg: #1c1428;");
-  expect(light).toContain("--nb-card: #ffffff;");
-  expect(light).toContain("--nb-muted: #ebe7f2;");
-  expect(light).toContain("--nb-border: #1c142812;");
-  expect(light).toContain("--nb-primary: #3f2564;");
-  expect(light).toContain("--nb-primary-fg: #ffffff;");
+  expect(light).toMatch(/--nb-bg: #f7f7f9;/i);
+  expect(light).toMatch(/--nb-fg: #0a0a0c;/i);
+  expect(light).toMatch(/--nb-card: #ffffff;/i);
+  expect(light).toMatch(/--nb-muted: #e9e9ef;/i);
+  expect(light).toMatch(/--nb-border: #0a0a1e14;/i);
+  expect(light).toMatch(/--nb-primary: #7c3aed;/i);
+  expect(light).toMatch(/--nb-primary-fg: #ffffff;/i);
   expect(light).toContain("--nb-radius: 12px;");
   expect(light).toContain("--nb-font: -apple-system");
 
   const dark = buildShellHtml({ kind: "html", html: "<p>dark</p>", isDark: true });
-  expect(dark).toContain("--nb-bg: #08070b;");
-  expect(dark).toContain("--nb-fg: #f4f0f8;");
-  expect(dark).toContain("--nb-card: #131119;");
-  expect(dark).toContain("--nb-muted: #18151f;");
-  expect(dark).toContain("--nb-border: #ffffff14;");
-  expect(dark).toContain("--nb-primary: #cfb0ec;");
-  expect(dark).toContain("--nb-primary-fg: #1a1022;");
+  expect(dark).toMatch(/--nb-bg: #0a0a0c;/i);
+  expect(dark).toMatch(/--nb-fg: #f4f4f6;/i);
+  expect(dark).toMatch(/--nb-card: #16161a;/i);
+  expect(dark).toMatch(/--nb-muted: #232329;/i);
+  expect(dark).toMatch(/--nb-border: #ffffff12;/i);
+  expect(dark).toMatch(/--nb-primary: #a78bfa;/i);
+  expect(dark).toMatch(/--nb-primary-fg: #0a0a0c;/i);
 });
 
 test("buildShellHtml puts base stylesheet before artifact's own styles", () => {

@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useT } from "../../i18n";
 import { IconButton } from "../../ui/components/IconButton";
 import { ListItem, Sheet } from "../../ui/components";
+import { Halo } from "../../ui/Halo";
 import { useTheme } from "../../ui/ThemeProvider";
 import { router } from "expo-router";
 import { isWritable, chatsStore } from "../../state/chatsStore";
@@ -99,6 +100,7 @@ export function ThreadScreen({ chatKey, onBack }: { chatKey: string; onBack: () 
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: th.colors.background }}>
+      <Halo />
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 4, paddingVertical: 4 }}>
         <IconButton icon="arrow-left" accessibilityLabel={t("thread.back")} onPress={onBack} />
         <BotFace state={face} />

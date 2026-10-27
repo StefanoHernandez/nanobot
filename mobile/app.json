@@ -79,10 +79,10 @@
         "expo-font",
         {
           "fonts": [
-            "./node_modules/@expo-google-fonts/atkinson-hyperlegible/400Regular/AtkinsonHyperlegible_400Regular.ttf",
-            "./node_modules/@expo-google-fonts/atkinson-hyperlegible/700Bold/AtkinsonHyperlegible_700Bold.ttf",
-            "./node_modules/@expo-google-fonts/bricolage-grotesque/700Bold/BricolageGrotesque_700Bold.ttf",
-            "./node_modules/@expo-google-fonts/bricolage-grotesque/800ExtraBold/BricolageGrotesque_800ExtraBold.ttf"
+            "./node_modules/@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/geist/500Medium/Geist_500Medium.ttf",
+            "./node_modules/@expo-google-fonts/geist/600SemiBold/Geist_600SemiBold.ttf",
+            "./node_modules/@expo-google-fonts/geist-mono/400Regular/GeistMono_400Regular.ttf"
           ]
         }
       ],
