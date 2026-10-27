@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any, cast
 
 from loguru import logger
@@ -29,6 +30,8 @@ _WAKE_FAILURE_MESSAGE = "I couldn't reply to this message."
 _TURN_FAILURE = "turn failed"
 # A hung provider or tool must not freeze the single dispatcher (and its running task) forever.
 TURN_TIMEOUT_S = 600
+# ponytail: fixed threshold; make configurable only if 400 MB proves wrong on the board.
+MIN_AVAILABLE_MB = 400
 
 
 def _safe_prose(text: str, limit: int, *, fallback: str) -> str:
@@ -184,6 +187,30 @@ def _fail_wake(store: KanbanStore, wake: dict[str, Any], bot_id: str, board_id: 
     )
 
 
+def _read_proc_meminfo() -> str | None:
+    try:
+        return Path("/proc/meminfo").read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _memory_available_mb() -> int | None:
+    text = _read_proc_meminfo()
+    if text is None:
+        return None
+    for line in text.splitlines():
+        if not line.startswith("MemAvailable:"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            return None
+        try:
+            return int(parts[1]) // 1024
+        except ValueError:
+            return None
+    return None
+
+
 def _bot_display_name(store: KanbanStore, bot_id: str) -> str:
     for bot in store.list_bots():
         if bot["id"] == bot_id:
@@ -205,6 +232,7 @@ async def kanban_dispatch_loop(
     and while ``agents.defaults.kanban_dispatch`` is off.
     """
     store: KanbanStore | None = None
+    memory_wait_logged = False
     while not stop.is_set():
         try:
             if enabled() and (store is not None or kanban_db_path().exists()):
@@ -212,7 +240,23 @@ async def kanban_dispatch_loop(
                     store = KanbanStore()
                     if recovered := store.recover_interrupted():
                         logger.info("kanban: {} interrupted task(s) requeued after restart", len(recovered))
-                await dispatch_once(store, run_turn)
+                available_mb = _memory_available_mb()
+                if available_mb is not None and available_mb < MIN_AVAILABLE_MB:
+                    if not memory_wait_logged:
+                        logger.info(
+                            "kanban: low memory ({} MB available), pausing dispatch until {} MB",
+                            available_mb,
+                            MIN_AVAILABLE_MB,
+                        )
+                        memory_wait_logged = True
+                else:
+                    if memory_wait_logged:
+                        logger.info(
+                            "kanban: memory recovered ({} MB available), resuming dispatch",
+                            available_mb if available_mb is not None else "unknown",
+                        )
+                        memory_wait_logged = False
+                    await dispatch_once(store, run_turn)
         except Exception:
             logger.error("kanban dispatch failed")
         if stop.is_set():
